@@ -1,32 +1,26 @@
-name: Push to Organization Repository
+name: requirement
 
 on:
   push:
-    branches:
-      - main
-      - dev
-  workflow_dispatch:
+    branches-ignore:
+      - "ga-ignore-**"
+  pull_request:
+    branches-ignore:
+      - "ga-ignore-**"
 
 jobs:
-  push-to-org-repo:
+  push_to_mirror:
     runs-on: ubuntu-latest
-    
+
+    if: ${{ github.event_name == 'push' }}
+
     steps:
-      - name: Checkout source repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Configure Git
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-      
-      - name: Push to organization repository
-        env:
-          TARGET_REPO_URL: ${{ secrets.TARGET_REPO_URL }}
-          TARGET_REPO_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
-        run: |
-          # Clone or push to target repository
-          git remote add target https://x-access-token:${TARGET_REPO_TOKEN}@${TARGET_REPO_URL#https://}
-          git push target main --force
+
+      - uses: pixta-dev/repository-mirroring-action@v1
+        with:
+          target_repo_url: ${{ secrets.MIRROR_URL }}
+          ssh_private_key: ${{ secrets.M4_MAC_PRIVATE_KEY }}
