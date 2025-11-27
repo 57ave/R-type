@@ -60,8 +60,6 @@ rtype/
 │   │   │   ├── IRenderer.hpp
 │   │   │   ├── ITexture.hpp
 │   │   │   ├── ISprite.hpp
-│   │   │   ├── SFMLRenderer.hpp
-│   │   │   ├── SFMLTexture.hpp
 │   │   │   ├── Window.hpp
 │   │   │   └── Camera.hpp
 │   │   │
@@ -101,8 +99,6 @@ rtype/
 │       │   └── NetworkInterpolator.cpp
 │       │
 │       ├── rendering/
-│       │   ├── SFMLRenderer.cpp
-│       │   ├── SFMLTexture.cpp
 │       │   ├── Window.cpp
 │       │   └── Camera.cpp
 │       │
@@ -150,13 +146,23 @@ rtype/
 │   ├── include/client/
 │   │   ├── GameClient.hpp
 │   │   ├── NetworkClient.hpp
-│   │   └── ClientPredictor.hpp
+│   │   ├── ClientPredictor.hpp
+│   │   │
+│   │   └── rendering/           # SFML implementation (client-specific)
+│   │       ├── SFMLRenderer.hpp
+│   │       ├── SFMLTexture.hpp
+│   │       └── SFMLSprite.hpp
 │   │
 │   └── src/
 │       ├── main.cpp                 # Client entry point
 │       ├── GameClient.cpp
 │       ├── NetworkClient.cpp
-│       └── ClientPredictor.cpp
+│       ├── ClientPredictor.cpp
+│       │
+│       └── rendering/
+│           ├── SFMLRenderer.cpp
+│           ├── SFMLTexture.cpp
+│           └── SFMLSprite.cpp
 │
 ├── server/                          # 🖥️ Server Application
 │   ├── CMakeLists.txt
@@ -311,9 +317,7 @@ add_library(engine STATIC
     src/network/Connection.cpp
     src/network/ConnectionManager.cpp
     
-    # Rendering
-    src/rendering/SFMLRenderer.cpp
-    src/rendering/SFMLTexture.cpp
+    # Rendering (ABSTRACT ONLY - no SFML here!)
     src/rendering/Window.cpp
     src/rendering/Camera.cpp
     
@@ -335,9 +339,6 @@ target_include_directories(engine
 
 target_link_libraries(engine
     PUBLIC
-        sfml-graphics
-        sfml-window
-        sfml-system
         Boost::system
 )
 
@@ -356,6 +357,11 @@ add_executable(r-type_client
     src/GameClient.cpp
     src/NetworkClient.cpp
     src/ClientPredictor.cpp
+    
+    # SFML implementation (client-specific)
+    src/rendering/SFMLRenderer.cpp
+    src/rendering/SFMLTexture.cpp
+    src/rendering/SFMLSprite.cpp
 )
 
 target_include_directories(r-type_client 
@@ -367,6 +373,9 @@ target_link_libraries(r-type_client
     PRIVATE
         engine
         game
+        sfml-graphics
+        sfml-window
+        sfml-system
 )
 ```
 
@@ -438,21 +447,30 @@ engine/src/core/
 
 ### Phase 3 : Rendering (Semaine 3)
 ```bash
+# ENGINE : Interfaces abstraites seulement
 engine/include/engine/rendering/
-├── IRenderer.hpp
-├── ITexture.hpp
-├── ISprite.hpp
-├── SFMLRenderer.hpp
-├── SFMLTexture.hpp
-├── Window.hpp
-└── Camera.hpp
+├── IRenderer.hpp          # Interface abstraite
+├── ITexture.hpp           # Interface abstraite
+├── ISprite.hpp            # Interface abstraite
+├── Window.hpp             # Wrapper générique
+└── Camera.hpp             # Logique pure (pas de lib)
 
 engine/src/rendering/
-├── SFMLRenderer.cpp
-├── SFMLTexture.cpp
 ├── Window.cpp
 └── Camera.cpp
 
+# CLIENT : Implémentation SFML
+client/include/client/rendering/
+├── SFMLRenderer.hpp       # Implémente IRenderer
+├── SFMLTexture.hpp        # Implémente ITexture
+└── SFMLSprite.hpp         # Implémente ISprite
+
+client/src/rendering/
+├── SFMLRenderer.cpp
+├── SFMLTexture.cpp
+└── SFMLSprite.cpp
+
+# SYSTEMS (dans engine, utilisent les interfaces)
 engine/include/engine/systems/
 └── RenderSystem.hpp
 
