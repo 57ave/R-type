@@ -30,7 +30,7 @@ namespace rtype
                     // Getters
                     uint32_t getWidth() const { return width_; }
                     uint32_t getHeight() const { return height_; }
-                    std::string getTitle() const { return title_; }
+                    const std::string &getTitle() const { return title_; }
                     bool isOpen() const { return isOpen_; }
             };
 
