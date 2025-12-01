@@ -2,7 +2,7 @@
 #define RTYPE_ENGINE_RENDERING_ITEXTURE_HPP
 
 #include <string>
-#include <cstdint>
+#include "engine/rendering/Types.hpp"
 
 namespace rtype
 {
@@ -10,14 +10,6 @@ namespace rtype
     {
         namespace rendering
         {
-            struct Vector2u {
-                uint32_t x;
-                uint32_t y;
-
-                Vector2u() : x(0), y(0) {}
-                Vector2u(uint32_t x, uint32_t y) : x(x), y(y) {}
-            };
-
             class ITexture {
                 public:
                     virtual ~ITexture() = default;

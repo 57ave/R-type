@@ -18,7 +18,7 @@ namespace rtype
                 SFMLTexture *currentTexture_;
 
             public:
-                SFMLSprite();
+                SFMLSprite() : currentTexture_(nullptr) {};
                 ~SFMLSprite() override = default;
 
                 // ISprite implementation

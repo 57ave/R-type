@@ -9,24 +9,6 @@ namespace rtype
     {
         namespace rendering
         {
-            struct Vector2f {
-                float x;
-                float y;
-
-                Vector2f() : x(0.0f), y(0.0f) {}
-                Vector2f(float x, float y) : x(x), y(y) {}
-            };
-
-            struct IntRect {
-                int left;
-                int top;
-                int width;
-                int height;
-
-                IntRect() : left(0), top(0), width(0), height(0) {}
-                IntRect(int left, int top, int width, int height) : left(left), top(top), width(width), height(height) {}
-            };
-
             class ISprite {
                 public:
                     virtual ~ISprite() = default;

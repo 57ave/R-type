@@ -17,9 +17,7 @@ namespace rtype
             void Camera::setZoom(float zoom)
             {
                 if (zoom > 0.0f)
-                {
                     zoom_ = zoom;
-                }
             }
 
             Vector2f Camera::worldToScreen(Vector2f worldPos) const

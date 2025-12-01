@@ -28,7 +28,7 @@ namespace rtype
                 void setCamera(const engine::rendering::Camera &camera) override;
 
                 // Helper: get window
-                sf::RenderWindow *getWindow() { return window_; }
+                const sf::RenderWindow &getWindow() const { return *window_; }
             };
 
         }

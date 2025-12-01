@@ -6,12 +6,6 @@ namespace rtype
     {
         namespace rendering
         {
-
-            SFMLSprite::SFMLSprite()
-                : currentTexture_(nullptr)
-            {
-            }
-
             void SFMLSprite::setTexture(engine::rendering::ITexture *texture)
             {
                 if (!texture)
@@ -19,9 +13,7 @@ namespace rtype
 
                 currentTexture_ = dynamic_cast<SFMLTexture *>(texture);
                 if (currentTexture_)
-                {
                     sprite_.setTexture(currentTexture_->getNativeTexture());
-                }
             }
 
             void SFMLSprite::setPosition(engine::rendering::Vector2f position)

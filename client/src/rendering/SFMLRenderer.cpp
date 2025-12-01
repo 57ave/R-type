@@ -20,8 +20,7 @@ namespace rtype
             void SFMLRenderer::draw(engine::rendering::ISprite &sprite, const engine::rendering::Transform &transform)
             {
                 SFMLSprite *sfmlSprite = dynamic_cast<SFMLSprite *>(&sprite);
-                if (sfmlSprite)
-                {
+                if (sfmlSprite) {
                     sf::Sprite &nativeSprite = sfmlSprite->getNativeSprite();
 
                     // Apply transform

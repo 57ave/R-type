@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdint>
 #include <engine/rendering/ITexture.hpp>
+#include "engine/rendering/Types.hpp"
 
 namespace rtype
 {
