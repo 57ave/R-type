@@ -1,0 +1,202 @@
+@startuml R-Type Client-Server Data Flow
+
+!define CLIENT_COLOR #E3F2FD
+!define SERVER_COLOR #FFEBEE
+!define ENGINE_COLOR #FFF3E0
+!define NETWORK_COLOR #E8F5E9
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+title R-Type - Client/Server Communication Flow
+
+' ============================================
+' PARTICIPANTS
+' ============================================
+
+box "Client Side" CLIENT_COLOR
+    participant "Input\nManager" as ClientInput
+    participant "Client\nRegistry" as ClientRegistry
+    participant "Prediction\nSystem" as Prediction
+    participant "Render\nSystem" as Renderer
+    participant "Network\nClient" as ClientNet
+end box
+
+box "Network Layer" NETWORK_COLOR
+    participant "UDP\nSocket" as Network
+end box
+
+box "Server Side" SERVER_COLOR
+    participant "Network\nServer" as ServerNet
+    participant "Server\nRegistry" as ServerRegistry
+    participant "Game Logic\nSystems" as GameLogic
+    participant "Collision\nSystem" as Collision
+    participant "AI\nSystem" as AI
+end box
+
+' ============================================
+' SEQUENCE FLOW
+' ============================================
+
+== Client Initialization ==
+
+ClientInput -> ClientRegistry : Create local player entity
+ClientRegistry -> ClientNet : Send JOIN_GAME packet
+ClientNet -> Network : UDP send
+Network -> ServerNet : Receive JOIN_GAME
+ServerNet -> ServerRegistry : Create player entity
+ServerRegistry -> ServerNet : Assign NetworkId
+ServerNet -> Network : Send SPAWN_PLAYER packet
+Network -> ClientNet : Receive
+ClientNet -> ClientRegistry : Spawn remote entities
+
+== Game Loop (60 FPS) ==
+
+loop Every Frame
+
+    group Client Update
+        
+        ClientInput -> ClientInput : Poll keyboard/gamepad
+        ClientInput -> ClientRegistry : Update PlayerInput component
+        
+        note over Prediction
+            **Client-Side Prediction**
+            Apply input immediately
+            for responsive feel
+        end note
+        
+        Prediction -> ClientRegistry : Read PlayerInput + Position
+        Prediction -> ClientRegistry : Update Position (predicted)
+        
+        ClientNet -> ClientRegistry : Prepare INPUT packet
+        ClientRegistry -> ClientNet : { inputState, sequenceNumber }
+        ClientNet -> Network : Send INPUT packet (UDP)
+        
+        Renderer -> ClientRegistry : Query entities with Sprite + Position
+        ClientRegistry -> Renderer : Return entity data
+        Renderer -> Renderer : Draw starfield, players, enemies, bullets
+        
+    end
+    
+    group Server Update (Authoritative)
+        
+        Network -> ServerNet : Receive INPUT packets from all clients
+        
+        loop For each connected client
+            ServerNet -> ServerRegistry : Update PlayerInput for client's entity
+        end
+        
+        note over GameLogic
+            **Authoritative Game State**
+            Server has final say
+        end note
+        
+        GameLogic -> ServerRegistry : Read all PlayerInput components
+        GameLogic -> ServerRegistry : Update Velocity based on input
+        GameLogic -> ServerRegistry : Apply game rules
+        
+        AI -> ServerRegistry : Update enemy AI
+        AI -> ServerRegistry : Spawn bullets, move enemies
+        
+        Collision -> ServerRegistry : Query entities with Collider
+        Collision -> Collision : Detect bullet-enemy, player-enemy collisions
+        Collision -> ServerRegistry : Destroy entities, update Health
+        
+        ServerRegistry -> ServerNet : Prepare WORLD_STATE snapshot
+        
+        note over ServerNet
+            **State Synchronization**
+            Position, velocity, health
+            for all entities
+        end note
+        
+        ServerNet -> Network : Broadcast WORLD_STATE to all clients
+        
+    end
+    
+    group Client Reconciliation
+        
+        Network -> ClientNet : Receive WORLD_STATE
+        
+        ClientNet -> ClientRegistry : Extract server positions
+        
+        note over Prediction
+            **Server Reconciliation**
+            Check if prediction matches
+            server state
+        end note
+        
+        Prediction -> ClientRegistry : Compare predicted vs server position
+        
+        alt Prediction was correct
+            Prediction -> ClientRegistry : Keep predicted position
+        else Prediction was wrong (collision, etc.)
+            Prediction -> ClientRegistry : Snap to server position
+            Prediction -> Prediction : Re-simulate from server state
+        end
+        
+        note over ClientRegistry
+            **Interpolation**
+            Smooth movement of
+            other players/enemies
+        end note
+        
+        ClientRegistry -> ClientRegistry : Interpolate remote entities
+        
+    end
+
+end
+
+== Player Shoots ==
+
+ClientInput -> ClientRegistry : Detect fire button press
+ClientRegistry -> Prediction : Create bullet locally (optimistic)
+Prediction -> ClientRegistry : Spawn bullet entity
+
+ClientNet -> Network : Send FIRE_WEAPON packet
+Network -> ServerNet : Receive
+ServerNet -> ServerRegistry : Validate can fire
+ServerRegistry -> ServerRegistry : Spawn bullet (authoritative)
+ServerNet -> Network : Broadcast SPAWN_ENTITY (bullet)
+Network -> ClientNet : Receive for other clients
+
+== Enemy Destroyed ==
+
+Collision -> ServerRegistry : Detect bullet hit enemy
+ServerRegistry -> ServerRegistry : Destroy enemy entity
+ServerRegistry -> ServerNet : Emit ENTITY_DESTROYED event
+ServerNet -> Network : Broadcast DESTROY_ENTITY packet
+Network -> ClientNet : Receive
+ClientNet -> ClientRegistry : Remove enemy from local state
+ClientRegistry -> Renderer : Enemy no longer rendered
+
+== Player Disconnects ==
+
+ClientInput -> ClientNet : Close connection
+ClientNet -> Network : Send DISCONNECT packet
+Network -> ServerNet : Receive / Detect timeout
+ServerNet -> ServerRegistry : Remove player entity
+ServerRegistry -> ServerNet : Get list of remaining players
+ServerNet -> Network : Broadcast PLAYER_LEFT packet
+
+' ============================================
+' PACKET TYPES
+' ============================================
+
+note over Network
+  **Common Packet Types**
+  
+  Client → Server:
+  - JOIN_GAME
+  - INPUT (movement, fire)
+  - DISCONNECT
+  
+  Server → Client:
+  - WORLD_STATE (positions, velocities)
+  - SPAWN_ENTITY (players, enemies, bullets)
+  - DESTROY_ENTITY
+  - PLAYER_JOINED / PLAYER_LEFT
+  - GAME_OVER
+end note
+
+@enduml
