@@ -24,7 +24,7 @@ namespace rtype
                 // IRenderer implementation
                 void clear() override;
                 void draw(engine::rendering::ISprite &sprite, const engine::rendering::Transform &transform) override;
-                void present() override;
+                void display() override;
                 void setCamera(const engine::rendering::Camera &camera) override;
 
                 // Helper: get window

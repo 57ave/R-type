@@ -8,9 +8,7 @@ namespace rtype
         namespace rendering
         {
 
-            SFMLRenderer::SFMLRenderer(sf::RenderWindow *window) : window_(window)
-            {
-            }
+            SFMLRenderer::SFMLRenderer(sf::RenderWindow *window) : window_(window) {}
 
             void SFMLRenderer::clear()
             {
@@ -32,7 +30,7 @@ namespace rtype
                 }
             }
 
-            void SFMLRenderer::present()
+            void SFMLRenderer::display()
             {
                 window_->display();
             }
