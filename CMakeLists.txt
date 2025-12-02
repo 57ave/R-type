@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 project(rtype_server)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_BUILD_TYPE Debug)
+
 include(cmake/CPM.cmake)
 
 CPMAddPackage(
@@ -11,16 +13,7 @@ CPMAddPackage(
   GIT_SHALLOW TRUE
 )
 
-## Use CPM to fetch Boost instead of FetchContent
-CPMAddPackage(
-  NAME Boost
-  GITHUB_REPOSITORY boostorg/boost
-  GIT_TAG boost-1.84.0
-  GIT_SHALLOW TRUE
-)
-
-## add boost cmake module
-## (Optional) boost cmake helpers removed — use system Boost via FindBoost
+CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 
 add_executable(r-type_server
     engine/src/network/NetworkServer.cpp
@@ -28,6 +21,6 @@ add_executable(r-type_server
 
 find_package(SFML 2.6.1 REQUIRED)
 
-find_package(Boost CONFIG REQUIRED COMPONENTS system filesystem)
-target_link_libraries(r-type_server PRIVATE Boost::system Boost::asio Boost::filesystem sfml-graphics sfml-window sfml-system)
+target_include_directories(r-type_server PRIVATE ${asio_SOURCE_DIR}/include engine/src)
+target_link_libraries(r-type_server PRIVATE sfml-graphics sfml-window sfml-system)
 

@@ -1,24 +1,25 @@
 #include <iostream>
-#include <boost/asio.hpp>
+#include <ctime>
+#include <asio.hpp>
 #include "Protocol.hpp"  // Assume the previous classes are in this header
 
-using boost::asio::ip::udp;
+using asio::ip::udp;
 
 // Helper functions from previous example
 void sendPacket(udp::socket& socket, const udp::endpoint& endpoint, const RTypePacket& packet) {
     auto buffer = packet.serialize();
-    socket.send_to(boost::asio::buffer(buffer), endpoint);
+    socket.send_to(asio::buffer(buffer), endpoint);
 }
 
 RTypePacket receivePacket(udp::socket& socket, udp::endpoint& sender) {
     std::array<char, 65536> recvBuffer;  // Max UDP size
-    size_t len = socket.receive_from(boost::asio::buffer(recvBuffer), sender);
+    size_t len = socket.receive_from(asio::buffer(recvBuffer), sender);
     return RTypePacket::deserialize(recvBuffer.data(), len);
 }
 
 // Server example
 void runServer() {
-    boost::asio::io_context io_context;
+    asio::io_context io_context;
     udp::socket socket(io_context, udp::endpoint(udp::v4(), 12345));  // Bind to port 12345
 
     std::cout << "Server listening on port 12345..." << std::endl;
@@ -48,12 +49,12 @@ void runServer() {
 
 // Client example
 void runClient() {
-    boost::asio::io_context io_context;
+    asio::io_context io_context;
     udp::socket socket(io_context);
     socket.open(udp::v4());
 
     udp::resolver resolver(io_context);
-    udp::endpoint server_endpoint = *resolver.resolve("localhost", "12345").begin();
+    udp::endpoint server_endpoint = *resolver.resolve(udp::v4(), "localhost", "12345").begin();
 
     // Prepare CLIENT_HELLO (no payload)
     RTypePacket hello(PacketType::CLIENT_HELLO);
