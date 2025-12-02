@@ -25,7 +25,7 @@ rtype/
 │   ├── CMakeLists.txt
 │   ├── README.md
 │   │
-│   ├── include/engine/              # Headers publics
+│   ├── include/              # Headers publics
 │   │   │
 │   │   ├── ecs/                     # Entity Component System
 │   │   │   ├── Entity.hpp
