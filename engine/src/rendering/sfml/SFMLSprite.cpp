@@ -1,4 +1,4 @@
-#include <engine/rendering/sfml/SFMLSprite.hpp>
+#include <engine/include/rendering/sfml/SFMLSprite.hpp>
 
 namespace rtype
 {

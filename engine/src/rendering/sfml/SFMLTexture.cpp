@@ -1,4 +1,4 @@
-#include <engine/rendering/sfml/SFMLTexture.hpp>
+#include <engine/include/rendering/sfml/SFMLTexture.hpp>
 
 namespace rtype
 {
