@@ -9,21 +9,42 @@
             class Time {
             public:
                 // Constructor to initialize the start time
-                Time() : startTime(std::chrono::high_resolution_clock::now()) {}
+                Time() : _startTime(std::chrono::high_resolution_clock::now()) {}
 
                 // Method to get the elapsed time in milliseconds
                 long long getElapsedTime() const {
                     auto currentTime = std::chrono::high_resolution_clock::now();
-                    return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
+                    return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - _startTime).count();
                 }
 
                 // Method to reset the start time to the current time
                 void reset() {
-                    startTime = std::chrono::high_resolution_clock::now();
+                    _startTime = std::chrono::high_resolution_clock::now();
+                }
+                float getDeltaTime() const {
+                    return _deltaTime;
+                }
+                float getTotalTime() const {
+                    return _totalTime;
+                }
+                float getTimeScale() const {
+                    return _timeScale;
+                }
+                void setDeltaTime(float deltaTime) {
+                    _deltaTime = deltaTime;
+                }
+                void setTotalTime(float totalTime) {
+                    _totalTime = totalTime;
+                }
+                void setTimeScale(float timeScale) {
+                    _timeScale = timeScale;
                 }
 
             private:
-                std::chrono::high_resolution_clock::time_point startTime; // Start time point
+                std::chrono::high_resolution_clock::time_point _startTime; // Start time point
+                float _deltaTime; // Delta time in seconds
+                float _totalTime; // Total time in seconds
+                float _timeScale; // Time scale factor
             };
 
         } // namespace core
