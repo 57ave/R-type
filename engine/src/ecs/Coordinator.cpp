@@ -1,4 +1,4 @@
-#include <engine/ecs/Coordinator.hpp>
+#include <ecs/Coordinator.hpp>
 
 namespace ECS {
 

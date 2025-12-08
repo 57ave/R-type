@@ -1,8 +1,8 @@
 #ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
 #define RTYPE_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
 
-#include <engine/rendering/IRenderer.hpp>
-#include <engine/rendering/sfml/SFMLSprite.hpp>
+#include <rendering/IRenderer.hpp>
+#include <rendering/sfml/SFMLSprite.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <memory>
 

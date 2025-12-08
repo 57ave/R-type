@@ -1,8 +1,8 @@
 #ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
 #define RTYPE_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
 
-#include <engine/include/rendering/ISprite.hpp>
-#include <engine/include/rendering/sfml/SFMLTexture.hpp>
+#include <rendering/ISprite.hpp>
+#include <rendering/sfml/SFMLTexture.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 
 namespace rtype

@@ -1,4 +1,4 @@
-#include <engine/include/rendering/Camera.hpp>
+#include <rendering/Camera.hpp>
 
 namespace rtype
 {

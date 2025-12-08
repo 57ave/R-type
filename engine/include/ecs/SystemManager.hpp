@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTYPE_ENGINE_ECS_SYSTEMMANAGER_HPP
+#define RTYPE_ENGINE_ECS_SYSTEMMANAGER_HPP
 
 #include "Types.hpp"
 #include "System.hpp"
@@ -48,3 +49,5 @@ namespace ECS {
     };
 
 } // namespace ECS
+
+#endif // RTYPE_ENGINE_ECS_SYSTEMMANAGER_HPP

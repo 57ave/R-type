@@ -1,9 +1,9 @@
 #ifndef RTYPE_ENGINE_RENDERING_IRENDERER_HPP
 #define RTYPE_ENGINE_RENDERING_IRENDERER_HPP
 
-#include <engine/rendering/ISprite.hpp>
-#include <engine/rendering/Camera.hpp>
-#include "engine/rendering/Types.hpp"
+#include <rendering/ISprite.hpp>
+#include <rendering/Camera.hpp>
+#include <rendering/Types.hpp>
 
 namespace rtype
 {

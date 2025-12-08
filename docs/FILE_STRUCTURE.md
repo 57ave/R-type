@@ -6,6 +6,13 @@
 
 ## 🌳 Arborescence Complète
 
+> **📝 Note importante sur l'architecture Rendering:**
+> - **SFML est encapsulé dans `engine/rendering/sfml/`** (pas dans client/)
+> - **`Camera`** = Classe concrète avec logique pure (pas d'interface)
+> - **`SFMLWindow`** = Classe standalone complète (pas d'héritage)
+> - **Le client utilise directement** `SFMLWindow`, `SFMLRenderer`, etc. de l'engine
+> - ❌ **Plus de classe `Window` de base** (supprimée pour simplifier)
+
 ```
 rtype/
 ├── CMakeLists.txt                    # Root CMake
@@ -57,11 +64,17 @@ rtype/
 │   │   │   └── PacketTypes.hpp
 │   │   │
 │   │   ├── rendering/               # Graphics abstraction
-│   │   │   ├── IRenderer.hpp
-│   │   │   ├── ITexture.hpp
-│   │   │   ├── ISprite.hpp
-│   │   │   ├── Window.hpp
-│   │   │   └── Camera.hpp
+│   │   │   ├── IRenderer.hpp       # Interface
+│   │   │   ├── ITexture.hpp        # Interface
+│   │   │   ├── ISprite.hpp         # Interface
+│   │   │   ├── Types.hpp           # Vector2i, Vector2u, Vector2f, etc.
+│   │   │   ├── Camera.hpp          # Pure logic (no SFML)
+│   │   │   │
+│   │   │   └── sfml/               # SFML implementation (in engine!)
+│   │   │       ├── SFMLWindow.hpp  # Complete SFML encapsulation
+│   │   │       ├── SFMLRenderer.hpp
+│   │   │       ├── SFMLTexture.hpp
+│   │   │       └── SFMLSprite.hpp
 │   │   │
 │   │   ├── physics/                 # Physics & collision
 │   │   │   ├── CollisionDetector.hpp
@@ -99,8 +112,13 @@ rtype/
 │       │   └── NetworkInterpolator.cpp
 │       │
 │       ├── rendering/
-│       │   ├── Window.cpp
-│       │   └── Camera.cpp
+│       │   ├── Camera.cpp           # Math logic only
+│       │   │
+│       │   └── sfml/                # SFML implementations
+│       │       ├── SFMLWindow.cpp
+│       │       ├── SFMLRenderer.cpp
+│       │       ├── SFMLTexture.cpp
+│       │       └── SFMLSprite.cpp
 │       │
 │       ├── physics/
 │       │   ├── CollisionDetector.cpp
@@ -146,23 +164,13 @@ rtype/
 │   ├── include/client/
 │   │   ├── GameClient.hpp
 │   │   ├── NetworkClient.hpp
-│   │   ├── ClientPredictor.hpp
-│   │   │
-│   │   └── rendering/           # SFML implementation (client-specific)
-│   │       ├── SFMLRenderer.hpp
-│   │       ├── SFMLTexture.hpp
-│   │       └── SFMLSprite.hpp
+│   │   └── ClientPredictor.hpp
 │   │
 │   └── src/
-│       ├── main.cpp                 # Client entry point
+│       ├── main.cpp                 # Client entry point (uses engine's SFMLWindow)
 │       ├── GameClient.cpp
 │       ├── NetworkClient.cpp
-│       ├── ClientPredictor.cpp
-│       │
-│       └── rendering/
-│           ├── SFMLRenderer.cpp
-│           ├── SFMLTexture.cpp
-│           └── SFMLSprite.cpp
+│       └── ClientPredictor.cpp
 │
 ├── server/                          # 🖥️ Server Application
 │   ├── CMakeLists.txt
@@ -297,40 +305,17 @@ endif()
 
 ### engine/CMakeLists.txt
 ```cmake
-# Game Engine Library
-add_library(engine STATIC
-    # ECS
-    src/ecs/EntityManager.cpp
-    src/ecs/Registry.cpp
-    src/ecs/SystemManager.cpp
-    
-    # Core
-    src/core/Time.cpp
-    src/core/Logger.cpp
-    src/core/EventBus.cpp
-    src/core/Config.cpp
-    src/core/InputManager.cpp
-    
-    # Network
-    src/network/Packet.cpp
-    src/network/UDPSocket.cpp
-    src/network/Connection.cpp
-    src/network/ConnectionManager.cpp
-    
-    # Rendering (ABSTRACT ONLY - no SFML here!)
-    src/rendering/Window.cpp
-    src/rendering/Camera.cpp
-    
-    # Physics
-    src/physics/CollisionDetector.cpp
-    src/physics/QuadTree.cpp
-    
-    # Systems
-    src/systems/MovementSystem.cpp
-    src/systems/CollisionSystem.cpp
-    src/systems/RenderSystem.cpp
-    src/systems/AnimationSystem.cpp
+# Game Engine Library - Single unified library
+file(GLOB_RECURSE ENGINE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ecs/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/physics/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/network/*.cpp"
 )
+
+add_library(engine STATIC ${ENGINE_SOURCES})
 
 target_include_directories(engine 
     PUBLIC 
@@ -339,30 +324,27 @@ target_include_directories(engine
 
 target_link_libraries(engine
     PUBLIC
-        Boost::system
+        sfml-graphics
+        sfml-window
+        sfml-system
 )
 
 # Compiler warnings
 if(MSVC)
-    target_compile_options(engine PRIVATE /W4 /WX)
+    target_compile_options(engine PRIVATE /W4)
 else()
-    target_compile_options(engine PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_compile_options(engine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 ```
 
 ### client/CMakeLists.txt
 ```cmake
-add_executable(r-type_client
-    src/main.cpp
-    src/GameClient.cpp
-    src/NetworkClient.cpp
-    src/ClientPredictor.cpp
-    
-    # SFML implementation (client-specific)
-    src/rendering/SFMLRenderer.cpp
-    src/rendering/SFMLTexture.cpp
-    src/rendering/SFMLSprite.cpp
+# Client executable - uses engine's SFML encapsulation
+file(GLOB_RECURSE CLIENT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
+
+add_executable(r-type_client ${CLIENT_SOURCES})
 
 target_include_directories(r-type_client 
     PRIVATE 
@@ -373,9 +355,6 @@ target_link_libraries(r-type_client
     PRIVATE
         engine
         game
-        sfml-graphics
-        sfml-window
-        sfml-system
 )
 ```
 
@@ -447,31 +426,32 @@ engine/src/core/
 
 ### Phase 3 : Rendering (Semaine 3)
 ```bash
-# ENGINE : Interfaces abstraites seulement
-engine/include/engine/rendering/
+# ENGINE : Interfaces abstraites + implémentation SFML
+engine/include/rendering/
 ├── IRenderer.hpp          # Interface abstraite
 ├── ITexture.hpp           # Interface abstraite
 ├── ISprite.hpp            # Interface abstraite
-├── Window.hpp             # Wrapper générique
-└── Camera.hpp             # Logique pure (pas de lib)
+├── Types.hpp              # Vector2i, Vector2u, Vector2f, IntRect, Transform
+├── Camera.hpp             # Logique pure (pas de lib)
+└── sfml/
+    ├── SFMLWindow.hpp     # Encapsulation SFML complète
+    ├── SFMLRenderer.hpp   # Implémente IRenderer
+    ├── SFMLTexture.hpp    # Implémente ITexture
+    └── SFMLSprite.hpp     # Implémente ISprite
 
 engine/src/rendering/
-├── Window.cpp
-└── Camera.cpp
+├── Camera.cpp             # Math logic only
+└── sfml/
+    ├── SFMLWindow.cpp
+    ├── SFMLRenderer.cpp
+    ├── SFMLTexture.cpp
+    └── SFMLSprite.cpp
 
-# CLIENT : Implémentation SFML
-client/include/client/rendering/
-├── SFMLRenderer.hpp       # Implémente IRenderer
-├── SFMLTexture.hpp        # Implémente ITexture
-└── SFMLSprite.hpp         # Implémente ISprite
-
-client/src/rendering/
-├── SFMLRenderer.cpp
-├── SFMLTexture.cpp
-└── SFMLSprite.cpp
+# CLIENT : Utilise directement l'engine
+client/src/main.cpp        # Utilise SFMLWindow de l'engine
 
 # SYSTEMS (dans engine, utilisent les interfaces)
-engine/include/engine/systems/
+engine/include/systems/
 └── RenderSystem.hpp
 
 engine/src/systems/
@@ -646,4 +626,149 @@ r-type_server
 
 ---
 
-**Structure prête ! Commence à coder ! 🚀**
+## 🎯 Clarification : Engine vs Game vs Client
+
+### 📚 **engine/** = Bibliothèque générique
+- **Contenu :** ECS, Rendering, Network, Physics, Core
+- **Type :** Library statique
+- **Dépendances :** SFML (pour rendering/sfml/)
+- **Utilisé par :** game, client, server
+- **Exemple :** `Coordinator`, `SFMLWindow`, `Camera`, `CollisionDetector`
+
+### 🎮 **game/** = Logique métier R-Type
+- **Contenu :** Composants et systèmes spécifiques au jeu R-Type
+- **Type :** Library statique
+- **Dépendances :** engine
+- **Utilisé par :** client, server
+- **Exemple :** `Player`, `Enemy`, `Bullet`, `WeaponSystem`, `EnemyAISystem`
+
+### 💻 **client/** = Application client
+- **Contenu :** Point d'entrée, UI, menus, inputs
+- **Type :** Executable
+- **Dépendances :** engine, game
+- **Utilise :** `SFMLWindow` (fourni par engine)
+- **Exemple :** `main()`, `Menu`, gestion des events SFML
+
+### 🖥️ **server/** = Application serveur
+- **Contenu :** Simulation authoritative, network
+- **Type :** Executable
+- **Dépendances :** engine, game
+- **N'utilise PAS :** Le rendering SFML
+- **Exemple :** `main()`, validation réseau, simulation
+
+### 📋 Règle simple :
+- **Logique partagée (client + server)** → `game/`
+- **SFML / UI / Menu** → `client/`
+- **Framework générique** → `engine/`
+
+---
+
+## 💡 Exemples d'Utilisation
+
+### Client utilisant l'engine
+
+```cpp
+// client/src/main.cpp
+#include <iostream>
+#include <rendering/sfml/SFMLWindow.hpp>
+#include <rendering/Camera.hpp>
+#include <ecs/Coordinator.hpp>
+
+int main() {
+    // Utilise SFMLWindow de l'engine (déjà encapsulé)
+    rtype::engine::rendering::sfml::SFMLWindow window;
+    window.create(1920, 1080, "R-Type");
+    
+    // Camera pure logic (pas de SFML)
+    rtype::engine::rendering::Camera camera;
+    camera.setPosition({0, 0});
+    
+    // ECS
+    ECS::Coordinator coordinator;
+    coordinator.Init();
+    
+    // Boucle principale
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
+                window.close();
+        }
+        
+        // Get mouse position via engine's encapsulation
+        auto mousePos = window.getMousePosition();
+        
+        window.clear();
+        // Render game
+        window.display();
+    }
+    
+    return 0;
+}
+```
+
+### Game logic (partagé client/server)
+
+```cpp
+// game/include/game/components/Player.hpp
+struct Player {
+    int health = 100;
+    int score = 0;
+    int lives = 3;
+};
+
+// game/src/systems/WeaponSystem.cpp
+void WeaponSystem::update(Registry& reg, float dt) {
+    // Logique de tir (exécutée côté client ET serveur)
+    auto view = reg.view<Player, Weapon, Transform>();
+    for (auto entity : view) {
+        auto& weapon = view.get<Weapon>(entity);
+        if (weapon.canFire()) {
+            // Créer bullet...
+        }
+    }
+}
+```
+
+---
+
+## 📊 État Actuel (Décembre 2025)
+
+### ✅ Compilé et Fonctionnel
+
+**Bibliothèques:**
+- ✅ `libengine.a` - Engine complet avec SFML
+- ✅ `libgame.a` - Logique métier (vide pour l'instant)
+
+**Exécutables:**
+- ✅ `r-type_client` - Client fonctionnel
+- ✅ `r-type_server` - Serveur fonctionnel
+
+### 📁 Fichiers Clés Implémentés
+
+**Rendering:**
+- ✅ `engine/rendering/Camera.hpp/.cpp` (logique pure)
+- ✅ `engine/rendering/sfml/SFMLWindow.hpp/.cpp` (encapsulation complète)
+- ✅ `engine/rendering/sfml/SFML{Renderer,Texture,Sprite}.hpp/.cpp`
+
+**ECS:**
+- ✅ `engine/ecs/EntityManager.hpp/.cpp`
+- ✅ `engine/ecs/Coordinator.hpp/.cpp`
+- ✅ `engine/ecs/ComponentManager.hpp/.cpp`
+- ✅ `engine/ecs/SystemManager.hpp/.cpp`
+
+### ❌ Fichiers Supprimés (Simplification)
+
+- ❌ `engine/rendering/Window.hpp/.cpp` → Remplacé par `SFMLWindow`
+- ❌ `client/rendering/` → SFML maintenant dans `engine/`
+
+### 📚 Documentation Mise à Jour
+
+- ✅ [`ARCHITECTURE_CURRENT.md`](./ARCHITECTURE_CURRENT.md)
+- ✅ [`engine_architecture_complete.puml`](./engine_architecture_complete.puml)
+- ✅ [`rendering_architecture_simplified.puml`](./rendering_architecture_simplified.puml)
+- ✅ `FILE_STRUCTURE.md` ← Ce fichier
+
+---
+
+**Structure validée et prête pour le développement ! 🚀**

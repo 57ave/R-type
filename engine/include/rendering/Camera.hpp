@@ -1,7 +1,7 @@
 #ifndef RTYPE_ENGINE_RENDERING_CAMERA_HPP
 #define RTYPE_ENGINE_RENDERING_CAMERA_HPP
 
-#include <engine/rendering/ISprite.hpp>
+#include <rendering/ISprite.hpp>
 
 namespace rtype
 {

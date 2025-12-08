@@ -1,9 +1,11 @@
-#pragma once
+#ifndef RTYPE_ENGINE_ECS_ENTITYMANAGER_HPP
+#define RTYPE_ENGINE_ECS_ENTITYMANAGER_HPP
 
 #include "Types.hpp"
 #include <array>
 #include <queue>
 #include <cassert>
+#include <unordered_map>
 
 namespace ECS {
 
@@ -32,3 +34,5 @@ namespace ECS {
     };
 
 } // namespace ECS
+
+#endif // RTYPE_ENGINE_ECS_ENTITYMANAGER_HPP

@@ -2,7 +2,7 @@
 #define RTYPE_ENGINE_RENDERING_ITEXTURE_HPP
 
 #include <string>
-#include "engine/rendering/Types.hpp"
+#include <rendering/Types.hpp>
 
 namespace rtype
 {

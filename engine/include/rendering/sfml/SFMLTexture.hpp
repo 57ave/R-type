@@ -1,7 +1,7 @@
 #ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
 #define RTYPE_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
 
-#include <engine/include/rendering/ITexture.hpp>
+#include <rendering/ITexture.hpp>
 #include <SFML/Graphics/Texture.hpp>
 
 namespace rtype

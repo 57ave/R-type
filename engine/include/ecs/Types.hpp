@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTYPE_ENGINE_ECS_TYPES_HPP
+#define RTYPE_ENGINE_ECS_TYPES_HPP
 
 #include <cstdint>
 #include <bitset>
@@ -30,3 +31,5 @@ constexpr NetworkId INVALID_NETWORK_ID = 0;
 using Signature = std::bitset<MAX_COMPONENTS>;
 
 } // namespace ECS
+
+#endif // RTYPE_ENGINE_ECS_TYPES_HPP

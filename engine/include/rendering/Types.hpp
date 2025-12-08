@@ -17,6 +17,14 @@ namespace rtype
                 Vector2u(uint32_t x, uint32_t y) : x(x), y(y) {}
             };
 
+            struct Vector2i {
+                int x;
+                int y;
+
+                Vector2i() : x(0), y(0) {}
+                Vector2i(int x, int y) : x(x), y(y) {}
+            };
+
             struct Vector2f {
                 float x;
                 float y;

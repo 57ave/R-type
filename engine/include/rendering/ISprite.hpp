@@ -1,7 +1,7 @@
 #ifndef RTYPE_ENGINE_RENDERING_ISPRITE_HPP
 #define RTYPE_ENGINE_RENDERING_ISPRITE_HPP
 
-#include <engine/rendering/ITexture.hpp>
+#include <rendering/ITexture.hpp>
 
 namespace rtype
 {

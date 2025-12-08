@@ -1,4 +1,4 @@
-#include <engine/include/rendering/sfml/SFMLRenderer.hpp>
+#include <rendering/sfml/SFMLRenderer.hpp>
 #include <SFML/Graphics/View.hpp>
 
 namespace rtype

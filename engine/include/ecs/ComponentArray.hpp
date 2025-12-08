@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RTYPE_ENGINE_ECS_COMPONENTARRAY_HPP
+#define RTYPE_ENGINE_ECS_COMPONENTARRAY_HPP
 
 #include "Types.hpp"
 #include <array>
@@ -87,3 +88,5 @@ namespace ECS {
     };
 
 } // namespace ECS
+
+#endif // RTYPE_ENGINE_ECS_COMPONENTARRAY_HPP

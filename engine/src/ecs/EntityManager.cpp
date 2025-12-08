@@ -1,4 +1,4 @@
-#include <engine/ecs/EntityManager.hpp>
+#include <ecs/EntityManager.hpp>
 #include <stdexcept>
 
 namespace ECS {
