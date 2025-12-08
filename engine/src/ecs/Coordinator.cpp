@@ -1,4 +1,5 @@
 #include <ecs/Coordinator.hpp>
+#include <ecs/RegisterCoreComponents.hpp>
 
 namespace ECS {
 
@@ -61,6 +62,13 @@ Entity Coordinator::GetEntityByNetworkId(NetworkId networkId) const
 bool Coordinator::HasEntityForNetworkId(NetworkId networkId) const
 {
     return mEntityManager->HasEntityForNetworkId(networkId);
+}
+
+void Coordinator::RegisterDefaultComponents()
+{
+    // Delegate to helper so the list of core components remains in a
+    // single place and can be extended without touching Coordinator.
+    ECS::RegisterCoreComponents(*this);
 }
 
 } // namespace ECS
