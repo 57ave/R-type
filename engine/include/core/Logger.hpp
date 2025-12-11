@@ -8,20 +8,26 @@
 #ifndef _CORE_LOGGER_
     #define _CORE_LOGGER_
     #include <string>
+    #include <iostream>
 
-    class Logger {
-        public:
-            Logger();
-            ~Logger();
-            void info(std::string message);
-            void warning(std::string message);
-            void error(std::string message);
-            void debug(std::string message);
+    namespace rtype {
+        namespace core {
 
+            class Logger {
+                public:
+                    Logger();
+                    ~Logger();
+                    void info(const std::string& message);
+                    void warning(const std::string& message);
+                    void error(const std::string& message);
+                    void debug(const std::string& message);
 
-        protected:
-        private:
-            // std::vector<ILogOutput*> _Outputs;
-    };
+                protected:
+                private:
+                    // std::vector<ILogOutput*> _Outputs;
+            };
+
+        } // namespace core
+    } // namespace rtype
 
 #endif /* !_CORE_LOGGER_ */
