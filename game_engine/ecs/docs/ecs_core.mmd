@@ -1,0 +1,144 @@
+---
+title: ECS Core - Minimal Implementation
+---
+classDiagram
+    %% ==================== CORE TYPES ====================
+    
+    class Entity {
+        <<type alias>>
+        +uint32_t ID
+        +constexpr MAX_ENTITIES = 5000
+    }
+    
+    note for Entity "Simple ID not a class!<br/>using Entity = std::uint32_t;"
+    
+    class ComponentType {
+        <<type alias>>
+        +uint8_t type ID
+        +constexpr MAX_COMPONENTS = 32
+    }
+    
+    note for ComponentType "Each component type gets unique ID<br/>using ComponentType = std::uint8_t;"
+    
+    class Signature {
+        <<type alias>>
+        +bitset~MAX_COMPONENTS~
+        +Example 0b00000101 = components 0 and 2
+    }
+    
+    note for Signature "Bitset indicating components<br/>using Signature = std::bitset~MAX_COMPONENTS~;"
+    
+    %% ==================== ENTITY MANAGER ====================
+    
+    class EntityManager {
+        -queue~Entity~ mAvailableEntities
+        -array~Signature, MAX_ENTITIES~ mSignatures
+        -uint32_t mLivingEntityCount
+        +EntityManager()
+        +CreateEntity() Entity
+        +DestroyEntity(Entity entity) void
+        +SetSignature(Entity entity, Signature signature) void
+        +GetSignature(Entity entity) Signature
+    }
+    
+    note for EntityManager "Responsibilities:<br/>• Distribute entity IDs<br/>• Maintain entity signatures<br/>• Reuse destroyed entity IDs<br/><br/>Implementation:<br/>• Pre-fill queue with IDs 0 to MAX_ENTITIES<br/>• Pop ID on create, push on destroy<br/>• O(1) create/destroy operations"
+    
+    %% ==================== COMPONENT ARRAY ====================
+    
+    class IComponentArray {
+        <<interface>>
+        +EntityDestroyed(Entity entity) void*
+    }
+    
+    class ComponentArray~T~ {
+        -array~T, MAX_ENTITIES~ mComponentArray
+        -unordered_map~Entity, size_t~ mEntityToIndexMap
+        -unordered_map~size_t, Entity~ mIndexToEntityMap
+        -size_t mSize
+        +InsertData(Entity entity, T component) void
+        +RemoveData(Entity entity) void
+        +GetData(Entity entity) T&
+        +EntityDestroyed(Entity entity) void
+    }
+    
+    note for ComponentArray "Packed Array Pattern:<br/><br/>Components stored contiguously: [C₀][C₁][C₂][C₃]...<br/><br/>Maps maintain:<br/>Entity → Array Index<br/>Array Index → Entity<br/><br/>Why?<br/>• Cache-friendly iteration<br/>• No holes in memory<br/>• Fast linear traversal for systems<br/><br/>On Remove:<br/>Swap with last element, then pop<br/>→ Always keep array packed"
+    
+    IComponentArray <|.. ComponentArray~T~
+    
+    %% ==================== COMPONENT MANAGER ====================
+    
+    class ComponentManager {
+        -unordered_map~const char*, ComponentType~ mComponentTypes
+        -unordered_map~const char*, shared_ptr~IComponentArray~~ mComponentArrays
+        -ComponentType mNextComponentType
+        +RegisterComponent~T~() void
+        +GetComponentType~T~() ComponentType
+        +AddComponent~T~(Entity entity, T component) void
+        +RemoveComponent~T~(Entity entity) void
+        +GetComponent~T~(Entity entity) T&
+        +EntityDestroyed(Entity entity) void
+        -GetComponentArray~T~() shared_ptr~ComponentArray~T~~
+    }
+    
+    note for ComponentManager "Responsibilities:<br/>• Register component types (assign IDs)<br/>• Store component arrays<br/>• Route add/get/remove to correct array<br/><br/>Type Registration:<br/>RegisterComponent~Transform~(); // Gets ID 0<br/>RegisterComponent~Velocity~(); // Gets ID 1<br/>RegisterComponent~Sprite~(); // Gets ID 2<br/><br/>Storage:<br/>Map: type_name → ComponentArray~T~"
+    
+    ComponentManager o-- IComponentArray : manages
+    ComponentManager ..> ComponentArray~T~ : creates
+    
+    %% ==================== SYSTEM BASE ====================
+    
+    class System {
+        <<abstract>>
+        #set~Entity~ mEntities
+        +Init() void*
+        +Update(float dt) void*
+        +Shutdown() void*
+    }
+    
+    note for System "Systems operate on entities<br/><br/>Only entities matching the<br/>system's signature are added<br/>to mEntities set.<br/><br/>Example:<br/>MovementSystem signature:<br/>Transform | Velocity<br/><br/>Will only process entities<br/>with BOTH components."
+    
+    %% ==================== SYSTEM MANAGER ====================
+    
+    class SystemManager {
+        -unordered_map~const char*, shared_ptr~System~~ mSystems
+        -unordered_map~const char*, Signature~ mSignatures
+        +RegisterSystem~T~() shared_ptr~T~
+        +SetSignature~T~(Signature signature) void
+        +EntityDestroyed(Entity entity) void
+        +EntitySignatureChanged(Entity entity, Signature entitySignature) void
+    }
+    
+    note for SystemManager "Responsibilities:<br/>• Register systems<br/>• Store system signatures<br/>• Maintain system entity lists<br/><br/>Entity Signature Matching:<br/>if ((entitySignature & systemSignature) == systemSignature)<br/>    // Entity has ALL required components<br/>    system→mEntities.insert(entity)<br/><br/>Called when:<br/>• Component added → check all systems<br/>• Component removed → check all systems<br/>• Entity destroyed → remove from all systems"
+    
+    SystemManager o-- System : manages
+    
+    %% ==================== COORDINATOR (FACADE) ====================
+    
+    class Coordinator {
+        -unique_ptr~ComponentManager~ mComponentManager
+        -unique_ptr~EntityManager~ mEntityManager
+        -unique_ptr~SystemManager~ mSystemManager
+        +Init() void
+        +CreateEntity() Entity
+        +DestroyEntity(Entity entity) void
+        +RegisterComponent~T~() void
+        +AddComponent~T~(Entity entity, T component) void
+        +RemoveComponent~T~(Entity entity) void
+        +GetComponent~T~(Entity entity) T&
+        +GetComponentType~T~() ComponentType
+        +RegisterSystem~T~() shared_ptr~T~
+        +SetSystemSignature~T~(Signature signature) void
+    }
+    
+    note for Coordinator "FACADE PATTERN<br/><br/>Single entry point for all ECS operations.<br/>Coordinates between the three managers.<br/><br/>Usage:<br/>Coordinator gCoordinator;<br/><br/>gCoordinator.Init();<br/>Entity player = gCoordinator.CreateEntity();<br/>gCoordinator.AddComponent(player, Transform{...});"
+    
+    Coordinator *-- EntityManager
+    Coordinator *-- ComponentManager
+    Coordinator *-- SystemManager
+    
+    %% ==================== RELATIONSHIPS ====================
+    
+    EntityManager -- Entity : manages
+    EntityManager -- Signature : stores
+    ComponentManager -- ComponentType : assigns
+    SystemManager -- Signature : matches
