@@ -1,0 +1,102 @@
+@startuml Config and ResourceManager Flow
+
+title Flow de chargement des assets: Config → ResourceManager → Utilisation
+
+actor "GameEngine" as Engine
+participant "Config" as Config
+participant "ResourceManager<Texture>" as RM
+participant "RenderSystem" as Render
+participant "Sprite" as Sprite
+
+== Phase 1: Initialisation ==
+
+Engine -> Config : load("assets")
+activate Config
+note right
+    Scanne assets/players/
+    et assets/enemies/
+end note
+
+Config -> Config : scanDirectory("assets/players", "players")
+Config -> Config : scanDirectory("assets/enemies", "enemies")
+
+note over Config
+    _data rempli :
+    "players.ship" → "assets/players/spaceships.gif"
+    "enemies.basic" → "assets/enemies/r-typesheet10.gif"
+end note
+
+Config --> Engine : ✅ Assets scannés
+deactivate Config
+
+== Phase 2: Chargement des Textures ==
+
+Engine -> Config : get<string>("players.ship")
+activate Config
+Config --> Engine : "assets/players/spaceships.gif"
+deactivate Config
+
+note right of Engine
+    Maintenant on a le CHEMIN
+    Mais pas encore la texture
+end note
+
+Engine -> RM : load("assets/players/spaceships.gif")
+activate RM
+
+note over RM
+    Charge le fichier .gif
+    depuis le disque
+    Crée sf::Texture (2 MB)
+end note
+
+RM -> RM : Vérifie si déjà en cache
+RM -> RM : Charge depuis disque → sf::Texture
+
+note over RM
+    _resourceCache :
+    "assets/players/spaceships.gif" → [sf::Texture]
+end note
+
+RM --> Engine : ✅ Texture chargée
+deactivate RM
+
+== Phase 3: Utilisation pendant le jeu ==
+
+Render -> Config : get<string>("players.ship")
+activate Config
+Config --> Render : "assets/players/spaceships.gif"
+deactivate Config
+
+Render -> RM : get("assets/players/spaceships.gif")
+activate RM
+
+note over RM
+    Texture déjà en cache !
+    Retour immédiat (< 1ms)
+end note
+
+RM --> Render : shared_ptr<sf::Texture>
+deactivate RM
+
+Render -> Sprite : setTexture(texture)
+activate Sprite
+Sprite --> Render : ✅ Sprite configuré
+deactivate Sprite
+
+Render -> Render : draw(sprite)
+
+note over Render
+    La texture est utilisée
+    pour dessiner le vaisseau
+end note
+
+== Résumé ==
+
+note over Engine, Sprite
+    **Config** : Annuaire léger (strings)
+    **ResourceManager** : Entrepôt lourd (textures en RAM)
+    **Séparation** : Flexibilité et performance optimale
+end note
+
+@enduml

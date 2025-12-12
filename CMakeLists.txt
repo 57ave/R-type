@@ -15,4 +15,9 @@ file(GLOB_RECURSE SOURCES engine/src/*.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PRIVATE includes)
+# Ajoute le dossier include au chemin de recherche
+target_include_directories(${PROJECT_NAME} PRIVATE engine/include)
+
+# Trouve et lie SFML
+find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE sfml-system sfml-window sfml-graphics sfml-audio sfml-network)
