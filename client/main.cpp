@@ -3,6 +3,7 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 class Background
 {
@@ -383,10 +384,18 @@ class ChargedMissile
             sf::FloatRect playerBounds = player.getBounds();
 
             float missileHeight = data.height * 3.0f;
+            float missileWidth = data.width * 3.0f;
             float missileX = playerPos.x + playerBounds.width;
             float missileY = playerPos.y + (playerBounds.height / 2.0f) - (missileHeight / 2.0f);
 
             sprite.setPosition(missileX, missileY);
+
+            // Initialiser la hitbox
+            hitbox.setSize(sf::Vector2f(missileWidth, missileHeight));
+            hitbox.setFillColor(sf::Color::Transparent);
+            hitbox.setOutlineColor(sf::Color::Cyan);
+            hitbox.setOutlineThickness(2);
+            hitbox.setPosition(missileX, missileY);
 
             animationTime = 0.0f;
             currentFrame = 0;
@@ -430,6 +439,7 @@ class ChargedMissile
 
         sf::Vector2f getPosition() const { return sprite.getPosition(); }
         sf::FloatRect getBounds() const { return sprite.getGlobalBounds(); }
+        const sf::RectangleShape& getHitbox() const { return hitbox; }
         float getSpeed() const { return speed; }
         int getChargeLevel() const { return chargeLevel; }
 
@@ -439,6 +449,263 @@ class ChargedMissile
             hitbox.setPosition(x, y);
         }
         void setSpeed(float s) { speed = s; }
+};
+
+class Explosion
+{
+    private:
+        sf::Sprite sprite;
+        sf::Texture* texture;
+        float animationTime;
+        float frameTime;
+        int currentFrame;
+        int maxFrames;
+        bool finished;
+
+        // Coordonnées exactes de chaque frame d'explosion dans le spritesheet
+        struct ExplosionFrame {
+            int x;      // Position X dans la spritesheet
+            int y;      // Position Y dans la spritesheet
+            int width;  // Largeur du sprite
+            int height; // Hauteur du sprite
+        };
+
+        // Définir les 6 premières frames de l'explosion
+        ExplosionFrame frames[6] = {
+            {129, 0, 34, 35},    // Frame 0
+            {160, 0, 34, 35},    // Frame 1
+            {193, 0, 34, 35},    // Frame 2
+            {226, 0, 34, 35},    // Frame 3
+            {261, 0, 34, 35},    // Frame 4
+            {293, 0, 34, 35}     // Frame 5
+        };
+
+        public:
+        Explosion() : animationTime(0.0f), frameTime(0.1f), currentFrame(0),
+                      maxFrames(6), finished(false) {}
+
+        void init(sf::Texture &tex, sf::Vector2f position)
+        {
+            texture = &tex;
+            sprite.setTexture(tex);
+
+            sprite.setScale(2.5f, 2.5f);
+
+            // Afficher la première frame immédiatement
+            ExplosionFrame& frame = frames[0];
+            sf::IntRect explosionRect(frame.x, frame.y, frame.width, frame.height);
+            sprite.setTextureRect(explosionRect);
+
+            // Centrer l'explosion sur la position
+            sprite.setPosition(position);
+            
+            currentFrame = 0;
+            animationTime = 0.0f;
+        }
+
+        void update(float deltaTime)
+        {
+            if (finished)
+                return;
+
+            animationTime += deltaTime;
+
+            if (animationTime >= frameTime)
+            {
+                animationTime = 0.0f;
+                
+                // Passer à la frame suivante
+                currentFrame++;
+
+                // Vérifier si on a dépassé la dernière frame
+                if (currentFrame >= maxFrames)
+                {
+                    // Animation terminée
+                    finished = true;
+                    return; // Important : ne pas essayer d'afficher une frame inexistante
+                }
+                
+                // Mettre à jour avec la nouvelle frame
+                ExplosionFrame& frame = frames[currentFrame];
+                sf::IntRect newRect(frame.x, frame.y, frame.width, frame.height);
+                sprite.setTextureRect(newRect);
+            }
+        }
+
+        void draw(sf::RenderWindow &window)
+        {
+            if (!finished)
+            {
+                window.draw(sprite);
+            }
+        }
+
+        bool isFinished() const { return finished; }
+};
+
+class Enemy
+{
+    public:
+        enum class MovementPattern
+        {
+            STRAIGHT,      // Ligne droite de droite à gauche
+            SINE_WAVE,     // Vague sinusoïdale
+            ZIGZAG,        // Zigzag haut/bas
+            CIRCULAR,      // Mouvement circulaire
+            DIAGONAL_DOWN, // Diagonale descendante
+            DIAGONAL_UP    // Diagonale montante
+        };
+
+    private:
+        sf::Sprite sprite;
+        sf::RectangleShape hitbox;
+        sf::Texture* texture;
+        float speed;
+        float timeAlive;           // Temps écoulé depuis la création
+        MovementPattern pattern;
+        sf::Vector2f startPosition; // Position de départ pour certains patterns
+        float amplitude;            // Amplitude pour les mouvements ondulatoires
+        float frequency;            // Fréquence pour les mouvements ondulatoires
+        
+        // Animation
+        float animationTime;
+        float frameTime;
+        int currentFrame;
+        int spriteWidth;
+        int spriteHeight;
+        int maxFrames;  // Seulement les 8 premières colonnes (partie gauche)
+
+    public:
+        Enemy() : speed(300.0f), timeAlive(0.0f), pattern(MovementPattern::STRAIGHT),
+                  amplitude(100.0f), frequency(2.0f), animationTime(0.0f), frameTime(0.1f), currentFrame(0),
+                  spriteWidth(33), spriteHeight(32), maxFrames(8) {}
+
+        void init(sf::Texture &tex, sf::Vector2f position, MovementPattern movePattern = MovementPattern::STRAIGHT)
+        {
+            texture = &tex;
+            sprite.setTexture(tex);
+
+            // Utiliser la première frame (colonne 0) de la partie gauche
+            sf::IntRect enemyRect(0, 0, spriteWidth, spriteHeight);
+            sprite.setTextureRect(enemyRect);
+
+            sprite.setScale(2.5f, 2.5f);
+            sprite.setPosition(position);
+
+            startPosition = position;
+            pattern = movePattern;
+            timeAlive = 0.0f;
+            animationTime = 0.0f;
+            currentFrame = 0;
+
+            hitbox.setSize(sf::Vector2f(spriteWidth * 2.5f, spriteHeight * 2.5f));
+            hitbox.setFillColor(sf::Color::Transparent);
+            hitbox.setOutlineColor(sf::Color::Green);
+            hitbox.setOutlineThickness(2);
+            hitbox.setPosition(position);
+        }
+        
+        void animate(float deltaTime)
+        {
+            animationTime += deltaTime;
+
+            if (animationTime >= frameTime)
+            {
+                animationTime = 0.0f;
+                currentFrame++;
+
+                // Boucler sur les 8 premières frames (partie gauche uniquement)
+                if (currentFrame >= maxFrames)
+                {
+                    currentFrame = 0;
+                }
+
+                // Mettre à jour la texture rect (colonnes 0 à 7)
+                sf::IntRect newRect(currentFrame * spriteWidth, 0, spriteWidth, spriteHeight);
+                sprite.setTextureRect(newRect);
+            }
+        }
+
+        void update(float deltaTime, float, float screenHeight)
+        {
+            // Animer le sprite
+            animate(deltaTime);
+            
+            timeAlive += deltaTime;
+            sf::Vector2f currentPos = sprite.getPosition();
+            sf::Vector2f newPos = currentPos;
+
+            switch (pattern)
+            {
+                case MovementPattern::STRAIGHT:
+                    // Simple mouvement horizontal vers la gauche
+                    newPos.x -= speed * deltaTime;
+                    break;
+
+                case MovementPattern::SINE_WAVE:
+                    // Mouvement en vague sinusoïdale
+                    newPos.x -= speed * deltaTime;
+                    newPos.y = startPosition.y + amplitude * std::sin(frequency * timeAlive);
+                    break;
+
+                case MovementPattern::ZIGZAG:
+                    // Zigzag : change de direction verticale périodiquement
+                    newPos.x -= speed * deltaTime;
+                    newPos.y = startPosition.y + amplitude * std::sin(frequency * timeAlive * 2);
+                    break;
+
+                case MovementPattern::CIRCULAR:
+                    // Mouvement circulaire tout en avançant
+                    newPos.x -= speed * deltaTime * 0.5f; // Plus lent horizontalement
+                    newPos.x += amplitude * 0.3f * std::cos(frequency * timeAlive);
+                    newPos.y = startPosition.y + amplitude * std::sin(frequency * timeAlive);
+                    break;
+
+                case MovementPattern::DIAGONAL_DOWN:
+                    // Diagonale descendante
+                    newPos.x -= speed * deltaTime;
+                    newPos.y += speed * deltaTime * 0.5f;
+                    break;
+
+                case MovementPattern::DIAGONAL_UP:
+                    // Diagonale montante
+                    newPos.x -= speed * deltaTime;
+                    newPos.y -= speed * deltaTime * 0.5f;
+                    break;
+            }
+
+            // Limiter la position Y pour rester dans l'écran
+            float spriteScaledHeight = spriteHeight * sprite.getScale().y;
+            if (newPos.y < 0)
+            {
+                newPos.y = 0;
+            }
+            else if (newPos.y + spriteScaledHeight > screenHeight)
+            {
+                newPos.y = screenHeight - spriteScaledHeight;
+            }
+
+            sprite.setPosition(newPos);
+            hitbox.setPosition(newPos);
+        }
+
+        void draw(sf::RenderWindow &window, bool drawHitbox = false)
+        {
+            window.draw(sprite);
+            if (drawHitbox)
+                window.draw(hitbox);
+        }
+
+        // Getters
+        sf::Vector2f getPosition() const { return sprite.getPosition(); }
+        sf::FloatRect getBounds() const { return sprite.getGlobalBounds(); }
+        const sf::RectangleShape& getHitbox() const { return hitbox; }
+        float getSpeed() const { return speed; }
+
+        // Setters
+        void setSpeed(float s) { speed = s; }
+        void setAmplitude(float a) { amplitude = a; }
+        void setFrequency(float f) { frequency = f; }
 };
 
 class Missile
@@ -465,12 +732,20 @@ class Missile
 
             // Calculer la hauteur du missile après scale (20 * 3.0f = 60)
             float missileHeight = 20 * 3.0f;
+            float missileWidth = 20 * 3.0f;
 
             // Positionner le missile à droite du joueur et centré verticalement
             float missileX = playerPos.x + playerBounds.width;
             float missileY = playerPos.y + (playerBounds.height / 2.0f) - (missileHeight / 2.0f) + 10.0f;
 
             sprite.setPosition(missileX, missileY);
+
+            // Initialiser la hitbox
+            hitbox.setSize(sf::Vector2f(missileWidth, missileHeight));
+            hitbox.setFillColor(sf::Color::Transparent);
+            hitbox.setOutlineColor(sf::Color::Blue);
+            hitbox.setOutlineThickness(2);
+            hitbox.setPosition(missileX, missileY);
 
             std::cout << "Missile créé à la position (" << sprite.getPosition().x << ", " << sprite.getPosition().y << ")" << std::endl;
         }
@@ -491,6 +766,7 @@ class Missile
         // Getters
         sf::Vector2f getPosition() const { return sprite.getPosition(); }
         sf::FloatRect getBounds() const { return sprite.getGlobalBounds(); }
+        const sf::RectangleShape& getHitbox() const { return hitbox; }
         float getSpeed() const { return speed; }
 
         // Setters
@@ -535,14 +811,36 @@ int main()
     }
     std::cout << "Texture missile chargée avec succès!" << std::endl;
 
+    // Charger la texture des ennemis (vaisseau rouge)
+    sf::Texture enemyTexture;
+    if (!enemyTexture.loadFromFile("../../client/assets/enemies/r-typesheet5.png"))
+    {
+        std::cerr << "Error: Could not load enemy sprite" << std::endl;
+        return 1;
+    }
+
+    // Charger la texture des explosions
+    sf::Texture explosionTexture;
+    if (!explosionTexture.loadFromFile("../../client/assets/enemies/r-typesheet44.png"))
+    {
+        std::cerr << "Error: Could not load explosion sprite" << std::endl;
+        return 1;
+    }
+
     std::vector<Missile> missiles;
     std::vector<ChargedMissile> chargedMissiles;
+    std::vector<Enemy> enemies;
+    std::vector<Explosion> explosions;
     std::vector<ShootEffect> shootEffects;
     std::vector<ChargedShootEffect> chargedShootEffects;
     bool spacePressed = false;
     float spaceHoldTime = 0.0f;
-    const float chargeStartTime = 0.1f; // Temps pour démarrer l'animation (réduit)
-    ChargedShootEffect* activeChargingEffect = nullptr; // Animation de charge en cours
+    const float chargeStartTime = 0.1f;
+    ChargedShootEffect* activeChargingEffect = nullptr;
+
+    // Système de spawn d'ennemis
+    float enemySpawnTimer = 0.0f;
+    float enemySpawnInterval = 2.0f; // Spawn un ennemi toutes les 2 secondes
 
     while (window.isOpen())
     {
@@ -624,6 +922,137 @@ int main()
         background.animate(deltaTime);
         player.move(deltaTime, window.getSize());
 
+        // Système de spawn d'ennemis
+        enemySpawnTimer += deltaTime;
+        if (enemySpawnTimer >= enemySpawnInterval)
+        {
+            enemySpawnTimer = 0.0f;
+
+            // Créer un ennemi avec un pattern aléatoire
+            Enemy enemy;
+            float spawnY = 100 + (rand() % 800); // Position Y aléatoire
+            sf::Vector2f spawnPos(window.getSize().x + 50, spawnY); // Spawn à droite de l'écran
+
+            // Choisir un pattern aléatoire
+            Enemy::MovementPattern patterns[] = {
+                Enemy::MovementPattern::STRAIGHT,
+                Enemy::MovementPattern::SINE_WAVE,
+                Enemy::MovementPattern::ZIGZAG,
+                Enemy::MovementPattern::CIRCULAR,
+                Enemy::MovementPattern::DIAGONAL_DOWN,
+                Enemy::MovementPattern::DIAGONAL_UP
+            };
+
+            int patternIndex = rand() % 6;
+            enemy.init(enemyTexture, spawnPos, patterns[patternIndex]);
+
+            // Varier la vitesse et les paramètres
+            enemy.setSpeed(200.0f + (rand() % 200));
+            enemy.setAmplitude(50.0f + (rand() % 100));
+            enemy.setFrequency(1.0f + (rand() % 3));
+
+            enemies.push_back(enemy);
+        }
+
+        // Mettre à jour et supprimer les ennemis hors écran
+        for (auto it = enemies.begin(); it != enemies.end();)
+        {
+            it->update(deltaTime, window.getSize().x, window.getSize().y);
+
+            // Supprimer si hors écran (à gauche)
+            sf::Vector2f pos = it->getPosition();
+            if (pos.x < -100)
+            {
+                it = enemies.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        // Détection de collision entre missiles normaux et ennemis
+        for (auto missileIt = missiles.begin(); missileIt != missiles.end();)
+        {
+            bool missileHit = false;
+            sf::FloatRect missileBounds = missileIt->getHitbox().getGlobalBounds();
+
+            for (auto enemyIt = enemies.begin(); enemyIt != enemies.end();)
+            {
+                sf::FloatRect enemyBounds = enemyIt->getHitbox().getGlobalBounds();
+
+                if (missileBounds.intersects(enemyBounds))
+                {
+                    // Collision détectée !
+                    // Créer une explosion à la position de l'ennemi
+                    Explosion explosion;
+                    explosion.init(explosionTexture, enemyIt->getPosition());
+                    explosions.push_back(explosion);
+
+                    // Supprimer l'ennemi
+                    enemyIt = enemies.erase(enemyIt);
+
+                    // Marquer le missile pour suppression
+                    missileHit = true;
+                    break;
+                }
+                else
+                {
+                    ++enemyIt;
+                }
+            }
+
+            if (missileHit)
+            {
+                missileIt = missiles.erase(missileIt);
+            }
+            else
+            {
+                ++missileIt;
+            }
+        }
+
+        // Détection de collision entre missiles chargés et ennemis
+        for (auto missileIt = chargedMissiles.begin(); missileIt != chargedMissiles.end();)
+        {
+            bool missileHit = false;
+            sf::FloatRect missileBounds = missileIt->getHitbox().getGlobalBounds();
+
+            for (auto enemyIt = enemies.begin(); enemyIt != enemies.end();)
+            {
+                sf::FloatRect enemyBounds = enemyIt->getHitbox().getGlobalBounds();
+
+                if (missileBounds.intersects(enemyBounds))
+                {
+                    // Collision détectée !
+                    // Créer une explosion à la position de l'ennemi
+                    Explosion explosion;
+                    explosion.init(explosionTexture, enemyIt->getPosition());
+                    explosions.push_back(explosion);
+
+                    // Supprimer l'ennemi
+                    enemyIt = enemies.erase(enemyIt);
+
+                    // Marquer le missile pour suppression
+                    missileHit = true;
+                    break;
+                }
+                else
+                {
+                    ++enemyIt;
+                }
+            }
+
+            if (missileHit)
+            {
+                missileIt = chargedMissiles.erase(missileIt);
+            }
+            else
+            {
+                ++missileIt;
+            }
+        }
+
         // Déplacer et supprimer les missiles normaux hors écran
         for (auto it = missiles.begin(); it != missiles.end();)
         {
@@ -687,10 +1116,30 @@ int main()
             // L'animation reste bloquée sur la dernière frame tant que la touche est maintenue
         }
 
+        // Mettre à jour les explosions et supprimer celles terminées
+        for (auto it = explosions.begin(); it != explosions.end();)
+        {
+            it->update(deltaTime);
+            if (it->isFinished())
+            {
+                it = explosions.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
         // Rendu
         window.clear();
         background.draw(window);
         player.draw(window);
+
+        // Dessiner les ennemis
+        for (auto &enemy : enemies)
+        {
+            enemy.draw(window, false); // true pour voir les hitbox
+        }
 
         // Dessiner les missiles normaux
         for (auto &missile : missiles)
@@ -720,6 +1169,12 @@ int main()
         if (activeChargingEffect != nullptr)
         {
             activeChargingEffect->draw(window);
+        }
+
+        // Dessiner les explosions
+        for (auto &explosion : explosions)
+        {
+            explosion.draw(window);
         }
 
         window.display();
