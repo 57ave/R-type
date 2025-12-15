@@ -7,6 +7,7 @@ file(GLOB_RECURSE CLIENT_SOURCES
 
 # Créer l'exécutable client
 add_executable(r-type_client
+    main.cpp
     ${CLIENT_SOURCES}
 )
 
