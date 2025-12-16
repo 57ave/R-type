@@ -1,27 +1,41 @@
-cmake_minimum_required(VERSION 3.16)
-project(rtype_server)
+cmake_minimum_required(VERSION 3.15)
+project(RType VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-include(cmake/CPM.cmake)
+# Export compile commands for IntelliSense
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-CPMAddPackage(
-  NAME SFML
-  GITHUB_REPOSITORY SFML/SFML
-  GIT_TAG 2.6.1
-  GIT_SHALLOW TRUE
-)
+# Options de build
+option(BUILD_CLIENT "Build client executable" ON)
+option(BUILD_SERVER "Build server executable" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
-CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
+# Compiler warnings
+if(MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-add_executable(r-type_server
-    engine/src/network/NetworkServer.cpp
-    engine/src/network/UdpServer.cpp
-)
+# Find SFML (needed for client)
+find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
 
-find_package(SFML 2.6.1 REQUIRED)
+# Subdirectories
+add_subdirectory(engine)
+add_subdirectory(game)
 
-target_include_directories(r-type_server PRIVATE ${asio_SOURCE_DIR}/asio/include engine/src)
-target_link_libraries(r-type_server PRIVATE sfml-graphics sfml-window sfml-system)
+if(BUILD_CLIENT)
+    add_subdirectory(client)
+endif()
 
+if(BUILD_SERVER)
+    add_subdirectory(server)
+endif()
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

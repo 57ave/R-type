@@ -86,3 +86,6 @@ config.local.json
 r-type_server
 Makefile
 CPack*
+build
+.vscode/
+engine/build
