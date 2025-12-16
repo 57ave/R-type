@@ -163,9 +163,15 @@ ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst)
     sprite->setTexture(backgroundTexture.get());
     sprite->setPosition(Vector2f(x, y));
     
+    // Calculate scale to fit window height
+    Vector2u texSize = backgroundTexture->getSize();
+    float scale = windowHeight / texSize.y;
+    
     Sprite spriteComp;
     spriteComp.sprite = sprite;
     spriteComp.layer = -10;
+    spriteComp.scaleX = scale;
+    spriteComp.scaleY = scale;
     gCoordinator.AddComponent(bg, spriteComp);
     
     // Scrolling background
@@ -173,9 +179,6 @@ ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst)
     scrolling.scrollSpeed = 200.0f;
     scrolling.horizontal = true;
     scrolling.loop = true;
-    
-    Vector2u texSize = backgroundTexture->getSize();
-    float scale = windowHeight / texSize.y;
     scrolling.spriteWidth = texSize.x * scale;
     
     if (isFirst) {
@@ -367,6 +370,8 @@ ECS::Entity CreateExplosion(float x, float y) {
     spriteComp.sprite = sprite;
     spriteComp.textureRect = rect;
     spriteComp.layer = 15;
+    spriteComp.scaleX = 2.5f;  // Scale up the explosion
+    spriteComp.scaleY = 2.5f;
     gCoordinator.AddComponent(explosion, spriteComp);
     
     // Animation
@@ -379,7 +384,7 @@ ECS::Entity CreateExplosion(float x, float y) {
     anim.frameHeight = 35;
     anim.startX = 129;
     anim.startY = 0;
-    anim.spacing = 31;
+    anim.spacing = 33;  // Average spacing between explosion frames
     gCoordinator.AddComponent(explosion, anim);
     
     // Lifetime (destroy after animation finishes)
@@ -572,9 +577,9 @@ int main(void)
                         CreateMissile(playerPos.x + 99.0f, playerPos.y + 30.0f, false, 0);
                         
                         // Play shoot sound using engine abstraction
-                        if (shootSound.getStatus() != rtype::engine::Sound::Status::Playing) {
-                            shootSound.play();
-                        }
+                        // Stop the sound if it's playing, then play it again for rapid fire
+                        shootSound.stop();
+                        shootSound.play();
                         
                         // Create shoot effect
                         CreateShootEffect(playerPos.x + 89.0f, playerPos.y + 10.0f, player);
@@ -688,10 +693,10 @@ int main(void)
                         playerAnim.targetColumn = 2;
                     }
                     
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) {
+                    if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left)) {
                         playerVel.vx = -speed;
                     }
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+                    if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right)) {
                         playerVel.vx = speed;
                     }
                     
@@ -734,6 +739,27 @@ int main(void)
                 if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {
                     auto& playerAnim = gCoordinator.GetComponent<StateMachineAnimation>(player);
                     playerAnim.targetColumn = 2;
+                    
+                    // Continue animation transition even when not moving
+                    playerAnim.transitionTime += deltaTime;
+                    if (playerAnim.currentColumn != playerAnim.targetColumn && 
+                        playerAnim.transitionTime >= playerAnim.transitionSpeed) {
+                        playerAnim.transitionTime = 0.0f;
+                        
+                        if (playerAnim.currentColumn < playerAnim.targetColumn) {
+                            playerAnim.currentColumn++;
+                        } else if (playerAnim.currentColumn > playerAnim.targetColumn) {
+                            playerAnim.currentColumn--;
+                        }
+                        
+                        if (gCoordinator.HasComponent<Sprite>(player)) {
+                            auto& sprite = gCoordinator.GetComponent<Sprite>(player);
+                            IntRect rect(33 * playerAnim.currentColumn, playerAnim.currentRow * 17, 33, 17);
+                            if (sprite.sprite) {
+                                sprite.sprite->setTextureRect(rect);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -968,7 +994,7 @@ int main(void)
                 Transform transform;
                 transform.position = Vector2f(pos.x, pos.y);
                 transform.rotation = 0.0f;
-                transform.scale = Vector2f(3.0f, 3.0f);
+                transform.scale = Vector2f(sprite.scaleX, sprite.scaleY);
                 
                 renderer.draw(*sprite.sprite, transform);
             }
