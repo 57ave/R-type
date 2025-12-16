@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  dev:
+    build: .
+    volumes:
+      - .:/app
+    # Keep the container running
+    command: tail -f /dev/null

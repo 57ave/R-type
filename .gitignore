@@ -1,3 +1,91 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# CPM dependencies
+cpm-package-lock.cmake
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+*.out
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Object files
+*.slo
+*.lo
+*.obj
+
+# Static libraries
+*.lai
+*.la
+*.lib
+
+# Fortran modules
+*.mod
+*.smod
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Package managers
+conan/
+vcpkg/
+node_modules/
+
+# Game assets (if any)
+assets/
+data/
+
+# User-specific configs
+.env
+config.local.json
+
+# Backup files
+*.orig
+*.rej
+
+*.pdf
+r-type_server
+Makefile
+CPack*
 build
 .vscode/
 engine/build
