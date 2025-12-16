@@ -12,8 +12,8 @@ void MovementSystem::Init() {
 
 void MovementSystem::Update(float dt) {
     for (auto entity : mEntities) {
-        auto& transform = m_Coordinator->GetComponent<ECS::Transform>(entity);
-        auto& velocity = m_Coordinator->GetComponent<ECS::Velocity>(entity);
+        auto& transform = m_Coordinator->GetComponent<rtype::engine::ECS::Transform>(entity);
+        auto& velocity = m_Coordinator->GetComponent<rtype::engine::ECS::Velocity>(entity);
         
         // Apply velocity to position
         transform.x += velocity.dx * dt;

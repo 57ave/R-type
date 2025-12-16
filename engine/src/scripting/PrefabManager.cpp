@@ -1,5 +1,5 @@
-#include <engine/scripting/PrefabManager.hpp>
-#include <engine/ecs/Components.hpp>
+#include <scripting/PrefabManager.hpp>
+#include <ecs/Components.hpp>
 #include <iostream>
 
 namespace Scripting {

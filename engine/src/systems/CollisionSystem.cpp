@@ -2,7 +2,7 @@
 #include <components/Position.hpp>
 #include <components/Collider.hpp>
 #include <components/Health.hpp>
-#include <components/Damage.hpp>
+#include <components/Weapon.hpp>
 #include <components/Tag.hpp>
 #include <cmath>
 #include <iostream>

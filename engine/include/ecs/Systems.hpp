@@ -3,6 +3,7 @@
 #include "System.hpp"
 #include "Components.hpp"
 #include "Coordinator.hpp"
+#include "RenderSystem.hpp"
 #include <cmath>
 #include <vector>
 #include <algorithm>

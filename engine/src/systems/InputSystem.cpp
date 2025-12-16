@@ -12,11 +12,11 @@ void InputSystem::Init() {
 void InputSystem::Update(float dt) {
     for (auto entity : mEntities) {
         // Only process player entities
-        if (!m_Coordinator->HasComponent<ECS::Player>(entity)) {
+        if (!m_Coordinator->HasComponent<rtype::engine::ECS::Player>(entity)) {
             continue;
         }
         
-        auto& velocity = m_Coordinator->GetComponent<ECS::Velocity>(entity);
+        auto& velocity = m_Coordinator->GetComponent<rtype::engine::ECS::Velocity>(entity);
         
         // Apply input to velocity
         velocity.dx = 0;

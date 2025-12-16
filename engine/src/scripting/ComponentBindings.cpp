@@ -1,4 +1,4 @@
-#include <engine/scripting/ComponentBindings.hpp>
+#include <scripting/ComponentBindings.hpp>
 
 namespace Scripting {
 

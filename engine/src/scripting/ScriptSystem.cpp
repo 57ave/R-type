@@ -1,4 +1,4 @@
-#include <engine/scripting/ScriptSystem.hpp>
+#include <scripting/ScriptSystem.hpp>
 #include <iostream>
 
 namespace Scripting {

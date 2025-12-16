@@ -17,8 +17,8 @@ void LifetimeSystem::Update(float dt) {
         bool shouldDestroy = false;
         
         // Check projectile lifetime
-        if (m_Coordinator->HasComponent<ECS::Projectile>(entity)) {
-            auto& projectile = m_Coordinator->GetComponent<ECS::Projectile>(entity);
+        if (m_Coordinator->HasComponent<rtype::engine::ECS::Projectile>(entity)) {
+            auto& projectile = m_Coordinator->GetComponent<rtype::engine::ECS::Projectile>(entity);
             projectile.lifetime -= dt;
             
             if (projectile.lifetime <= 0) {
@@ -27,8 +27,13 @@ void LifetimeSystem::Update(float dt) {
         }
         
         // Check power-up duration
+<<<<<<< HEAD
         if (m_Coordinator->HasComponent<ECS::PowerUp>(entity)) {
             auto& powerup = m_Coordinator->GetComponent<ECS::PowerUp>(entity);
+=======
+        if (m_Coordinator->HasComponent<rtype::engine::ECS::PowerUp>(entity)) {
+            auto& powerup = m_Coordinator->GetComponent<rtype::engine::ECS::PowerUp>(entity);
+>>>>>>> 70f068f3120b0cf03b296410b8e9109e01050291
             if (powerup.duration > 0) {
                 powerup.duration -= dt;
                 

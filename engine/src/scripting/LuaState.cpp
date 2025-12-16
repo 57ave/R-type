@@ -1,4 +1,4 @@
-#include <engine/scripting/LuaState.hpp>
+#include <scripting/LuaState.hpp>
 #include <iostream>
 
 namespace Scripting {
