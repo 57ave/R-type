@@ -17,10 +17,11 @@ CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 
 add_executable(r-type_server
     engine/src/network/NetworkServer.cpp
+    engine/src/network/UdpServer.cpp
 )
 
 find_package(SFML 2.6.1 REQUIRED)
 
-target_include_directories(r-type_server PRIVATE ${asio_SOURCE_DIR}/include engine/src)
+target_include_directories(r-type_server PRIVATE ${asio_SOURCE_DIR}/asio/include engine/src)
 target_link_libraries(r-type_server PRIVATE sfml-graphics sfml-window sfml-system)
 
