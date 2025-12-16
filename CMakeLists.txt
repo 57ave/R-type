@@ -20,22 +20,13 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find SFML (needed for client)
-find_package(SFML 2.5 COMPONENTS graphics window system audio REQUIRED)
+file(GLOB_RECURSE SOURCES engine/src/*.cpp)
 
-# Subdirectories
-add_subdirectory(engine)
-add_subdirectory(game)
+add_executable(${PROJECT_NAME} ${SOURCES})
 
-if(BUILD_CLIENT)
-    add_subdirectory(client)
-endif()
+# Ajoute le dossier include au chemin de recherche
+target_include_directories(${PROJECT_NAME} PRIVATE engine/include)
 
-if(BUILD_SERVER)
-    add_subdirectory(server)
-endif()
-
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+# Trouve et lie SFML
+find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE sfml-system sfml-window sfml-graphics sfml-audio sfml-network)
