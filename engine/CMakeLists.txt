@@ -20,6 +20,7 @@ target_link_libraries(engine PUBLIC
     sfml-graphics
     sfml-window
     sfml-system
+    sfml-audio
 )
 
 # ==================== Examples (Optional) ====================

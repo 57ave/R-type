@@ -1,6 +1,7 @@
 #include <SFML/System/Clock.hpp>
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -746,8 +747,6 @@ class Missile
             hitbox.setOutlineColor(sf::Color::Blue);
             hitbox.setOutlineThickness(2);
             hitbox.setPosition(missileX, missileY);
-
-            std::cout << "Missile créé à la position (" << sprite.getPosition().x << ", " << sprite.getPosition().y << ")" << std::endl;
         }
 
         void move(float deltaTime)
@@ -809,7 +808,20 @@ int main()
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
-    std::cout << "Texture missile chargée avec succès!" << std::endl;
+
+    // Charger le son de tir (vfx/shoot.ogg)
+    sf::SoundBuffer shootBuffer;
+    sf::Sound shootSound;
+    if (!shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg"))
+    {
+        std::cerr << "Warning: Could not load shoot.ogg (no shoot sound)" << std::endl;
+        // Ne pas échouer la compilation/exécution si le son manque, on continue sans son
+    }
+    else
+    {
+        shootSound.setBuffer(shootBuffer);
+        shootSound.setVolume(80.f); // ajuster si besoin
+    }
 
     // Charger la texture des ennemis (vaisseau rouge)
     sf::Texture enemyTexture;
@@ -876,6 +888,12 @@ int main()
                         Missile missile;
                         missile.init(player, missileTexture);
                         missiles.push_back(missile);
+
+                        // Jouer le son de tir si chargé
+                        if (shootSound.getBuffer() != nullptr)
+                        {
+                            shootSound.play();
+                        }
 
                         ShootEffect effect;
                         sf::Vector2f playerPos = player.getPosition();
