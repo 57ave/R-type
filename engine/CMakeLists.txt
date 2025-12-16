@@ -30,6 +30,10 @@ add_library(ecs STATIC
     src/ecs/Coordinator.cpp
 )
 
+target_include_directories(ecs PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 # Inclure CPM.cmake pour la gestion des dépendances
 include(cmake/CPM.cmake)
 
@@ -41,16 +45,25 @@ if (NOT SFML_FOUND)
     CPMAddPackage("gh:SFML/SFML#2.6.0")
 endif()
 
-# Crée une seule library statique avec tout l'engine
-add_library(engine STATIC ${ENGINE_SOURCES})
+# Enable PIC for ecs library (needed for shared library systems)
+set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(engine PUBLIC
+# Network library
+add_library(network STATIC
+    src/network/UdpServer.cpp
+    src/network/NetworkServer.cpp
+    src/network/UdpClient.cpp
+    src/network/NetworkClient.cpp
+)
+
+target_include_directories(network PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${asio_SOURCE_DIR}/asio/include
 )
 
-# Enable PIC for ecs library (needed for shared library systems)
-set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(network PUBLIC ecs)
+
+set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Core library (for SystemLoader and engine abstractions)
 # Must be defined before rendering because rendering depends on it
@@ -103,6 +116,7 @@ target_link_libraries(engine INTERFACE
     rendering
     core
     scripting
+    network
 )
 
 # Optional: Build examples
@@ -257,7 +271,7 @@ target_include_directories(HealthSystem PUBLIC
 target_link_libraries(HealthSystem PUBLIC ecs)
 
 # Installation
-install(TARGETS ecs rendering core scripting
+install(TARGETS ecs rendering core scripting network
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin

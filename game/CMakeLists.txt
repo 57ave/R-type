@@ -37,6 +37,7 @@ target_link_libraries(r-type_game PRIVATE
     engine
     game
     core
+    network
     sfml-graphics
     sfml-window
     sfml-system

@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <string>
+#include <set>
 
 // Engine includes - Core
 #include <ecs/ECS.hpp>
@@ -20,6 +22,11 @@
 #include <engine/Clock.hpp>
 #include <engine/Audio.hpp>
 
+// Network includes
+#include <network/NetworkClient.hpp>
+#include <network/RTypeProtocol.hpp>
+#include <systems/NetworkSystem.hpp>
+
 // Components
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
@@ -32,6 +39,7 @@
 #include <components/ScrollingBackground.hpp>
 #include <components/MovementPattern.hpp>
 #include <components/Lifetime.hpp>
+#include <components/NetworkId.hpp>
 
 using namespace rtype::engine::rendering;
 using namespace rtype::engine::rendering::sfml;
@@ -453,9 +461,27 @@ ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent) {
     return effect;
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine..." << std::endl;
+    
+    // Parse command line arguments
+    bool networkMode = false;
+    std::string serverAddress = "127.0.0.1";
+    short serverPort = 12345;
+    
+    if (argc > 1 && std::string(argv[1]) == "--network") {
+        networkMode = true;
+        if (argc > 2) {
+            serverAddress = argv[2];
+        }
+        if (argc > 3) {
+            serverPort = static_cast<short>(std::stoi(argv[3]));
+        }
+        std::cout << "Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
+    } else {
+        std::cout << "Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
+    }
     
     // Initialize ECS Coordinator
     gCoordinator.Init();
@@ -479,6 +505,58 @@ int main(void)
     gCoordinator.RegisterComponent<Effect>();
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
+    gCoordinator.RegisterComponent<NetworkId>();
+    
+    // Network setup
+    std::shared_ptr<NetworkClient> networkClient;
+    std::shared_ptr<rtype::engine::systems::NetworkSystem> networkSystem;
+    
+    if (networkMode) {
+        try {
+            networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
+            networkSystem = std::make_shared<rtype::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+            
+            // Set callback to register new entities
+            networkSystem->setEntityCreatedCallback([](ECS::Entity entity) {
+                allEntities.push_back(entity);
+                std::cout << "[Game] Registered network entity " << entity << std::endl;
+            });
+            
+            networkClient->start();
+            networkClient->sendHello();
+            
+            std::cout << "[Game] Network client started, waiting for SERVER_WELCOME..." << std::endl;
+            
+            // Wait for server welcome (with timeout)
+            auto startTime = std::chrono::steady_clock::now();
+            bool connected = false;
+            while (!connected) {
+                networkClient->process();
+                if (networkClient->hasReceivedPackets()) {
+                    auto packet = networkClient->getNextReceivedPacket();
+                    if (static_cast<GamePacketType>(packet.header.type) == GamePacketType::SERVER_WELCOME) {
+                        if (packet.payload.size() >= 1) {
+                            uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
+                            networkSystem->setLocalPlayerId(playerId);
+                            std::cout << "[Game] Connected! Player ID: " << (int)playerId << std::endl;
+                            connected = true;
+                        }
+                    }
+                }
+                
+                auto now = std::chrono::steady_clock::now();
+                if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 5) {
+                    std::cerr << "[Game] Connection timeout!" << std::endl;
+                    return 1;
+                }
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[Game] Network error: " << e.what() << std::endl;
+            return 1;
+        }
+    }
     
     // Create window and renderer
     SFMLWindow window;
@@ -486,39 +564,58 @@ int main(void)
     
     SFMLRenderer renderer(&window.getSFMLWindow());
     
-    // Load textures
+    // Load textures (try multiple paths for flexibility)
     backgroundTexture = std::make_unique<SFMLTexture>();
-    if (!backgroundTexture->loadFromFile("../../client/assets/background.png")) {
+    bool bgLoaded = backgroundTexture->loadFromFile("../../client/assets/background.png") ||
+                    backgroundTexture->loadFromFile("../client/assets/background.png") ||
+                    backgroundTexture->loadFromFile("client/assets/background.png");
+    if (!bgLoaded) {
         std::cerr << "Error: Could not load background.png" << std::endl;
+        std::cerr << "Tried paths: ../../client/assets/, ../client/assets/, client/assets/" << std::endl;
         return 1;
     }
     
     playerTexture = std::make_unique<SFMLTexture>();
-    if (!playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png")) {
+    bool playerLoaded = playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
+                        playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
+                        playerTexture->loadFromFile("client/assets/players/r-typesheet42.png");
+    if (!playerLoaded) {
         std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
     }
     
     missileTexture = std::make_unique<SFMLTexture>();
-    if (!missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png")) {
+    bool missileLoaded = missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
+                         missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
+                         missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
+    if (!missileLoaded) {
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
     
     enemyTexture = std::make_unique<SFMLTexture>();
-    if (!enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png")) {
+    bool enemyLoaded = enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
+                       enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
+                       enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
+    if (!enemyLoaded) {
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
     }
     
     explosionTexture = std::make_unique<SFMLTexture>();
-    if (!explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png")) {
+    bool explosionLoaded = explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
+                           explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
+                           explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
+    if (!explosionLoaded) {
         std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;
     }
     
     // Load sound
-    if (!shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg")) {
+    bool soundLoaded = shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
+                       shootBuffer.loadFromFile("../client/assets/vfx/shoot.ogg") ||
+                       shootBuffer.loadFromFile("client/assets/vfx/shoot.ogg");
+    if (!soundLoaded) {
         std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
     } else {
         shootSound.setBuffer(shootBuffer);
@@ -526,7 +623,11 @@ int main(void)
     }
     
     // Create game entities
-    ECS::Entity player = CreatePlayer(100.0f, 400.0f);
+    ECS::Entity player = 0;
+    if (!networkMode) {
+        // Only create player in local mode - server creates it in network mode
+        player = CreatePlayer(100.0f, 400.0f);
+    }
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
     
     // Game variables using engine abstractions
@@ -542,9 +643,103 @@ int main(void)
     
     std::cout << "Game initialized successfully!" << std::endl;
     
+    // Input mask for network
+    uint8_t inputMask = 0;
+    
+    // Track entities we've added sprites to
+    std::set<ECS::Entity> entitiesWithSprites;
+    
     // Game loop
     while (window.isOpen()) {
         float deltaTime = clock.restart();
+        
+        // Update network system
+        if (networkMode && networkSystem) {
+            networkSystem->Update(deltaTime);
+            
+            // Add sprites to network entities that don't have them
+            for (auto entity : allEntities) {
+                if (entitiesWithSprites.find(entity) == entitiesWithSprites.end() &&
+                    gCoordinator.HasComponent<NetworkId>(entity) &&
+                    gCoordinator.HasComponent<Position>(entity) &&
+                    gCoordinator.HasComponent<Tag>(entity)) {
+                    
+                    auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                    auto& pos = gCoordinator.GetComponent<Position>(entity);
+                    auto& networkId = gCoordinator.GetComponent<NetworkId>(entity);
+                    
+                    // Create sprite based on tag - with proper visuals
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.layer = 10;
+                    spriteComp.scaleX = 3.0f;
+                    spriteComp.scaleY = 3.0f;
+                    
+                    if (tag.name == "Player") {
+                        // Player sprite
+                        sprite->setTexture(playerTexture.get());
+                        int line = networkId.playerId % 4; // Different colors for different players
+                        IntRect rect(33 * 2, line * 17, 33, 17);
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        
+                        // Add animation component
+                        StateMachineAnimation anim;
+                        anim.currentColumn = 2;
+                        anim.targetColumn = 2;
+                        anim.transitionSpeed = 0.15f;
+                        anim.spriteWidth = 33;
+                        anim.spriteHeight = 17;
+                        anim.currentRow = line;
+                        gCoordinator.AddComponent(entity, anim);
+                        
+                    } else if (tag.name == "Enemy") {
+                        // Enemy sprite
+                        sprite->setTexture(enemyTexture.get());
+                        IntRect rect(0, 3 * 33, 32, 32);
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        
+                        // Add animation for enemy
+                        Animation anim;
+                        anim.frameCount = 2;
+                        anim.currentFrame = 0;
+                        anim.frameTime = 0.2f;
+                        anim.currentTime = 0.0f;
+                        anim.loop = true;
+                        anim.frameWidth = 32;
+                        anim.frameHeight = 32;
+                        anim.startX = 0;
+                        anim.startY = 3 * 33;
+                        gCoordinator.AddComponent(entity, anim);
+                        
+                    } else if (tag.name == "PlayerBullet" || tag.name == "bullet" || tag.name == "charged_bullet") {
+                        // Check if it's a charged bullet based on size or other properties
+                        sprite->setTexture(missileTexture.get());
+                        
+                        // Normal missile
+                        IntRect rect(232, 103, 16, 12);
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        spriteComp.scaleX = 2.0f;
+                        spriteComp.scaleY = 2.0f;
+                    }
+                    
+                    sprite->setPosition(Vector2f(pos.x, pos.y));
+                    
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    entitiesWithSprites.insert(entity);
+                    
+                    std::cout << "[Game] Added sprite to network entity " << entity << " (" << tag.name << ")" << std::endl;
+                }
+            }
+        }
+        
+        // Reset input mask
+        inputMask = 0;
         
         // Event handling using engine abstractions
         rtype::engine::InputEvent event;
@@ -665,10 +860,28 @@ int main(void)
             }
         }
         
-        // Handle player input
-        if (gCoordinator.HasComponent<Velocity>(player) && gCoordinator.HasComponent<Position>(player)) {
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) || sf::Keyboard::isKeyPressed(sf::Keyboard::Down) ||
-                sf::Keyboard::isKeyPressed(sf::Keyboard::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
+        // Capture input
+        bool movingUp = sf::Keyboard::isKeyPressed(sf::Keyboard::Up);
+        bool movingDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Down);
+        bool movingLeft = sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
+        bool movingRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Right);
+        bool firing = spacePressed;
+        
+        // Build input mask for network (bit flags from Protocol.md)
+        if (movingUp) inputMask |= (1 << 0);
+        if (movingDown) inputMask |= (1 << 1);
+        if (movingLeft) inputMask |= (1 << 2);
+        if (movingRight) inputMask |= (1 << 3);
+        if (firing) inputMask |= (1 << 4);
+        
+        // Send input to server if in network mode
+        if (networkMode && networkSystem && inputMask != 0) {
+            networkSystem->sendInput(inputMask);
+        }
+        
+        // Handle player input (only in local mode)
+        if (!networkMode && gCoordinator.HasComponent<Velocity>(player) && gCoordinator.HasComponent<Position>(player)) {
+            if (movingUp || movingDown || movingLeft || movingRight) {
                 
                 auto& playerVel = gCoordinator.GetComponent<Velocity>(player);
                 auto& playerPos = gCoordinator.GetComponent<Position>(player);
@@ -676,9 +889,6 @@ int main(void)
                 float speed = 500.0f;
                 playerVel.vx = 0.0f;
                 playerVel.vy = 0.0f;
-                
-                bool movingUp = sf::Keyboard::isKeyPressed(sf::Keyboard::Up);
-                bool movingDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Down);
                 
                 if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {
                     auto& playerAnim = gCoordinator.GetComponent<StateMachineAnimation>(player);
@@ -693,10 +903,10 @@ int main(void)
                         playerAnim.targetColumn = 2;
                     }
                     
-                    if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left)) {
+                    if (movingLeft) {
                         playerVel.vx = -speed;
                     }
-                    if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right)) {
+                    if (movingRight) {
                         playerVel.vx = speed;
                     }
                     
@@ -764,26 +974,28 @@ int main(void)
             }
         }
         
-        // Enemy spawning
-        enemySpawnTimer += deltaTime;
-        if (enemySpawnTimer >= enemySpawnInterval) {
-            enemySpawnTimer = 0.0f;
-            
-            float spawnY = 100.0f + (rand() % 800);
-            MovementPattern::Type patterns[] = {
-                MovementPattern::Type::STRAIGHT,
-                MovementPattern::Type::SINE_WAVE,
-                MovementPattern::Type::ZIGZAG,
-                MovementPattern::Type::CIRCULAR,
-                MovementPattern::Type::DIAGONAL_DOWN,
-                MovementPattern::Type::DIAGONAL_UP
-            };
-            int patternIndex = rand() % 6;
-            
-            CreateEnemy(1920.0f + 50.0f, spawnY, patterns[patternIndex]);
+        // Enemy spawning (only in local mode)
+        if (!networkMode) {
+            enemySpawnTimer += deltaTime;
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                enemySpawnTimer = 0.0f;
+                
+                float spawnY = 100.0f + (rand() % 800);
+                MovementPattern::Type patterns[] = {
+                    MovementPattern::Type::STRAIGHT,
+                    MovementPattern::Type::SINE_WAVE,
+                    MovementPattern::Type::ZIGZAG,
+                    MovementPattern::Type::CIRCULAR,
+                    MovementPattern::Type::DIAGONAL_DOWN,
+                    MovementPattern::Type::DIAGONAL_UP
+                };
+                int patternIndex = rand() % 6;
+                
+                CreateEnemy(1920.0f + 50.0f, spawnY, patterns[patternIndex]);
+            }
         }
         
-        // Update scrolling background
+        // Update scrolling background (always, even in network mode)
         for (auto entity : allEntities) {
             if (gCoordinator.HasComponent<ScrollingBackground>(entity) && 
                 gCoordinator.HasComponent<Position>(entity)) {
@@ -798,9 +1010,11 @@ int main(void)
             }
         }
         
-        // Update movement patterns
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<MovementPattern>(entity) && 
+        // Skip physics updates in network mode (server handles it)
+        if (!networkMode) {
+            // Update movement patterns
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<MovementPattern>(entity) && 
                 gCoordinator.HasComponent<Position>(entity)) {
                 auto& pattern = gCoordinator.GetComponent<MovementPattern>(entity);
                 auto& pos = gCoordinator.GetComponent<Position>(entity);
@@ -963,6 +1177,8 @@ int main(void)
             
             if (bulletDestroyed) break;
         }
+        
+        } // End of !networkMode
         
         // Process destroyed entities
         ProcessDestroyedEntities();
