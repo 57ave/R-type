@@ -3,17 +3,22 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <SFML/Window/Event.hpp>
-#include <SFML/System/Clock.hpp>
-#include <SFML/Audio.hpp>
 
-// Engine includes
+// Engine includes - Core
 #include <ecs/ECS.hpp>
 #include <ecs/Coordinator.hpp>
+
+// Engine includes - Rendering
 #include <rendering/sfml/SFMLWindow.hpp>
 #include <rendering/sfml/SFMLRenderer.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <rendering/sfml/SFMLTexture.hpp>
+
+// Engine includes - Input/Time/Audio abstractions
+#include <engine/Input.hpp>
+#include <engine/Keyboard.hpp>
+#include <engine/Clock.hpp>
+#include <engine/Audio.hpp>
 
 // Components
 #include <components/Position.hpp>
@@ -48,9 +53,9 @@ std::unique_ptr<SFMLTexture> explosionTexture;
 // Sprite storage (to prevent memory leaks)
 std::vector<SFMLSprite*> allSprites;
 
-// Sound
-sf::SoundBuffer shootBuffer;
-sf::Sound shootSound;
+// Audio using engine abstractions
+rtype::engine::SoundBuffer shootBuffer;
+rtype::engine::Sound shootSound;
 
 void RegisterEntity(ECS::Entity entity) {
     allEntities.push_back(entity);
@@ -519,8 +524,8 @@ int main(void)
     ECS::Entity player = CreatePlayer(100.0f, 400.0f);
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
     
-    // Game variables
-    sf::Clock clock;
+    // Game variables using engine abstractions
+    rtype::engine::Clock clock;
     float enemySpawnTimer = 0.0f;
     float enemySpawnInterval = 2.0f;
     
@@ -534,17 +539,17 @@ int main(void)
     
     // Game loop
     while (window.isOpen()) {
-        float deltaTime = clock.restart().asSeconds();
+        float deltaTime = clock.restart();
         
-        // Event handling
-        sf::Event event;
+        // Event handling using engine abstractions
+        rtype::engine::InputEvent event;
         while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed) {
+            if (event.type == rtype::engine::EventType::Closed) {
                 window.close();
             }
             
             // Handle space key release for shooting
-            if (event.type == sf::Event::KeyReleased && event.key.code == sf::Keyboard::Space) {
+            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
                 if (spacePressed && gCoordinator.HasComponent<Position>(player)) {
                     auto& playerPos = gCoordinator.GetComponent<Position>(player);
                     
@@ -566,8 +571,8 @@ int main(void)
                         // Create normal missile
                         CreateMissile(playerPos.x + 99.0f, playerPos.y + 30.0f, false, 0);
                         
-                        // Play shoot sound
-                        if (shootSound.getBuffer() != nullptr) {
+                        // Play shoot sound using engine abstraction
+                        if (shootSound.getStatus() != rtype::engine::Sound::Status::Playing) {
                             shootSound.play();
                         }
                         

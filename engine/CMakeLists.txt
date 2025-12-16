@@ -37,6 +37,24 @@ target_include_directories(ecs PUBLIC
 # Enable PIC for ecs library (needed for shared library systems)
 set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# Core library (for SystemLoader and engine abstractions)
+# Must be defined before rendering because rendering depends on it
+add_library(core STATIC
+    src/core/SystemLoader.cpp
+    src/engine/Input.cpp
+    src/engine/Keyboard.cpp
+    src/engine/Clock.cpp
+    src/engine/Audio.cpp
+)
+
+target_include_directories(core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(core PUBLIC ecs sfml-window sfml-system sfml-audio ${CMAKE_DL_LIBS})
+
+set_target_properties(core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Rendering library
 add_library(rendering STATIC
     src/rendering/Camera.cpp
@@ -53,6 +71,7 @@ target_include_directories(rendering PUBLIC
 
 target_link_libraries(rendering PUBLIC
     ecs
+    core
     sfml-graphics
     sfml-window
     sfml-system
@@ -77,23 +96,6 @@ option(BUILD_ENGINE_EXAMPLES "Build engine examples" OFF)
 if(BUILD_ENGINE_EXAMPLES)
     add_subdirectory(examples)
 endif()
-
-# Core library (for SystemLoader and engine abstractions)
-add_library(core STATIC
-    src/core/SystemLoader.cpp
-    src/engine/Input.cpp
-    src/engine/Keyboard.cpp
-    src/engine/Clock.cpp
-    src/engine/Audio.cpp
-)
-
-target_include_directories(core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(core PUBLIC ecs sfml-window sfml-system sfml-audio ${CMAKE_DL_LIBS})
-
-set_target_properties(core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Scripting library (Lua + Sol3) - only if Lua is found
 if(LUA_FOUND)

@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Options de build
 option(BUILD_CLIENT "Build client executable" ON)
 option(BUILD_SERVER "Build server executable" ON)
+option(BUILD_GAME "Build game executable" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
 # Compiler warnings
@@ -20,13 +21,23 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-file(GLOB_RECURSE SOURCES engine/src/*.cpp)
-
-add_executable(${PROJECT_NAME} ${SOURCES})
-
-# Ajoute le dossier include au chemin de recherche
-target_include_directories(${PROJECT_NAME} PRIVATE engine/include)
-
-# Trouve et lie SFML
+# Find SFML (required by all sub-projects)
 find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE sfml-system sfml-window sfml-graphics sfml-audio sfml-network)
+
+# Build engine library
+add_subdirectory(engine)
+
+# Build client if requested
+if(BUILD_CLIENT)
+    add_subdirectory(client)
+endif()
+
+# Build server if requested
+if(BUILD_SERVER)
+    add_subdirectory(server)
+endif()
+
+# Build game if requested
+if(BUILD_GAME)
+    add_subdirectory(game)
+endif()
