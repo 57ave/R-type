@@ -1,24 +1,56 @@
-/*
+#pragma once
 
-🎯 Rôle du fichier
-Gérer toute la communication UDP serveur ↔ clients.
+#include <asio.hpp>
+#include <vector>
+#include <map>
+#include <mutex>
+#include <iostream>
+#include <queue>
+#include "Packet.hpp"
+#include "ClientSession.hpp"
+#include "RTypeProtocol.hpp" // For GamePacketType
 
-📌 Contenu attendu
-Bind sur le port UDP
-Réception non bloquante des packets clients :
-    inputs
-    demandes de connexion
-    keep-alive
-Envoi des WorldUpdate (snapshots) vers tous les clients
-Stockage des adresses/ports des clients actifs
+using asio::ip::udp;
 
-Fonctionnalités internes
-File thread-safe pour push les messages entrants (vers TickThread)
-File thread-safe pour push les snapshots à envoyer (depuis TickThread)
-Gestion du timeout des clients inactifs
+class UdpServer {
+public:
+    UdpServer(asio::io_context& io_context, short port);
+    ~UdpServer();
 
-🚫 Ce fichier NE doit pas faire
-Pas de logique du jeu
-Pas d’accès direct aux entités
-Pas de parsing complexe : juste sérialisation/désérialisation
-*/
+    // Start receiving packets
+    void start();
+
+    // Pop the next valid packet from the queue (Thread-safe)
+    // Returns true if a packet was retrieved, false if queue is empty
+    bool popPacket(NetworkPacket& outPacket, udp::endpoint& outSender);
+
+    // Broadcast a packet to all connected clients
+    void broadcast(const NetworkPacket& packet);
+
+    // Send to specific client
+    void sendTo(const NetworkPacket& packet, const udp::endpoint& endpoint);
+
+    // Check for timeouts and remove inactive clients
+    void checkTimeouts();
+
+private:
+    void startReceive();
+    void handleReceive(const std::error_code& error, std::size_t bytes_transferred);
+    
+    // Internal helper to get or create session
+    void handleClientSession(const udp::endpoint& sender, const NetworkPacket& packet);
+
+private:
+    udp::socket socket_;
+    udp::endpoint receiverEndpoint_;
+    std::array<char, 65536> recvBuffer_;
+
+    // Client management
+    std::map<std::string, std::shared_ptr<ClientSession>> sessions_; // Key: "IP:Port"
+    std::mutex sessionsMutex_;
+    uint8_t nextPlayerId_ = 1;
+
+    // Packet queue for Game Engine
+    std::queue<std::pair<NetworkPacket, udp::endpoint>> packetQueue_;
+    std::mutex queueMutex_;
+};
