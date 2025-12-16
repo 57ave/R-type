@@ -81,3 +81,8 @@ config.local.json
 # Backup files
 *.orig
 *.rej
+
+*.pdf
+r-type_server
+Makefile
+CPack*
