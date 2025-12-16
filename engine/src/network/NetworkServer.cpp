@@ -1,56 +1,56 @@
+#include "network/NetworkServer.hpp"
 #include <iostream>
-#include <thread>
-#include <chrono>
-#include "UdpServer.hpp"
 
-void runServer() {
-    try {
-        asio::io_context io_context;
-        
-        UdpServer server(io_context, 12345);
-        server.start();
+NetworkServer::NetworkServer(short port)
+    : server_(io_context_, port) {
+}
 
-        std::thread ioThread([&io_context](){
-            io_context.run();
-        });
-
-        std::cout << "Server started. Loop running..." << std::endl;
-
-        while (true) {
-            NetworkPacket packet;
-            udp::endpoint sender;
-            
-            while (server.popPacket(packet, sender)) {
-                if (packet.header.type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
-                    // Send Welcome
-                    NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
-                    welcome.header.seq = packet.header.seq;
-                    server.sendTo(welcome, sender);
-                    std::cout << "Sent Welcome to " << sender << std::endl;
-                }
-                else if (packet.header.type == static_cast<uint16_t>(GamePacketType::CLIENT_INPUT)) {
-                    // Handle Input
-                     try {
-                        ClientInput input = RTypeProtocol::getClientInput(packet);
-                        // std::cout << "Input received: " << (int)input.inputMask << std::endl;
-                        // TODO: Apply to ECS
-                    } catch (...) {}
-                }
-            }
-
-            server.checkTimeouts();
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        ioThread.join();
-
-    } catch (const std::exception& e) {
-        std::cerr << "Server Exception: " << e.what() << std::endl;
+NetworkServer::~NetworkServer() {
+    io_context_.stop();
+    if (io_thread_.joinable()) {
+        io_thread_.join();
     }
 }
 
-int main(int argc, char* argv[]) {
-    runServer();
-    return 0;
+void NetworkServer::start() {
+    server_.start();
+    io_thread_ = std::thread([this]() {
+        io_context_.run();
+    });
+}
+
+void NetworkServer::process() {
+    NetworkPacket packet;
+    udp::endpoint sender;
+
+    while (server_.popPacket(packet, sender)) {
+        if (packet.header.type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
+            // Send Welcome
+            NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
+            welcome.header.seq = packet.header.seq;
+            server_.sendTo(welcome, sender);
+            std::cout << "Sent Welcome to " << sender << std::endl;
+        } else {
+            // Buffer other packets for polling
+            std::lock_guard<std::mutex> lock(packetsMutex_);
+            receivedPackets_.push({packet, sender});
+        }
+    }
+
+    server_.checkTimeouts();
+}
+
+bool NetworkServer::hasReceivedPackets() {
+    std::lock_guard<std::mutex> lock(packetsMutex_);
+    return !receivedPackets_.empty();
+}
+
+std::pair<NetworkPacket, asio::ip::udp::endpoint> NetworkServer::getNextReceivedPacket() {
+    std::lock_guard<std::mutex> lock(packetsMutex_);
+    if (receivedPackets_.empty()) {
+        throw std::runtime_error("No packets available");
+    }
+    auto packet = receivedPackets_.front();
+    receivedPackets_.pop();
+    return packet;
 }

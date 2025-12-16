@@ -1,4 +1,4 @@
-#include "UdpServer.hpp"
+#include "../../include/network/UdpServer.hpp"
 #include <iostream>
 #include <sstream>
 
@@ -25,17 +25,13 @@ void UdpServer::startReceive() {
 void UdpServer::handleReceive(const std::error_code& error, std::size_t bytes_transferred) {
     if (!error) {
         try {
-            // 1. Deserialize
             NetworkPacket packet = NetworkPacket::deserialize(recvBuffer_.data(), bytes_transferred);
 
-            // 2. Validate Header
             if (packet.header.magic != 0x5254 || packet.header.version != 1) {
                 // Invalid packet, ignore
             } else {
-                // 3. Manage Session & Logic
                 handleClientSession(receiverEndpoint_, packet);
 
-                // 4. Push to Queue for main thread
                 std::lock_guard<std::mutex> lock(queueMutex_);
                 packetQueue_.push({packet, receiverEndpoint_});
             }
