@@ -1,0 +1,9 @@
+#ifndef RTYPE_ENGINE_COMPONENTS_POSITION_HPP
+#define RTYPE_ENGINE_COMPONENTS_POSITION_HPP
+
+struct Position {
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+#endif // RTYPE_ENGINE_COMPONENTS_POSITION_HPP

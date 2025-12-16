@@ -1,0 +1,166 @@
+@startuml Core Subsystem Communications
+
+title Communications entre les Subsystems du Core
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+package "Core Subsystems" {
+    
+    component "Config" as Config #E3F2FD
+    component "ResourceManager" as RM #E3F2FD
+    component "EventBus" as EB #E3F2FD
+    component "Time" as Time #E3F2FD
+    component "Logger" as Logger #E3F2FD
+    component "InputManager" as Input #E3F2FD
+    
+}
+
+package "Game Systems" {
+    component "MovementSystem" as Move #FFF9C4
+    component "CollisionSystem" as Collision #FFF9C4
+    component "RenderSystem" as Render #FFF9C4
+    component "WeaponSystem" as Weapon #FFF9C4
+}
+
+package "Game Engine" {
+    component "Registry (ECS)" as Registry #FFF3E0
+    component "GameLoop" as GameLoop #FFF3E0
+}
+
+' ============================================
+' CONFIG COMMUNICATIONS
+' ============================================
+
+Config --> RM : (1) Fournit chemins\nExemple: "assets/ship.gif"
+note on link
+    Config = Annuaire
+    Donne les chemins
+    Ne charge rien
+end note
+
+Config --> GameLoop : (2) Paramètres de jeu\nExemple: player_speed, window_size
+note on link
+    Configuration
+    au démarrage
+end note
+
+' ============================================
+' RESOURCEMANAGER COMMUNICATIONS
+' ============================================
+
+RM --> Render : (3) Fournit Textures\nget("assets/ship.gif") → sf::Texture
+note on link
+    Cache de textures
+    Évite les doublons
+    Rapide (déjà en RAM)
+end note
+
+RM --> Weapon : (4) Fournit Sons\nget("laser.wav") → sf::Sound
+
+' ============================================
+' EVENTBUS COMMUNICATIONS
+' ============================================
+
+Collision --> EB : (5) Publie CollisionEvent
+note on link
+    Pub/Sub pattern
+    Découplage total
+end note
+
+EB --> Weapon : (6) Notifie collision\nCallback déclenché
+EB --> Logger : (7) Log l'événement
+EB --> Render : (8) Spawn explosion visuelle
+
+Input --> EB : (9) Publie InputEvent\n(touche pressée)
+EB --> Move : (10) Notifie déplacement
+
+' ============================================
+' TIME COMMUNICATIONS
+' ============================================
+
+GameLoop --> Time : (11) update() chaque frame
+note on link
+    Calcule deltaTime
+end note
+
+Time --> Move : (12) Fournit deltaTime\npour mouvement fluide
+Time --> Render : (13) Fournit deltaTime\npour animations
+Time --> Weapon : (14) Fournit deltaTime\npour fire rate
+
+' ============================================
+' LOGGER COMMUNICATIONS
+' ============================================
+
+Config --> Logger : (15) Log chargement assets
+RM --> Logger : (16) Log erreurs de chargement
+EB --> Logger : (17) Log événements importants
+Collision --> Logger : (18) Log collisions (debug)
+
+' ============================================
+' INPUTMANAGER COMMUNICATIONS
+' ============================================
+
+GameLoop --> Input : (19) update() - Poll inputs
+Input --> EB : (20) Publie InputEvent
+Input --> Move : (21) Accès direct isKeyPressed()
+
+' ============================================
+' REGISTRY (ECS) COMMUNICATIONS
+' ============================================
+
+Registry --> Move : (22) Fournit Components\nPosition, Velocity
+Registry --> Collision : (23) Fournit Components\nCollider, Position
+Registry --> Render : (24) Fournit Components\nSprite, Position
+
+Move --> Registry : (25) Modifie Position
+Collision --> Registry : (26) Détruit Entity si mort
+Render --> Registry : (27) Lit Sprite + Position
+
+' ============================================
+' NOTES ET EXPLICATIONS
+' ============================================
+
+note bottom of Config
+    **Rôle: Annuaire**
+    - Stocke chemins (strings)
+    - Paramètres de jeu
+    - Configuration initiale
+end note
+
+note bottom of RM
+    **Rôle: Cache d'assets**
+    - Charge objets en RAM
+    - Évite doublons
+    - Optimise performances
+end note
+
+note bottom of EB
+    **Rôle: Bus de communication**
+    - Pub/Sub décuplé
+    - Synchronisation
+    - Évite dépendances directes
+end note
+
+note bottom of Time
+    **Rôle: Horloge globale**
+    - deltaTime pour tous
+    - Mouvement indépendant FPS
+    - Peut ralentir/accélérer
+end note
+
+note bottom of Logger
+    **Rôle: Monitoring**
+    - Debug et production
+    - Trace tous les events
+    - Aide au debugging
+end note
+
+note bottom of Input
+    **Rôle: Contrôleur**
+    - Centralise les inputs
+    - Détecte changements
+    - Publie événements
+end note
+
+@enduml
