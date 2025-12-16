@@ -6,6 +6,7 @@ bin/
 lib/
 
 # CMake generated files
+.cache/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
