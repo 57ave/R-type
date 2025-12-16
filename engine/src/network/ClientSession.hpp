@@ -1,21 +1,31 @@
-/*
+#pragma once
 
-🎯 Rôle du fichier
-Gérer l’état individuel d’un joueur connecté au serveur.
+#include <asio.hpp>
+#include <chrono>
 
-📌 Contenu attendu
-Identifiant unique du joueur
-Adresse UDP du client
-Dernier input reçu
-Dernier timestamp actif
-Flags :
-    connecté
-    déconnecté proprement
-    crash détecté
+using asio::ip::udp;
 
-🚫 Ce fichier NE doit pas faire
-Pas de calcul de position
-Pas de logique de jeu
-Pas d’envoi UDP (utiliser UdpServer)
+class ClientSession {
+public:
+    udp::endpoint endpoint;
+    std::chrono::steady_clock::time_point lastPacketTime;
+    uint32_t lastSequenceNumber;
+    uint8_t playerId;
+    bool isConnected;
 
-*/
+    ClientSession(udp::endpoint ep, uint8_t id) 
+        : endpoint(ep), 
+          lastPacketTime(std::chrono::steady_clock::now()), 
+          lastSequenceNumber(0), 
+          playerId(id), 
+          isConnected(true) {}
+
+    void updateLastPacketTime() {
+        lastPacketTime = std::chrono::steady_clock::now();
+    }
+
+    bool isTimedOut(const std::chrono::milliseconds& timeoutDuration) const {
+        auto now = std::chrono::steady_clock::now();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPacketTime) > timeoutDuration;
+    }
+};
