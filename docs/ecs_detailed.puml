@@ -1,0 +1,400 @@
+@startuml ECS Architecture Detail
+
+!define ENTITY_COLOR #FFE0B2
+!define COMPONENT_COLOR #B3E5FC
+!define SYSTEM_COLOR #C8E6C9
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+title Entity Component System (ECS) - Detailed Architecture
+
+' ============================================
+' ENTITY LAYER
+' ============================================
+
+package "Entities (Just IDs)" as EntityLayer #ENTITY_COLOR {
+    
+    class Entity {
+        + id: uint32_t
+        + generation: uint32_t
+        --
+        Lightweight identifier
+        No data, no behavior
+    }
+    
+    class EntityManager {
+        - nextId: uint32_t
+        - freeList: Queue<uint32_t>
+        - generations: Array<uint32_t>
+        - aliveEntities: Set<Entity>
+        --
+        + create(): Entity
+        + destroy(Entity)
+        + isAlive(Entity): bool
+        + getGeneration(uint32_t): uint32_t
+    }
+    
+    EntityManager --> "*" Entity : manages
+}
+
+' ============================================
+' COMPONENT LAYER
+' ============================================
+
+package "Components (Pure Data)" as ComponentLayer #COMPONENT_COLOR {
+    
+    interface "ComponentManager<T>" as IComponentManager {
+        + add(Entity, T): void
+        + remove(Entity): void
+        + get(Entity): T&
+        + has(Entity): bool
+        + size(): size_t
+        + begin(): Iterator
+        + end(): Iterator
+    }
+    
+    class "SparseSet<T>" as SparseSet {
+        - sparse: Array<size_t>
+        - dense: Array<Entity>
+        - components: Array<T>
+        - size: size_t
+        --
+        + insert(Entity, T)
+        + erase(Entity)
+        + get(Entity): T&
+        + contains(Entity): bool
+        --
+        O(1) access
+        Cache-friendly iteration
+    }
+    
+    IComponentManager <|.. SparseSet
+    
+    note right of SparseSet
+        **Why SparseSet?**
+        
+        ✓ O(1) add/remove/get
+        ✓ Dense component storage
+        ✓ Fast iteration (no gaps)
+        ✓ Memory efficient for sparse data
+        
+        Alternative: PackedArray
+    end note
+    
+    package "Example Components" {
+        class Position <<struct>> {
+            + x: float
+            + y: float
+        }
+        
+        class Velocity <<struct>> {
+            + vx: float
+            + vy: float
+        }
+        
+        class Sprite <<struct>> {
+            + texturePath: string
+            + textureRect: IntRect
+            + layer: int
+        }
+        
+        class Collider <<struct>> {
+            + width: float
+            + height: float
+            + isTrigger: bool
+        }
+        
+        class Health <<struct>> {
+            + current: int
+            + max: int
+        }
+        
+        class NetworkId <<struct>> {
+            + id: uint32_t
+        }
+        
+        note bottom of Position
+            **Components are POD**
+            (Plain Old Data)
+            
+            No methods, just data
+            Serializable
+            Cache-friendly
+        end note
+    }
+}
+
+' ============================================
+' SYSTEM LAYER
+' ============================================
+
+package "Systems (Pure Logic)" as SystemLayer #SYSTEM_COLOR {
+    
+    interface ISystem {
+        + {abstract} update(Registry&, float deltaTime): void
+        + {abstract} getName(): string
+    }
+    
+    class SystemManager {
+        - systems: Vector<unique_ptr<ISystem>>
+        --
+        + addSystem<T>(args...): T&
+        + removeSystem<T>()
+        + getSystem<T>(): T*
+        + update(Registry&, float dt)
+    }
+    
+    SystemManager o-- "*" ISystem
+    
+    package "Example Systems" {
+        
+        class MovementSystem {
+            + update(Registry&, float dt)
+            --
+            Queries: Position + Velocity
+            Logic: position += velocity * dt
+        }
+        
+        class CollisionSystem {
+            - quadTree: QuadTree
+            - eventBus: EventBus*
+            --
+            + update(Registry&, float dt)
+            --
+            Queries: Position + Collider
+            Logic: Detect & resolve collisions
+        }
+        
+        class RenderSystem {
+            - renderer: IRenderer*
+            - camera: Camera
+            --
+            + update(Registry&, float dt)
+            --
+            Queries: Position + Sprite
+            Logic: Draw sprites to screen
+        }
+        
+        class HealthSystem {
+            + update(Registry&, float dt)
+            --
+            Queries: Health
+            Logic: Check if health <= 0
+                   → destroy entity
+        }
+        
+        ISystem <|.. MovementSystem
+        ISystem <|.. CollisionSystem
+        ISystem <|.. RenderSystem
+        ISystem <|.. HealthSystem
+    }
+}
+
+' ============================================
+' REGISTRY (CENTRAL HUB)
+' ============================================
+
+package "Registry (Coordinator)" {
+    
+    class Registry {
+        - entityManager: EntityManager
+        - componentPools: Map<TypeId, IComponentManager*>
+        - systemManager: SystemManager
+        --
+        **Entity Operations**
+        + createEntity(): Entity
+        + destroyEntity(Entity)
+        + isValid(Entity): bool
+        --
+        **Component Operations**
+        + addComponent<T>(Entity, T): T&
+        + getComponent<T>(Entity): T&
+        + hasComponent<T>(Entity): bool
+        + removeComponent<T>(Entity)
+        --
+        **System Operations**
+        + addSystem<T>(args...): T&
+        + getSystem<T>(): T*
+        --
+        **Queries**
+        + view<Components...>(): View
+        --
+        **Main Loop**
+        + update(float deltaTime)
+    }
+    
+    class "View<Components...>" as View {
+        - registry: Registry*
+        - filter: ComponentMask
+        --
+        + begin(): Iterator
+        + end(): Iterator
+        + each(callback)
+        + size(): size_t
+    }
+    
+    Registry *-- EntityManager
+    Registry *-- "n" IComponentManager : manages
+    Registry *-- SystemManager
+    Registry ..> View : creates
+}
+
+' ============================================
+' USAGE EXAMPLE
+' ============================================
+
+package "Usage Example" as Usage #F5F5F5 {
+    
+    note as N1
+        **Creating an Entity with Components**
+        
+        ```cpp
+        Registry registry;
+        
+        // Create entity
+        Entity player = registry.createEntity();
+        
+        // Add components
+        registry.addComponent<Position>(player, {100.f, 200.f});
+        registry.addComponent<Velocity>(player, {50.f, 0.f});
+        registry.addComponent<Sprite>(player, {"player.png", ...});
+        registry.addComponent<Health>(player, {100, 100});
+        ```
+    end note
+    
+    note as N2
+        **Querying Entities in a System**
+        
+        ```cpp
+        class MovementSystem : public ISystem {
+        public:
+            void update(Registry& registry, float dt) override {
+                // Query all entities with Position AND Velocity
+                auto view = registry.view<Position, Velocity>();
+                
+                for (auto entity : view) {
+                    auto& pos = registry.getComponent<Position>(entity);
+                    auto& vel = registry.getComponent<Velocity>(entity);
+                    
+                    // Update position
+                    pos.x += vel.vx * dt;
+                    pos.y += vel.vy * dt;
+                }
+            }
+        };
+        ```
+    end note
+    
+    note as N3
+        **Main Game Loop**
+        
+        ```cpp
+        int main() {
+            Registry registry;
+            
+            // Setup systems
+            registry.addSystem<MovementSystem>();
+            registry.addSystem<CollisionSystem>();
+            registry.addSystem<RenderSystem>();
+            
+            // Game loop
+            while (running) {
+                float dt = clock.restart();
+                
+                // Update all systems
+                registry.update(dt);
+            }
+        }
+        ```
+    end note
+}
+
+' ============================================
+' DATA FLOW
+' ============================================
+
+package "Data Flow Visualization" as DataFlow {
+    
+    actor "Game Code" as GameCode
+    
+    GameCode --> Registry : 1. createEntity()
+    Registry --> EntityManager : 2. generate ID
+    EntityManager --> Registry : 3. return Entity
+    
+    GameCode --> Registry : 4. addComponent<Position>()
+    Registry --> SparseSet : 5. insert(entity, component)
+    
+    GameCode --> Registry : 6. update(dt)
+    Registry --> SystemManager : 7. update all systems
+    SystemManager --> MovementSystem : 8. update(registry, dt)
+    MovementSystem --> Registry : 9. view<Position, Velocity>()
+    Registry --> View : 10. create view
+    View --> SparseSet : 11. iterate components
+    SparseSet --> MovementSystem : 12. component data
+    MovementSystem --> SparseSet : 13. modify components
+}
+
+' ============================================
+' PERFORMANCE NOTES
+' ============================================
+
+note bottom of ComponentLayer
+    **Memory Layout & Performance**
+    
+    Components are stored contiguously:
+    [Pos₁][Pos₂][Pos₃]...[Posₙ]
+    
+    Benefits:
+    ✓ CPU cache friendly
+    ✓ Vectorization possible (SIMD)
+    ✓ Predictable memory access
+    
+    vs. Object-Oriented:
+    [Entity₁]->[Pos₁, Vel₁, Sprite₁]
+    [Entity₂]->[Pos₂, Vel₂]
+    (Scattered memory, cache misses)
+end note
+
+note top of SystemLayer
+    **System Execution Order Matters!**
+    
+    Example order:
+    1. InputSystem
+    2. AISystem
+    3. MovementSystem
+    4. PhysicsSystem
+    5. CollisionSystem
+    6. HealthSystem
+    7. NetworkSyncSystem
+    8. AnimationSystem
+    9. RenderSystem
+    
+    Configure in SystemManager
+end note
+
+' ============================================
+' ALTERNATIVES & CONSIDERATIONS
+' ============================================
+
+note left of Registry
+    **ECS Implementation Alternatives**
+    
+    1. **Archetype-based** (Unity DOTS)
+       - Groups entities by component signature
+       - Ultra-fast iteration
+       - Complex implementation
+    
+    2. **SparseSet** (EnTT) ← Our choice
+       - Flexible & fast
+       - Easy to implement
+       - Good balance
+    
+    3. **Table-based** (Bevy)
+       - Like relational DB
+       - Query optimization
+       - Memory overhead
+end note
+
+@enduml

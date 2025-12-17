@@ -1,0 +1,626 @@
+@startuml Game Engine Architecture
+
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+title Game Engine - Complete Architecture (engine/)
+
+' ============================================
+' ECS SUBSYSTEM
+' ============================================
+
+package "ECS (engine/ecs/)" #FFF3E0 {
+    
+    class Entity {
+        + id: uint32_t
+        + generation: uint32_t
+    }
+    
+    class EntityManager {
+        - nextId: uint32_t
+        - freeList: Queue<uint32_t>
+        - generations: Array<uint32_t>
+        - alive: Set<Entity>
+        --
+        + create(): Entity
+        + destroy(Entity)
+        + isAlive(Entity): bool
+    }
+    
+    interface IComponentManagerBase {
+        + remove(Entity)
+        + has(Entity): bool
+    }
+    
+    class "ComponentManager<T>" as ComponentManager {
+        - sparseSet: SparseSet<T>
+        --
+        + add(Entity, T): T&
+        + get(Entity): T&
+        + remove(Entity)
+        + has(Entity): bool
+    }
+    
+    class "SparseSet<T>" as SparseSet {
+        - sparse: Vector<size_t>
+        - dense: Vector<Entity>
+        - components: Vector<T>
+        --
+        + insert(Entity, T)
+        + erase(Entity)
+        + get(Entity): T&
+        + contains(Entity): bool
+    }
+    
+    interface ISystem {
+        + {abstract} update(Registry&, float dt)
+        + {abstract} getName(): string
+    }
+    
+    class SystemManager {
+        - systems: Vector<unique_ptr<ISystem>>
+        --
+        + addSystem<T>(args...): T&
+        + getSystem<T>(): T*
+        + update(Registry&, float dt)
+    }
+    
+    class Registry {
+        - entityManager: EntityManager
+        - componentManagers: Map<TypeId, IComponentManagerBase*>
+        - systemManager: SystemManager
+        --
+        + createEntity(): Entity
+        + destroyEntity(Entity)
+        + addComponent<T>(Entity, T): T&
+        + getComponent<T>(Entity): T&
+        + hasComponent<T>(Entity): bool
+        + removeComponent<T>(Entity)
+        + view<Components...>(): View
+        + addSystem<T>(args...): T&
+        + update(float dt)
+    }
+    
+    class "View<Components...>" as View {
+        - registry: Registry*
+        --
+        + begin(): Iterator
+        + end(): Iterator
+        + each(callback)
+    }
+    
+    Registry *-- EntityManager
+    Registry *-- SystemManager
+    Registry *-- "*" IComponentManagerBase
+    ComponentManager ..|> IComponentManagerBase
+    ComponentManager *-- SparseSet
+    SystemManager o-- "*" ISystem
+}
+
+' ============================================
+' CORE SUBSYSTEM
+' ============================================
+
+package "Core (engine/core/)" #E3F2FD {
+    
+    class Time {
+        - deltaTime: float
+        - totalTime: float
+        - timeScale: float
+        --
+        + getDeltaTime(): float
+        + getTotalTime(): float
+        + update()
+        + setTimeScale(float)
+    }
+    
+    class Logger {
+        - outputs: Vector<ILogOutput*>
+        --
+        + info(message)
+        + warning(message)
+        + error(message)
+        + debug(message)
+    }
+    
+    class EventBus {
+        - subscribers: Map<TypeId, Vector<Callback>>
+        --
+        + subscribe<T>(callback)
+        + publish<T>(event)
+        + unsubscribe(handle)
+    }
+    
+    class "ResourceManager<T>" as ResourceManager {
+        - _resourceCache: Map<string, shared_ptr<T>>
+        --
+        + load(path)
+        + get(path): shared_ptr<T>
+        + unload(path)
+        + clear()
+    }
+    
+    note right of ResourceManager
+        **Rôle: Entrepôt**
+        Stocke les OBJETS chargés en mémoire
+        Exemple: sf::Texture (2 MB en RAM)
+        Cache intelligent pour éviter doublons
+    end note
+    
+    class Config {
+        - _data: Map<string, string>
+        --
+        + load(path)
+        + get<T>(key): T
+        + set<T>(key, value)
+        + save(path)
+    }
+    
+    note right of Config
+        **Rôle: Annuaire**
+        Stocke les CHEMINS des assets
+        Exemple: "players.ship" → "assets/ship.gif"
+    end note
+    
+    class InputManager {
+        - keyStates: Map<Key, State>
+        - mousePos: Vector2i
+        --
+        + isKeyPressed(Key): bool
+        + isKeyJustPressed(Key): bool
+        + getMousePosition(): Vector2i
+        + update()
+    }
+}
+
+' ============================================
+' NETWORK SUBSYSTEM
+' ============================================
+
+package "Network (engine/network/)" #E8F5E9 {
+    
+    class Packet {
+        - data: Vector<byte>
+        - readPos: size_t
+        --
+        + write<T>(value)
+        + read<T>(): T
+        + clear()
+        + getData(): byte*
+        + getSize(): size_t
+    }
+    
+    interface ISocket {
+        + {abstract} send(Packet, Address)
+        + {abstract} receive(): optional<Packet>
+        + {abstract} bind(port)
+        + {abstract} close()
+    }
+    
+    class UDPSocket {
+        - socket: boost::asio::udp::socket
+        - ioContext: io_context&
+        --
+        + send(Packet, Address)
+        + receive(): optional<Packet>
+        + bind(port)
+        + close()
+    }
+    
+    class Connection {
+        - address: Address
+        - state: ConnectionState
+        - lastPingTime: float
+        - sequenceNumber: uint32_t
+        --
+        + send(Packet)
+        + isConnected(): bool
+        + disconnect()
+        + updatePing(float dt)
+    }
+    
+    class ConnectionManager {
+        - connections: Map<Address, Connection>
+        - socket: ISocket*
+        --
+        + addConnection(Address): Connection&
+        + removeConnection(Address)
+        + getConnection(Address): Connection*
+        + broadcastToAll(Packet)
+        + update(float dt)
+    }
+    
+    class NetworkInterpolator {
+        - snapshots: Queue<Snapshot>
+        - bufferTime: float
+        --
+        + addSnapshot(timestamp, state)
+        + interpolate(currentTime): State
+        + clear()
+    }
+    
+    ISocket <|.. UDPSocket
+    ConnectionManager *-- "*" Connection
+    ConnectionManager o-- ISocket
+}
+
+' ============================================
+' RENDERING SUBSYSTEM (ABSTRACTION ONLY)
+' ============================================
+
+package "Rendering (engine/rendering/)" #FCE4EC {
+    
+    interface IRenderer {
+        + {abstract} clear()
+        + {abstract} draw(Sprite, Transform)
+        + {abstract} present()
+        + {abstract} setCamera(Camera)
+    }
+    
+    interface ITexture {
+        + {abstract} getSize(): Vector2u
+        + {abstract} loadFromFile(path): bool
+    }
+    
+    interface ISprite {
+        + {abstract} setTexture(ITexture*)
+        + {abstract} setPosition(Vector2f)
+        + {abstract} setTextureRect(IntRect)
+    }
+    
+    class Camera {
+        - position: Vector2f
+        - zoom: float
+        - viewport: IntRect
+        --
+        + setPosition(Vector2f)
+        + setZoom(float)
+        + worldToScreen(Vector2f): Vector2f
+        + screenToWorld(Vector2f): Vector2f
+    }
+    
+    note right of Camera
+        **Pure Logic Class**
+        Math operations only
+        No SFML dependency
+        Used by client & server
+    end note
+    
+    note right of IRenderer
+        **Abstract Interface**
+        Client/Server inject
+        concrete implementation
+        (SFML, Raylib, etc.)
+    end note
+}
+
+' ============================================
+' SFML IMPLEMENTATION (in engine/rendering/sfml/)
+' ============================================
+
+package "SFML Implementation (engine/rendering/sfml/)" #F8BBD0 {
+    
+    class SFMLRenderer {
+        - window: sf::RenderWindow&
+        --
+        + clear()
+        + draw(Sprite, Transform)
+        + present()
+        + setCamera(Camera)
+    }
+    
+    class SFMLTexture {
+        - texture: sf::Texture
+        --
+        + getSize(): Vector2u
+        + loadFromFile(path): bool
+    }
+    
+    class SFMLSprite {
+        - sprite: sf::Sprite
+        --
+        + setTexture(ITexture*)
+        + setPosition(Vector2f)
+        + setTextureRect(IntRect)
+    }
+    
+    class SFMLWindow {
+        - window: sf::RenderWindow
+        - width: uint32_t
+        - height: uint32_t
+        - title: string
+        --
+        + create(width, height, title)
+        + close()
+        + isOpen(): bool
+        + pollEvent(Event): bool
+        + clear()
+        + display()
+        + getMousePosition(): Vector2i
+        + getSFMLWindow(): sf::RenderWindow&
+        + getSize(): Vector2u
+    }
+    
+    IRenderer <|.. SFMLRenderer
+    ITexture <|.. SFMLTexture
+    ISprite <|.. SFMLSprite
+    
+    note bottom of SFMLWindow
+        **Complete SFML Encapsulation**
+        Standalone class (no inheritance)
+        Handles window, events, input
+        Used directly by client
+    end note
+}
+
+' ============================================
+' PHYSICS SUBSYSTEM
+' ============================================
+
+package "Physics (engine/physics/)" #F1F8E9 {
+    
+    class CollisionDetector {
+        + checkAABB(Box, Box): bool
+        + checkCircle(Circle, Circle): bool
+        + checkRaycast(Ray, Collider): optional<Hit>
+        + resolveCollision(CollisionInfo)
+    }
+    
+    class QuadTree {
+        - bounds: Rect
+        - children: QuadTree[4]
+        - entities: Vector<Entity>
+        - maxEntities: size_t
+        --
+        + insert(Entity, Bounds)
+        + query(Bounds): Vector<Entity>
+        + clear()
+        + subdivide()
+    }
+    
+    class "CollisionInfo" as CollisionInfo <<struct>> {
+        + entityA: Entity
+        + entityB: Entity
+        + normal: Vector2f
+        + penetration: float
+    }
+}
+
+' ============================================
+' COMMON SYSTEMS
+' ============================================
+
+package "Systems (engine/systems/)" #FFF9C4 {
+    
+    class MovementSystem {
+        + update(Registry&, float dt)
+    }
+    
+    class CollisionSystem {
+        - detector: CollisionDetector
+        - quadTree: QuadTree
+        - eventBus: EventBus*
+        --
+        + update(Registry&, float dt)
+    }
+    
+    class RenderSystem {
+        - renderer: IRenderer*
+        - camera: Camera
+        --
+        + update(Registry&, float dt)
+    }
+    
+    class AnimationSystem {
+        + update(Registry&, float dt)
+    }
+    
+    class LifetimeSystem {
+        + update(Registry&, float dt)
+    }
+    
+    class ParticleSystem {
+        + update(Registry&, float dt)
+    }
+    
+    ISystem <|.. MovementSystem
+    ISystem <|.. CollisionSystem
+    ISystem <|.. RenderSystem
+    ISystem <|.. AnimationSystem
+    ISystem <|.. LifetimeSystem
+    ISystem <|.. ParticleSystem
+    
+    CollisionSystem --> CollisionDetector
+    CollisionSystem --> QuadTree
+    CollisionSystem --> EventBus
+    
+    RenderSystem --> IRenderer
+    RenderSystem --> Camera
+}
+
+' ============================================
+' COMMON COMPONENTS (Examples)
+' ============================================
+
+package "Common Components" #E0F2F1 {
+    
+    class Position <<component>> {
+        + x: float
+        + y: float
+    }
+    
+    class Velocity <<component>> {
+        + vx: float
+        + vy: float
+    }
+    
+    class Sprite <<component>> {
+        + texture: ITexture*
+        + textureRect: IntRect
+        + layer: int
+    }
+    
+    class Collider <<component>> {
+        + width: float
+        + height: float
+        + isTrigger: bool
+    }
+    
+    class Health <<component>> {
+        + current: int
+        + max: int
+    }
+    
+    class NetworkId <<component>> {
+        + id: uint32_t
+    }
+    
+    class Animator <<component>> {
+        + frames: Vector<IntRect>
+        + frameTime: float
+        + currentFrame: size_t
+    }
+    
+    class Lifetime <<component>> {
+        + remaining: float
+    }
+    
+' ============================================
+' KEY RELATIONSHIPS & COMMUNICATION FLOWS
+' ============================================
+
+' ECS Communication
+Registry ..> View : creates
+SystemManager ..> Time : uses deltaTime
+
+' Config → ResourceManager flow
+Config ..> ResourceManager : fournit chemins
+note on link
+    1. Config donne le chemin
+    2. ResourceManager charge l'objet
+end note
+
+' EventBus Communication
+CollisionSystem ..> EventBus : publie CollisionEvent
+RenderSystem ..> EventBus : écoute WindowEvent
+MovementSystem ..> EventBus : écoute InputEvent
+
+note right of EventBus
+    **Pub/Sub Pattern**
+    Découple les systèmes
+    Évite les dépendances directes
+end note
+
+' ResourceManager Usage
+RenderSystem ..> ResourceManager : récupère Textures
+AnimationSystem ..> ResourceManager : récupère Sprites
+
+' Network Communication
+ConnectionManager ..> EventBus : publie NetworkEvents
+CollisionSystem ..> EventBus : publie CollisionEvent
+note on link
+    Event synchronisé
+    vers les clients
+end note
+
+' Time Distribution
+MovementSystem ..> Time : lit deltaTime
+AnimationSystem ..> Time : lit deltaTime
+ParticleSystem ..> Time : lit deltaTime
+
+note bottom of Registry
+    **Central Hub**
+    Coordonne toutes les opérations ECS
+    Utilisé par client ET serveur
+end notenSystem ..> EventBus : publishes
+RenderSystem ..> ResourceManager : uses
+
+note bottom of Registry
+    **Central Hub**
+    Coordinates all ECS operations
+    Used by both client and server
+end note
+
+note bottom of IRenderer
+    **Rendering Abstraction**
+    SFML implementation provided by engine
+    in engine/rendering/sfml/
+    Client uses SFMLRenderer/SFMLWindow directly
+end note
+
+note bottom of ISocket
+    **Network Abstraction**
+    Can use Boost.Asio or raw sockets
+    Implementation injected at runtime
+end note
+
+' ============================================
+' GLOBAL ARCHITECTURE OVERVIEW
+' ============================================
+
+package "Project Structure" #FFFDE7 {
+    
+    package "engine/" {
+        class EngineLib <<library>> {
+            + ECS
+            + Rendering (abstractions + SFML)
+            + Network
+            + Physics
+            + Core
+        }
+    }
+    
+    package "game/" {
+        class GameLib <<library>> {
+            + Game Components
+            + Game Systems
+            + Game Logic
+        }
+    }
+    
+    package "client/" {
+        class ClientExe <<executable>> {
+            + main()
+            + Uses SFMLWindow
+            + Uses SFMLRenderer
+            + Rendering + Input
+        }
+    }
+    
+    package "server/" {
+        class ServerExe <<executable>> {
+            + main()
+            + Network Authority
+            + No rendering
+        }
+    }
+    
+    GameLib --> EngineLib : depends on
+    ClientExe --> EngineLib : uses
+    ClientExe --> GameLib : uses
+    ServerExe --> EngineLib : uses
+    ServerExe --> GameLib : uses
+    
+    note right of EngineLib
+        **Engine provides:**
+        - ECS framework
+        - SFML encapsulation
+        - Network, Physics, Core
+    end note
+    
+    note right of GameLib
+        **Game contains:**
+        - R-Type specific logic
+        - Shared by client & server
+    end note
+    
+    note right of ClientExe
+        **Client:**
+        - Uses engine/rendering/sfml/
+        - Direct access to SFMLWindow
+        - No need to encapsulate SFML
+    end note
+}
+
+@enduml
