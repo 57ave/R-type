@@ -79,8 +79,9 @@ struct EntityState {
     float vx;
     float vy;
     uint8_t hp;
+    uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
 
-    EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), hp(0) {}
+    EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), hp(0), playerLine(0) {}
 
     std::vector<char> serialize() const {
         std::vector<char> buffer(sizeof(*this));

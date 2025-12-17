@@ -13,6 +13,7 @@ endif()
 
 # Créer l'exécutable client
 add_executable(r-type_client
+    main.cpp
     ${CLIENT_SOURCES}
 )
 

@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Options de build
 option(BUILD_CLIENT "Build client executable" ON)
 option(BUILD_SERVER "Build server executable" ON)
+option(BUILD_GAME "Build game executable" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
 # Compiler warnings
@@ -20,22 +21,23 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find SFML (needed for client)
-find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
+# Find SFML (required by all sub-projects)
+find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
 
-# Subdirectories
+# Build engine library
 add_subdirectory(engine)
-add_subdirectory(game)
 
+# Build client if requested
 if(BUILD_CLIENT)
     add_subdirectory(client)
 endif()
 
+# Build server if requested
 if(BUILD_SERVER)
     add_subdirectory(server)
 endif()
 
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
+# Build game if requested
+if(BUILD_GAME)
+    add_subdirectory(game)
 endif()

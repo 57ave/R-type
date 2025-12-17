@@ -18,6 +18,10 @@ public:
 
     bool hasReceivedPackets();
     std::pair<NetworkPacket, asio::ip::udp::endpoint> getNextReceivedPacket();
+    
+    void broadcast(const NetworkPacket& packet);
+    void sendTo(const NetworkPacket& packet, const asio::ip::udp::endpoint& endpoint);
+    void checkTimeouts();
 
 private:
     asio::io_context io_context_;

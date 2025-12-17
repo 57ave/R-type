@@ -11,7 +11,6 @@ namespace rtype
         namespace rendering
         {
             class IRenderer;
-            struct Transform;
         }
     }
 }
@@ -26,7 +25,6 @@ class RenderSystem : public ECS::System {
         RenderSystem();
         ~RenderSystem() override = default;
 
-        // ECS::System lifecycle
         void Init() override;
         void Update(float dt) override;
         void Shutdown() override;

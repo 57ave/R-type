@@ -24,17 +24,9 @@ void NetworkServer::process() {
     udp::endpoint sender;
 
     while (server_.popPacket(packet, sender)) {
-        if (packet.header.type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
-            // Send Welcome
-            NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
-            welcome.header.seq = packet.header.seq;
-            server_.sendTo(welcome, sender);
-            std::cout << "Sent Welcome to " << sender << std::endl;
-        } else {
-            // Buffer other packets for polling
-            std::lock_guard<std::mutex> lock(packetsMutex_);
-            receivedPackets_.push({packet, sender});
-        }
+        // Buffer all packets for polling by the game server
+        std::lock_guard<std::mutex> lock(packetsMutex_);
+        receivedPackets_.push({packet, sender});
     }
 
     server_.checkTimeouts();
@@ -53,4 +45,16 @@ std::pair<NetworkPacket, asio::ip::udp::endpoint> NetworkServer::getNextReceived
     auto packet = receivedPackets_.front();
     receivedPackets_.pop();
     return packet;
+}
+
+void NetworkServer::broadcast(const NetworkPacket& packet) {
+    server_.broadcast(packet);
+}
+
+void NetworkServer::sendTo(const NetworkPacket& packet, const asio::ip::udp::endpoint& endpoint) {
+    server_.sendTo(packet, endpoint);
+}
+
+void NetworkServer::checkTimeouts() {
+    server_.checkTimeouts();
 }

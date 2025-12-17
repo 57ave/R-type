@@ -4,6 +4,7 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/Event.hpp>
 #include <rendering/Types.hpp>
+#include <engine/Input.hpp>
 #include <string>
 
 namespace rtype
@@ -25,8 +26,11 @@ namespace rtype
                         void close();
                         bool isOpen() const;
 
-                        // Event handling
-                        bool pollEvent(sf::Event &event);
+                        // Event handling (abstracted)
+                        bool pollEvent(rtype::engine::InputEvent &event);
+                        
+                        // Event handling (SFML direct - for compatibility)
+                        bool pollEventSFML(sf::Event &event);
 
                         // Rendering
                         void clear();
