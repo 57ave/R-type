@@ -38,6 +38,18 @@ target_link_libraries(r-type_game PRIVATE
     game
     core
     network
+    MovementSystem
+    CollisionSystem
+    InputSystem
+    LifetimeSystem
+    AnimationSystem
+    StateMachineAnimationSystem
+    WeaponSystem
+    EnemySpawnSystem
+    MovementPatternSystem
+    ScrollingBackgroundSystem
+    BoundarySystem
+    HealthSystem
     sfml-graphics
     sfml-window
     sfml-system

@@ -4,8 +4,8 @@
 #include <ecs/Coordinator.hpp>
 #include <cmath>
 
-MovementPatternSystem::MovementPatternSystem()
-    : coordinator_(nullptr)
+MovementPatternSystem::MovementPatternSystem(ECS::Coordinator* coordinator)
+    : coordinator_(coordinator)
 {
 }
 

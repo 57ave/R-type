@@ -1,10 +1,10 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-#include <cmath>
 #include <algorithm>
 #include <string>
 #include <set>
+#include <functional>
 
 // Engine includes - Core
 #include <ecs/ECS.hpp>
@@ -26,6 +26,18 @@
 #include <network/NetworkClient.hpp>
 #include <network/RTypeProtocol.hpp>
 #include <systems/NetworkSystem.hpp>
+
+// Systems
+#include <systems/MovementSystem.hpp>
+#include <systems/AnimationSystem.hpp>
+#include <systems/StateMachineAnimationSystem.hpp>
+#include <systems/LifetimeSystem.hpp>
+#include <systems/RenderSystem.hpp>
+#include <systems/MovementPatternSystem.hpp>
+#include <systems/ScrollingBackgroundSystem.hpp>
+#include <systems/BoundarySystem.hpp>
+#include <systems/CollisionSystem.hpp>
+#include <systems/HealthSystem.hpp>
 
 // Components
 #include <components/Position.hpp>
@@ -384,7 +396,7 @@ ECS::Entity CreateExplosion(float x, float y) {
     
     // Animation
     Animation anim;
-    anim.frameTime = 0.1f;
+    anim.frameTime = 0.15f; // Slower animation (was 0.1f)
     anim.currentFrame = 0;
     anim.frameCount = 6;
     anim.loop = false;
@@ -397,7 +409,7 @@ ECS::Entity CreateExplosion(float x, float y) {
     
     // Lifetime (destroy after animation finishes)
     Lifetime lifetime;
-    lifetime.maxLifetime = 0.6f;
+    lifetime.maxLifetime = 1.0f; // 1 second before disappearing
     gCoordinator.AddComponent(explosion, lifetime);
     
     // Effect tag
@@ -463,7 +475,7 @@ ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent) {
 
 int main(int argc, char* argv[])
 {
-    std::cout << "R-Type Game Starting with ECS Engine..." << std::endl;
+    std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
     
     // Parse command line arguments
     bool networkMode = false;
@@ -478,9 +490,9 @@ int main(int argc, char* argv[])
         if (argc > 3) {
             serverPort = static_cast<short>(std::stoi(argv[3]));
         }
-        std::cout << "Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
+        std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
     } else {
-        std::cout << "Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
+        std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
     }
     
     // Initialize ECS Coordinator
@@ -507,6 +519,127 @@ int main(int argc, char* argv[])
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
     
+    std::cout << "[Game] Components registered" << std::endl;
+    
+    // ========================================
+    // INITIALIZE ALL SYSTEMS
+    // ========================================
+    std::cout << "🔧 Initializing Systems..." << std::endl;
+    
+    // Create all systems (pass coordinator pointer)
+    auto movementSystem = std::make_shared<MovementSystem>(&gCoordinator);
+    auto animationSystem = std::make_shared<AnimationSystem>();
+    animationSystem->SetCoordinator(&gCoordinator);
+    auto stateMachineAnimSystem = std::make_shared<StateMachineAnimationSystem>(&gCoordinator);
+    auto lifetimeSystem = std::make_shared<LifetimeSystem>(&gCoordinator);
+    auto movementPatternSystem = std::make_shared<MovementPatternSystem>(&gCoordinator);
+    auto scrollingBgSystem = std::make_shared<ScrollingBackgroundSystem>(&gCoordinator);
+    auto boundarySystem = std::make_shared<BoundarySystem>();
+    boundarySystem->SetCoordinator(&gCoordinator);
+    boundarySystem->SetWindowSize(1920.0f, 1080.0f);
+    auto collisionSystem = std::make_shared<CollisionSystem>(&gCoordinator);
+    auto healthSystem = std::make_shared<HealthSystem>(&gCoordinator);
+    
+    // Setup collision callback
+    collisionSystem->SetCollisionCallback([&](ECS::Entity a, ECS::Entity b) {
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+        
+        // Create explosion at collision point
+        if (gCoordinator.HasComponent<Position>(a)) {
+            auto& pos = gCoordinator.GetComponent<Position>(a);
+            CreateExplosion(pos.x, pos.y);
+        }
+        
+        // Damage entities with health
+        if (gCoordinator.HasComponent<Health>(a)) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            health.current -= 1;
+            if (health.current <= 0 && health.destroyOnDeath) {
+                DestroyEntityDeferred(a);
+            }
+        }
+        if (gCoordinator.HasComponent<Health>(b)) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            health.current -= 1;
+            if (health.current <= 0 && health.destroyOnDeath) {
+                DestroyEntityDeferred(b);
+            }
+        }
+        
+        // Destroy projectiles on collision
+        if (gCoordinator.HasComponent<ProjectileTag>(a)) {
+            DestroyEntityDeferred(a);
+        }
+        if (gCoordinator.HasComponent<ProjectileTag>(b)) {
+            DestroyEntityDeferred(b);
+        }
+    });
+    
+    // Register systems with ECS and set signatures
+    gCoordinator.RegisterSystem<MovementSystem>(&gCoordinator);
+    ECS::Signature movementSig;
+    movementSig.set(gCoordinator.GetComponentType<Position>());
+    movementSig.set(gCoordinator.GetComponentType<Velocity>());
+    gCoordinator.SetSystemSignature<MovementSystem>(movementSig);
+    
+    gCoordinator.RegisterSystem<AnimationSystem>();
+    ECS::Signature animSig;
+    animSig.set(gCoordinator.GetComponentType<Animation>());
+    animSig.set(gCoordinator.GetComponentType<Sprite>());
+    gCoordinator.SetSystemSignature<AnimationSystem>(animSig);
+    
+    gCoordinator.RegisterSystem<StateMachineAnimationSystem>(&gCoordinator);
+    ECS::Signature stateMachineSig;
+    stateMachineSig.set(gCoordinator.GetComponentType<StateMachineAnimation>());
+    stateMachineSig.set(gCoordinator.GetComponentType<Sprite>());
+    gCoordinator.SetSystemSignature<StateMachineAnimationSystem>(stateMachineSig);
+    
+    gCoordinator.RegisterSystem<LifetimeSystem>(&gCoordinator);
+    ECS::Signature lifetimeSig;
+    lifetimeSig.set(gCoordinator.GetComponentType<Lifetime>());
+    gCoordinator.SetSystemSignature<LifetimeSystem>(lifetimeSig);
+    
+    gCoordinator.RegisterSystem<MovementPatternSystem>();
+    ECS::Signature patternSig;
+    patternSig.set(gCoordinator.GetComponentType<MovementPattern>());
+    patternSig.set(gCoordinator.GetComponentType<Position>());
+    gCoordinator.SetSystemSignature<MovementPatternSystem>(patternSig);
+    
+    gCoordinator.RegisterSystem<ScrollingBackgroundSystem>();
+    ECS::Signature scrollingSig;
+    scrollingSig.set(gCoordinator.GetComponentType<ScrollingBackground>());
+    scrollingSig.set(gCoordinator.GetComponentType<Position>());
+    gCoordinator.SetSystemSignature<ScrollingBackgroundSystem>(scrollingSig);
+    
+    gCoordinator.RegisterSystem<BoundarySystem>();
+    ECS::Signature boundarySig;
+    boundarySig.set(gCoordinator.GetComponentType<Position>());
+    gCoordinator.SetSystemSignature<BoundarySystem>(boundarySig);
+    
+    gCoordinator.RegisterSystem<CollisionSystem>(&gCoordinator);
+    ECS::Signature collisionSig;
+    collisionSig.set(gCoordinator.GetComponentType<Position>());
+    collisionSig.set(gCoordinator.GetComponentType<Collider>());
+    gCoordinator.SetSystemSignature<CollisionSystem>(collisionSig);
+    
+    gCoordinator.RegisterSystem<HealthSystem>();
+    ECS::Signature healthSig;
+    healthSig.set(gCoordinator.GetComponentType<Health>());
+    gCoordinator.SetSystemSignature<HealthSystem>(healthSig);
+    
+    // Initialize all systems
+    movementSystem->Init();
+    animationSystem->Init();
+    stateMachineAnimSystem->Init();
+    lifetimeSystem->Init();
+    movementPatternSystem->Init();
+    scrollingBgSystem->Init();
+    boundarySystem->Init();
+    collisionSystem->Init();
+    healthSystem->Init();
+    
+    std::cout << "[Game] All Systems initialized!" << std::endl;
+    
     // Network setup
     std::shared_ptr<NetworkClient> networkClient;
     std::shared_ptr<rtype::engine::systems::NetworkSystem> networkSystem;
@@ -517,9 +650,27 @@ int main(int argc, char* argv[])
             networkSystem = std::make_shared<rtype::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
             
             // Set callback to register new entities
-            networkSystem->setEntityCreatedCallback([](ECS::Entity entity) {
+            networkSystem->setEntityCreatedCallback([&](ECS::Entity entity) {
                 allEntities.push_back(entity);
                 std::cout << "[Game] Registered network entity " << entity << std::endl;
+            });
+            
+            // Set callback for entity destruction (to create explosions)
+            networkSystem->setEntityDestroyedCallback([&](ECS::Entity entity, uint32_t networkId) {
+                // Get entity position before destroying
+                if (gCoordinator.HasComponent<Position>(entity)) {
+                    auto& pos = gCoordinator.GetComponent<Position>(entity);
+                    
+                    // Check if it's an enemy or player (not bullets)
+                    if (gCoordinator.HasComponent<Tag>(entity)) {
+                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                        if (tag.name == "Enemy" || tag.name == "Player") {
+                            // Create explosion at entity position
+                            std::cout << "[Game] Creating explosion at (" << pos.x << ", " << pos.y << ")" << std::endl;
+                            CreateExplosion(pos.x, pos.y);
+                        }
+                    }
+                }
             });
             
             networkClient->start();
@@ -649,11 +800,22 @@ int main(int argc, char* argv[])
     // Track entities we've added sprites to
     std::set<ECS::Entity> entitiesWithSprites;
     
-    // Game loop
+    // ========================================
+    // MAIN GAME LOOP (System-Driven)
+    // ========================================
+    std::cout << "[Game] Starting game loop..." << std::endl;
+    
     while (window.isOpen()) {
         float deltaTime = clock.restart();
         
-        // Update network system
+        // Cap deltaTime to prevent huge jumps (max 0.1s = 10 FPS minimum)
+        if (deltaTime > 0.1f) {
+            deltaTime = 0.1f;
+        }
+        
+        // ========================================
+        // 1. NETWORK UPDATE (Receives server state)
+        // ========================================
         if (networkMode && networkSystem) {
             networkSystem->Update(deltaTime);
             
@@ -681,7 +843,7 @@ int main(int argc, char* argv[])
                     if (tag.name == "Player") {
                         // Player sprite
                         sprite->setTexture(playerTexture.get());
-                        int line = networkId.playerId % 4; // Different colors for different players
+                        int line = networkId.playerLine; // Use the server-assigned ship color
                         IntRect rect(33 * 2, line * 17, 33, 17);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
@@ -722,6 +884,15 @@ int main(int argc, char* argv[])
                         
                         // Normal missile
                         IntRect rect(232, 103, 16, 12);
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        spriteComp.scaleX = 2.0f;
+                        spriteComp.scaleY = 2.0f;
+                        
+                    } else if (tag.name == "EnemyBullet") {
+                        // Enemy missile sprite
+                        sprite->setTexture(enemyTexture.get());
+                        IntRect rect(0, 0, 16, 16); // Use enemy bullet sprite
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
                         spriteComp.scaleX = 2.0f;
@@ -793,7 +964,7 @@ int main(int argc, char* argv[])
         }
         
         // Handle continuous input
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+        if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
             if (!spacePressed) {
                 spacePressed = true;
             }
@@ -860,14 +1031,17 @@ int main(int argc, char* argv[])
             }
         }
         
-        // Capture input
-        bool movingUp = sf::Keyboard::isKeyPressed(sf::Keyboard::Up);
-        bool movingDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Down);
-        bool movingLeft = sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
-        bool movingRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Right);
+        // ========================================
+        // 2. INPUT CAPTURE & NETWORK SEND
+        // ========================================
+        bool movingUp = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Up);
+        bool movingDown = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Down);
+        bool movingLeft = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left);
+        bool movingRight = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right);
         bool firing = spacePressed;
         
         // Build input mask for network (bit flags from Protocol.md)
+        inputMask = 0;
         if (movingUp) inputMask |= (1 << 0);
         if (movingDown) inputMask |= (1 << 1);
         if (movingLeft) inputMask |= (1 << 2);
@@ -875,111 +1049,40 @@ int main(int argc, char* argv[])
         if (firing) inputMask |= (1 << 4);
         
         // Send input to server if in network mode
-        if (networkMode && networkSystem && inputMask != 0) {
+        if (networkMode && networkSystem) {
             networkSystem->sendInput(inputMask);
         }
         
-        // Handle player input (only in local mode)
-        if (!networkMode && gCoordinator.HasComponent<Velocity>(player) && gCoordinator.HasComponent<Position>(player)) {
-            if (movingUp || movingDown || movingLeft || movingRight) {
-                
-                auto& playerVel = gCoordinator.GetComponent<Velocity>(player);
-                auto& playerPos = gCoordinator.GetComponent<Position>(player);
-                
-                float speed = 500.0f;
-                playerVel.vx = 0.0f;
-                playerVel.vy = 0.0f;
-                
-                if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {
-                    auto& playerAnim = gCoordinator.GetComponent<StateMachineAnimation>(player);
-                    
-                    if (movingUp) {
-                        playerVel.vy = -speed;
-                        playerAnim.targetColumn = 4;
-                    } else if (movingDown) {
-                        playerVel.vy = speed;
-                        playerAnim.targetColumn = 0;
-                    } else {
-                        playerAnim.targetColumn = 2;
-                    }
-                    
-                    if (movingLeft) {
-                        playerVel.vx = -speed;
-                    }
-                    if (movingRight) {
-                        playerVel.vx = speed;
-                    }
-                    
-                    // Update animation
-                    playerAnim.transitionTime += deltaTime;
-                    if (playerAnim.currentColumn != playerAnim.targetColumn && 
-                        playerAnim.transitionTime >= playerAnim.transitionSpeed) {
-                        playerAnim.transitionTime = 0.0f;
-                        
-                        if (playerAnim.currentColumn < playerAnim.targetColumn) {
-                            playerAnim.currentColumn++;
-                        } else if (playerAnim.currentColumn > playerAnim.targetColumn) {
-                            playerAnim.currentColumn--;
-                        }
-                        
-                        if (gCoordinator.HasComponent<Sprite>(player)) {
-                            auto& sprite = gCoordinator.GetComponent<Sprite>(player);
-                            IntRect rect(33 * playerAnim.currentColumn, playerAnim.currentRow * 17, 33, 17);
-                            if (sprite.sprite) {
-                                sprite.sprite->setTextureRect(rect);
-                            }
-                        }
-                    }
-                }
-                
-                // Apply movement
-                playerPos.x += playerVel.vx * deltaTime;
-                playerPos.y += playerVel.vy * deltaTime;
-                
-                // Boundary check
-                if (playerPos.x < 0) playerPos.x = 0;
-                if (playerPos.y < 0) playerPos.y = 0;
-                if (playerPos.x + 99.0f > 1920) playerPos.x = 1920 - 99.0f;
-                if (playerPos.y + 51.0f > 1080) playerPos.y = 1080 - 51.0f;
-            } else {
-                auto& playerVel = gCoordinator.GetComponent<Velocity>(player);
-                playerVel.vx = 0.0f;
-                playerVel.vy = 0.0f;
-                
-                if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {
-                    auto& playerAnim = gCoordinator.GetComponent<StateMachineAnimation>(player);
-                    playerAnim.targetColumn = 2;
-                    
-                    // Continue animation transition even when not moving
-                    playerAnim.transitionTime += deltaTime;
-                    if (playerAnim.currentColumn != playerAnim.targetColumn && 
-                        playerAnim.transitionTime >= playerAnim.transitionSpeed) {
-                        playerAnim.transitionTime = 0.0f;
-                        
-                        if (playerAnim.currentColumn < playerAnim.targetColumn) {
-                            playerAnim.currentColumn++;
-                        } else if (playerAnim.currentColumn > playerAnim.targetColumn) {
-                            playerAnim.currentColumn--;
-                        }
-                        
-                        if (gCoordinator.HasComponent<Sprite>(player)) {
-                            auto& sprite = gCoordinator.GetComponent<Sprite>(player);
-                            IntRect rect(33 * playerAnim.currentColumn, playerAnim.currentRow * 17, 33, 17);
-                            if (sprite.sprite) {
-                                sprite.sprite->setTextureRect(rect);
-                            }
-                        }
-                    }
-                }
+        // ========================================
+        // 3. LOCAL PLAYER INPUT (Only in local mode - manual)
+        // ========================================
+        if (!networkMode && player != 0 && gCoordinator.HasComponent<Velocity>(player)) {
+            auto& playerVel = gCoordinator.GetComponent<Velocity>(player);
+            float speed = 500.0f;
+            playerVel.vx = 0.0f;
+            playerVel.vy = 0.0f;
+            
+            if (movingUp) playerVel.vy = -speed;
+            if (movingDown) playerVel.vy = speed;
+            if (movingLeft) playerVel.vx = -speed;
+            if (movingRight) playerVel.vx = speed;
+            
+            // Update animation target
+            if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {
+                auto& playerAnim = gCoordinator.GetComponent<StateMachineAnimation>(player);
+                if (movingUp) playerAnim.targetColumn = 4;
+                else if (movingDown) playerAnim.targetColumn = 0;
+                else playerAnim.targetColumn = 2;
             }
         }
         
-        // Enemy spawning (only in local mode)
+        // ========================================
+        // 4. LOCAL ENEMY SPAWNING (Only in local mode)
+        // ========================================
         if (!networkMode) {
             enemySpawnTimer += deltaTime;
             if (enemySpawnTimer >= enemySpawnInterval) {
                 enemySpawnTimer = 0.0f;
-                
                 float spawnY = 100.0f + (rand() % 800);
                 MovementPattern::Type patterns[] = {
                     MovementPattern::Type::STRAIGHT,
@@ -989,196 +1092,33 @@ int main(int argc, char* argv[])
                     MovementPattern::Type::DIAGONAL_DOWN,
                     MovementPattern::Type::DIAGONAL_UP
                 };
-                int patternIndex = rand() % 6;
-                
-                CreateEnemy(1920.0f + 50.0f, spawnY, patterns[patternIndex]);
+                CreateEnemy(1920.0f + 50.0f, spawnY, patterns[rand() % 6]);
             }
         }
         
-        // Update scrolling background (always, even in network mode)
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<ScrollingBackground>(entity) && 
-                gCoordinator.HasComponent<Position>(entity)) {
-                auto& scrolling = gCoordinator.GetComponent<ScrollingBackground>(entity);
-                auto& pos = gCoordinator.GetComponent<Position>(entity);
-                
-                pos.x -= scrolling.scrollSpeed * deltaTime;
-                
-                if (pos.x + scrolling.spriteWidth < 0) {
-                    pos.x = scrolling.spriteWidth;
-                }
-            }
+        // ========================================
+        // 5. SYSTEM UPDATES (ECS Architecture!)
+        // ========================================
+        
+        // Always update scrolling background
+        scrollingBgSystem->Update(deltaTime);
+        
+        // In network mode, server handles physics - only update animations/visuals
+        if (networkMode) {
+            stateMachineAnimSystem->Update(deltaTime);
+            animationSystem->Update(deltaTime);
+            lifetimeSystem->Update(deltaTime);
+        } else {
+            // Local mode: Full simulation
+            movementPatternSystem->Update(deltaTime);
+            movementSystem->Update(deltaTime);
+            boundarySystem->Update(deltaTime);
+            collisionSystem->Update(deltaTime);
+            healthSystem->Update(deltaTime);
+            stateMachineAnimSystem->Update(deltaTime);
+            animationSystem->Update(deltaTime);
+            lifetimeSystem->Update(deltaTime);
         }
-        
-        // Skip physics updates in network mode (server handles it)
-        if (!networkMode) {
-            // Update movement patterns
-            for (auto entity : allEntities) {
-                if (gCoordinator.HasComponent<MovementPattern>(entity) && 
-                gCoordinator.HasComponent<Position>(entity)) {
-                auto& pattern = gCoordinator.GetComponent<MovementPattern>(entity);
-                auto& pos = gCoordinator.GetComponent<Position>(entity);
-                
-                pattern.timeAlive += deltaTime;
-                
-                switch (pattern.pattern) {
-                    case MovementPattern::Type::STRAIGHT:
-                        pos.x -= pattern.speed * deltaTime;
-                        break;
-                    case MovementPattern::Type::SINE_WAVE:
-                        pos.x -= pattern.speed * deltaTime;
-                        pos.y = pattern.startY + pattern.amplitude * std::sin(pattern.frequency * pattern.timeAlive);
-                        break;
-                    case MovementPattern::Type::ZIGZAG:
-                        pos.x -= pattern.speed * deltaTime;
-                        pos.y = pattern.startY + pattern.amplitude * std::sin(pattern.frequency * pattern.timeAlive * 2);
-                        break;
-                    case MovementPattern::Type::CIRCULAR:
-                        pos.x -= pattern.speed * deltaTime * 0.5f;
-                        pos.x += pattern.amplitude * 0.3f * std::cos(pattern.frequency * pattern.timeAlive);
-                        pos.y = pattern.startY + pattern.amplitude * std::sin(pattern.frequency * pattern.timeAlive);
-                        break;
-                    case MovementPattern::Type::DIAGONAL_DOWN:
-                        pos.x -= pattern.speed * deltaTime;
-                        pos.y += pattern.speed * deltaTime * 0.5f;
-                        break;
-                    case MovementPattern::Type::DIAGONAL_UP:
-                        pos.x -= pattern.speed * deltaTime;
-                        pos.y -= pattern.speed * deltaTime * 0.5f;
-                        break;
-                }
-                
-                // Boundary
-                if (pos.y < 0) pos.y = 0;
-                if (pos.y + 80.0f > 1080) pos.y = 1080 - 80.0f;
-                
-                // Destroy if off-screen
-                if (pos.x < -100) {
-                    DestroyEntityDeferred(entity);
-                }
-            }
-        }
-        
-        // Update velocity-based movement
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<Velocity>(entity) && 
-                gCoordinator.HasComponent<Position>(entity) &&
-                !gCoordinator.HasComponent<MovementPattern>(entity)) {  // Don't update if has movement pattern
-                auto& vel = gCoordinator.GetComponent<Velocity>(entity);
-                auto& pos = gCoordinator.GetComponent<Position>(entity);
-                
-                pos.x += vel.vx * deltaTime;
-                pos.y += vel.vy * deltaTime;
-                
-                // Destroy projectiles off-screen
-                if (gCoordinator.HasComponent<ProjectileTag>(entity)) {
-                    if (pos.x > 2000 || pos.x < -100 || pos.y > 1200 || pos.y < -100) {
-                        DestroyEntityDeferred(entity);
-                    }
-                }
-            }
-        }
-        
-        // Update animations
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<Animation>(entity) && 
-                gCoordinator.HasComponent<Sprite>(entity)) {
-                auto& anim = gCoordinator.GetComponent<Animation>(entity);
-                auto& sprite = gCoordinator.GetComponent<Sprite>(entity);
-                
-                anim.currentTime += deltaTime;
-                
-                if (anim.currentTime >= anim.frameTime) {
-                    anim.currentTime = 0.0f;
-                    anim.currentFrame++;
-                    
-                    if (anim.currentFrame >= anim.frameCount) {
-                        if (anim.loop) {
-                            anim.currentFrame = 0;
-                        } else {
-                            anim.finished = true;
-                            anim.currentFrame = anim.frameCount - 1;
-                        }
-                    }
-                    
-                    IntRect newRect(
-                        anim.startX + (anim.currentFrame * anim.spacing),
-                        anim.startY,
-                        anim.frameWidth,
-                        anim.frameHeight
-                    );
-                    if (sprite.sprite) {
-                        sprite.sprite->setTextureRect(newRect);
-                    }
-                }
-            }
-        }
-        
-        // Update lifetimes
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<Lifetime>(entity)) {
-                auto& lifetime = gCoordinator.GetComponent<Lifetime>(entity);
-                lifetime.timeAlive += deltaTime;
-                
-                if (lifetime.timeAlive >= lifetime.maxLifetime && lifetime.destroyOnExpire) {
-                    DestroyEntityDeferred(entity);
-                }
-            }
-        }
-        
-        // Simple collision detection
-        std::vector<ECS::Entity> bullets;
-        std::vector<ECS::Entity> enemies;
-        
-        for (auto entity : allEntities) {
-            if (gCoordinator.HasComponent<Tag>(entity)) {
-                auto& tag = gCoordinator.GetComponent<Tag>(entity);
-                if (tag.name == "bullet" || tag.name == "charged_bullet") {
-                    bullets.push_back(entity);
-                } else if (tag.name == "enemy") {
-                    enemies.push_back(entity);
-                }
-            }
-        }
-        
-        for (auto bullet : bullets) {
-            if (!gCoordinator.HasComponent<Position>(bullet) || !gCoordinator.HasComponent<Collider>(bullet))
-                continue;
-                
-            auto& bulletPos = gCoordinator.GetComponent<Position>(bullet);
-            auto& bulletCol = gCoordinator.GetComponent<Collider>(bullet);
-            
-            bool bulletDestroyed = false;
-            
-            for (auto enemy : enemies) {
-                if (!gCoordinator.HasComponent<Position>(enemy) || !gCoordinator.HasComponent<Collider>(enemy))
-                    continue;
-                    
-                auto& enemyPos = gCoordinator.GetComponent<Position>(enemy);
-                auto& enemyCol = gCoordinator.GetComponent<Collider>(enemy);
-                
-                // Simple AABB collision
-                bool collision = (bulletPos.x < enemyPos.x + enemyCol.width &&
-                                bulletPos.x + bulletCol.width > enemyPos.x &&
-                                bulletPos.y < enemyPos.y + enemyCol.height &&
-                                bulletPos.y + bulletCol.height > enemyPos.y);
-                
-                if (collision) {
-                    // Create explosion
-                    CreateExplosion(enemyPos.x, enemyPos.y);
-                    
-                    // Destroy both
-                    DestroyEntityDeferred(bullet);
-                    DestroyEntityDeferred(enemy);
-                    bulletDestroyed = true;
-                    break;
-                }
-            }
-            
-            if (bulletDestroyed) break;
-        }
-        
-        } // End of !networkMode
         
         // Process destroyed entities
         ProcessDestroyedEntities();

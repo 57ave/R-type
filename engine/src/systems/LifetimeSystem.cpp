@@ -1,4 +1,5 @@
 #include "systems/LifetimeSystem.hpp"
+#include "components/Lifetime.hpp"
 #include <iostream>
 #include <vector>
 
@@ -15,6 +16,16 @@ void LifetimeSystem::Update(float dt) {
     
     for (auto entity : mEntities) {
         bool shouldDestroy = false;
+        
+        // Check generic Lifetime component (for explosions, effects, etc.)
+        if (m_Coordinator->HasComponent<Lifetime>(entity)) {
+            auto& lifetime = m_Coordinator->GetComponent<Lifetime>(entity);
+            lifetime.timeAlive += dt;
+            
+            if (lifetime.timeAlive >= lifetime.maxLifetime && lifetime.destroyOnExpire) {
+                shouldDestroy = true;
+            }
+        }
         
         // Check projectile lifetime
         if (m_Coordinator->HasComponent<rtype::engine::ECS::Projectile>(entity)) {

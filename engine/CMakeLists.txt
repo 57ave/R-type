@@ -204,6 +204,17 @@ target_include_directories(AnimationSystem PUBLIC
 
 target_link_libraries(AnimationSystem PUBLIC ecs rendering)
 
+# StateMachine Animation System (for player ship animations)
+add_library(StateMachineAnimationSystem SHARED
+    src/systems/StateMachineAnimationSystem.cpp
+)
+
+target_include_directories(StateMachineAnimationSystem PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering)
+
 # Weapon System
 add_library(WeaponSystem SHARED
     src/systems/WeaponSystem.cpp

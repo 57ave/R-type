@@ -21,12 +21,17 @@ namespace systems {
 class NetworkSystem : public ECS::System {
 public:
     using EntityCallback = std::function<void(ECS::Entity)>;
+    using EntityDestroyCallback = std::function<void(ECS::Entity, uint32_t)>; // entity, networkId
     
     NetworkSystem(ECS::Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
         : coordinator_(coordinator), networkClient_(client), localPlayerId_(0) {}
     
     void setEntityCreatedCallback(EntityCallback callback) {
         entityCreatedCallback_ = callback;
+    }
+    
+    void setEntityDestroyedCallback(EntityDestroyCallback callback) {
+        entityDestroyedCallback_ = callback;
     }
 
     void Init() override {
@@ -138,7 +143,14 @@ private:
             
             auto it = networkIdToEntity_.find(networkId);
             if (it != networkIdToEntity_.end()) {
-                coordinator_->DestroyEntity(it->second);
+                ECS::Entity entity = it->second;
+                
+                // Notify callback before destroying (for explosion effects)
+                if (entityDestroyedCallback_) {
+                    entityDestroyedCallback_(entity, networkId);
+                }
+                
+                coordinator_->DestroyEntity(entity);
                 networkIdToEntity_.erase(it);
             }
         }
@@ -187,7 +199,7 @@ private:
         // Add NetworkId component
         bool isLocal = (state.type == EntityType::ENTITY_PLAYER && 
                        state.id == localPlayerId_);
-        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_));
+        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_, state.playerLine));
         
         // Add Position
         coordinator_->AddComponent(entity, Position{state.x, state.y});
@@ -246,6 +258,7 @@ private:
     std::unordered_map<uint32_t, ECS::Entity> networkIdToEntity_;
     uint8_t localPlayerId_;
     EntityCallback entityCreatedCallback_;
+    EntityDestroyCallback entityDestroyedCallback_;
 };
 
 } // namespace systems

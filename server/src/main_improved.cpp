@@ -6,6 +6,7 @@
 #include <random>
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
+#include "engine/Clock.hpp"
 
 // Simple game entity for server
 struct ServerEntity {
@@ -15,6 +16,8 @@ struct ServerEntity {
     float vx, vy;
     uint8_t hp;
     uint8_t playerId; // For player entities
+    uint8_t playerLine; // For player ship color (spritesheet line)
+    float fireTimer = 0.0f; // For rate limiting
 };
 
 class GameServer {
@@ -31,34 +34,43 @@ public:
     }
 
     void run() {
-        auto lastUpdate = std::chrono::steady_clock::now();
-        const float updateRate = 1.0f / 60.0f; // 60 FPS
+        rtype::engine::Clock updateClock;
+        rtype::engine::Clock snapshotClock;
+        
+        const float fixedDeltaTime = 1.0f / 60.0f; // 60 FPS simulation
         float enemySpawnTimer = 0.0f;
         const float enemySpawnInterval = 2.0f;
+        
+        const float snapshotRate = 1.0f / 30.0f; // 30 snapshots per second
+        float accumulatedTime = 0.0f;
 
         while (gameRunning_) {
-            auto now = std::chrono::steady_clock::now();
-            float deltaTime = std::chrono::duration<float>(now - lastUpdate).count();
+            float elapsed = updateClock.restart();
+            accumulatedTime += elapsed;
             
-            if (deltaTime >= updateRate) {
-                lastUpdate = now;
+            // Fixed timestep update loop
+            while (accumulatedTime >= fixedDeltaTime) {
+                accumulatedTime -= fixedDeltaTime;
                 
                 // Process incoming packets
                 server_.process();
                 processPackets();
                 
-                // Update game simulation
-                updateEntities(deltaTime);
+                // Update game simulation with FIXED deltaTime
+                updateEntities(fixedDeltaTime);
                 
                 // Spawn enemies
-                enemySpawnTimer += deltaTime;
+                enemySpawnTimer += fixedDeltaTime;
                 if (enemySpawnTimer >= enemySpawnInterval) {
                     enemySpawnTimer = 0.0f;
                     spawnEnemy();
                 }
                 
-                // Send world snapshot to all clients
-                sendWorldSnapshot();
+                // Send world snapshot at reduced rate (30Hz)
+                if (snapshotClock.getElapsedTime() >= snapshotRate) {
+                    snapshotClock.restart();
+                    sendWorldSnapshot();
+                }
                 
                 // Check for timeouts
                 server_.checkTimeouts();
@@ -99,11 +111,12 @@ private:
         player.id = nextEntityId_++;
         player.type = EntityType::ENTITY_PLAYER;
         player.x = 100.0f;
-        player.y = 400.0f + (playerId * 50.0f); // Offset players vertically
+        player.y = 200.0f + (playerId * 150.0f); // Offset players vertically with more space
         player.vx = 0.0f;
         player.vy = 0.0f;
         player.hp = 100;
         player.playerId = playerId;
+        player.playerLine = (playerId - 1) % 5; // Cycle through 5 different ship colors (lines 0-4)
         
         entities_[player.id] = player;
         playerEntities_[playerId] = player.id;
@@ -153,9 +166,10 @@ private:
         if (input.inputMask & (1 << 2)) player.vx = -speed; // Left
         if (input.inputMask & (1 << 3)) player.vx = speed;  // Right
         
-        // Fire
-        if (input.inputMask & (1 << 4)) {
+        // Fire (with rate limiting)
+        if ((input.inputMask & (1 << 4)) && player.fireTimer <= 0.0f) {
             spawnPlayerMissile(player);
+            player.fireTimer = 0.2f; // 0.2 second cooldown
         }
     }
 
@@ -171,10 +185,34 @@ private:
             entity.x += entity.vx * deltaTime;
             entity.y += entity.vy * deltaTime;
             
-            // Boundary checking
-            if (entity.x < -100.0f || entity.x > 2000.0f || 
-                entity.y < -100.0f || entity.y > 1180.0f) {
-                toRemove.push_back(id);
+            // Update fire timer
+            if (entity.fireTimer > 0.0f) {
+                entity.fireTimer -= deltaTime;
+            }
+            
+            // Enemy shooting logic
+            if (entity.type == EntityType::ENTITY_MONSTER && entity.fireTimer <= 0.0f) {
+                // Enemies shoot periodically
+                if (entity.x < 1800.0f && entity.x > 100.0f) { // Only shoot when on screen
+                    spawnEnemyMissile(entity);
+                    entity.fireTimer = 2.0f + (dist_(rng_) % 200) / 100.0f; // Random fire rate 2-4 seconds
+                }
+            }
+            
+            // Boundary checking for players
+            if (entity.type == EntityType::ENTITY_PLAYER) {
+                if (entity.x < 0) entity.x = 0;
+                if (entity.y < 0) entity.y = 0;
+                if (entity.x > 1820) entity.x = 1820;
+                if (entity.y > 1030) entity.y = 1030;
+            }
+            
+            // Boundary checking for others (remove if out of bounds)
+            if (entity.type != EntityType::ENTITY_PLAYER) {
+                if (entity.x < -100.0f || entity.x > 2000.0f || 
+                    entity.y < -100.0f || entity.y > 1180.0f) {
+                    toRemove.push_back(id);
+                }
             }
             
             // Check collisions (simple)
@@ -182,8 +220,41 @@ private:
                 for (auto& [enemyId, enemy] : entities_) {
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
+                            std::cout << "[GameServer] Missile " << id << " hit enemy " << enemyId << "!" << std::endl;
                             toRemove.push_back(id);
                             toRemove.push_back(enemyId);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Check enemy missile vs players
+            if (entity.type == EntityType::ENTITY_MONSTER_MISSILE) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            toRemove.push_back(id);
+                            player.hp -= 10; // Damage player
+                            if (player.hp <= 0) {
+                                toRemove.push_back(playerId);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Check enemy collision with players (crash damage)
+            if (entity.type == EntityType::ENTITY_MONSTER) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            toRemove.push_back(id); // Destroy enemy
+                            player.hp -= 20; // Heavy damage to player
+                            if (player.hp <= 0) {
+                                toRemove.push_back(playerId);
+                            }
                             break;
                         }
                     }
@@ -193,8 +264,12 @@ private:
         
         // Remove entities
         for (uint32_t id : toRemove) {
-            entities_.erase(id);
-            broadcastEntityDestroy(id);
+            auto it = entities_.find(id);
+            if (it != entities_.end()) {
+                std::cout << "[GameServer] 🗑️  Destroying entity " << id << " (type: " << (int)it->second.type << ")" << std::endl;
+                entities_.erase(it);
+                broadcastEntityDestroy(id);
+            }
         }
     }
 
@@ -214,11 +289,13 @@ private:
         enemy.vy = 0.0f;
         enemy.hp = 10;
         enemy.playerId = 0;
+        enemy.playerLine = 0; // Enemies don't use playerLine
+        enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f; // Initial fire delay 1-3s
         
         entities_[enemy.id] = enemy;
         broadcastEntitySpawn(enemy);
         
-        std::cout << "[GameServer] Spawned enemy " << enemy.id << std::endl;
+        std::cout << "[GameServer] 👾 Spawned enemy " << enemy.id << " at (" << enemy.x << ", " << enemy.y << ")" << std::endl;
     }
 
     void spawnPlayerMissile(const ServerEntity& player) {
@@ -231,8 +308,30 @@ private:
         missile.vy = 0.0f;
         missile.hp = 1;
         missile.playerId = player.playerId;
+        missile.playerLine = 0; // Missiles don't use playerLine
         
         entities_[missile.id] = missile;
+        broadcastEntitySpawn(missile);  // Broadcast to all clients
+        
+        std::cout << "[GameServer] Player " << (int)player.playerId << " fired missile " << missile.id << std::endl;
+    }
+    
+    void spawnEnemyMissile(const ServerEntity& enemy) {
+        ServerEntity missile;
+        missile.id = nextEntityId_++;
+        missile.type = EntityType::ENTITY_MONSTER_MISSILE;
+        missile.x = enemy.x - 20.0f;
+        missile.y = enemy.y + 10.0f;
+        missile.vx = -400.0f; // Shoot left towards players
+        missile.vy = 0.0f;
+        missile.hp = 1;
+        missile.playerId = 0;
+        missile.playerLine = 0;
+        
+        entities_[missile.id] = missile;
+        broadcastEntitySpawn(missile);
+        
+        std::cout << "[GameServer] Enemy " << enemy.id << " fired missile " << missile.id << " at (" << missile.x << ", " << missile.y << ")" << std::endl;
     }
 
     void sendWorldSnapshot() {
@@ -257,6 +356,7 @@ private:
             state.vx = entity.vx;
             state.vy = entity.vy;
             state.hp = entity.hp;
+            state.playerLine = entity.playerLine;
             
             auto stateData = state.serialize();
             packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
@@ -274,6 +374,7 @@ private:
         state.vx = entity.vx;
         state.vy = entity.vy;
         state.hp = entity.hp;
+        state.playerLine = entity.playerLine;
         
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_SPAWN));
         packet.header.timestamp = getCurrentTimestamp();

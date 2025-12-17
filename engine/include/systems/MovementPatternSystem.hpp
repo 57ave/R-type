@@ -9,7 +9,7 @@ namespace ECS {
 
 class MovementPatternSystem : public ECS::System {
     public:
-        MovementPatternSystem();
+        explicit MovementPatternSystem(ECS::Coordinator* coordinator = nullptr);
         ~MovementPatternSystem() override = default;
 
         void Init() override;

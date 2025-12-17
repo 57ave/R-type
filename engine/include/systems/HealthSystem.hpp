@@ -9,7 +9,7 @@ namespace ECS {
 
 class HealthSystem : public ECS::System {
     public:
-        HealthSystem();
+        explicit HealthSystem(ECS::Coordinator* coordinator = nullptr);
         ~HealthSystem() override = default;
 
         void Init() override;

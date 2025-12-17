@@ -9,7 +9,7 @@ namespace ECS {
 
 class ScrollingBackgroundSystem : public ECS::System {
     public:
-        ScrollingBackgroundSystem();
+        explicit ScrollingBackgroundSystem(ECS::Coordinator* coordinator = nullptr);
         ~ScrollingBackgroundSystem() override = default;
 
         void Init() override;

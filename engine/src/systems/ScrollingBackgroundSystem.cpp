@@ -4,8 +4,8 @@
 #include <components/Sprite.hpp>
 #include <ecs/Coordinator.hpp>
 
-ScrollingBackgroundSystem::ScrollingBackgroundSystem()
-    : coordinator_(nullptr)
+ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinator)
+    : coordinator_(coordinator)
 {
 }
 

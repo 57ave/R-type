@@ -3,8 +3,8 @@
 #include <ecs/Coordinator.hpp>
 #include <vector>
 
-HealthSystem::HealthSystem()
-    : coordinator_(nullptr)
+HealthSystem::HealthSystem(ECS::Coordinator* coordinator)
+    : coordinator_(coordinator)
 {
 }
 
