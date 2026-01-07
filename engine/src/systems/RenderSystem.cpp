@@ -5,6 +5,8 @@
 #include <rendering/Types.hpp>
 #include <rendering/IRenderer.hpp>
 #include <iostream>
+#include <vector>
+#include <algorithm>
 
 RenderSystem::RenderSystem()
     : renderer_(nullptr)
@@ -28,12 +30,25 @@ void RenderSystem::Update(float /*dt*/)
         return;
     }
 
-    // Iterate entities registered in this system (populated by SystemManager)
+    // Collect all renderable entities and sort by layer
+    std::vector<ECS::Entity> renderableEntities;
     for (auto entity : mEntities) {
-        // Check components exist
-        if (!coordinator_->HasComponent<Position>(entity) || !coordinator_->HasComponent<Sprite>(entity))
-            continue;
+        if (coordinator_->HasComponent<Position>(entity) && 
+            coordinator_->HasComponent<Sprite>(entity)) {
+            renderableEntities.push_back(entity);
+        }
+    }
 
+    // Sort by layer (lower layer = drawn first = background)
+    std::sort(renderableEntities.begin(), renderableEntities.end(), 
+        [this](ECS::Entity a, ECS::Entity b) {
+            auto& spriteA = coordinator_->GetComponent<Sprite>(a);
+            auto& spriteB = coordinator_->GetComponent<Sprite>(b);
+            return spriteA.layer < spriteB.layer;
+        });
+
+    // Draw all entities in order
+    for (auto entity : renderableEntities) {
         auto &pos = coordinator_->GetComponent<Position>(entity);
         auto &spr = coordinator_->GetComponent<Sprite>(entity);
 
@@ -45,8 +60,8 @@ void RenderSystem::Update(float /*dt*/)
         t.position.x = pos.x;
         t.position.y = pos.y;
         t.rotation = 0.0f;
-        t.scale.x = 1.0f;
-        t.scale.y = 1.0f;
+        t.scale.x = spr.scaleX;  // Use scale from Sprite component
+        t.scale.y = spr.scaleY;  // Use scale from Sprite component
 
         // Apply texture rect if needed on the sprite instance
         if (spr.textureRect.width != 0 || spr.textureRect.height != 0) {

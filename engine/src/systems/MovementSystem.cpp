@@ -1,4 +1,5 @@
 #include "systems/MovementSystem.hpp"
+#include "components/Position.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -12,12 +13,17 @@ void MovementSystem::Init() {
 
 void MovementSystem::Update(float dt) {
     for (auto entity : mEntities) {
-        auto& transform = m_Coordinator->GetComponent<rtype::engine::ECS::Transform>(entity);
+        // Check if entity has Position component
+        if (!m_Coordinator->HasComponent<Position>(entity)) {
+            continue;
+        }
+        
+        auto& position = m_Coordinator->GetComponent<Position>(entity);
         auto& velocity = m_Coordinator->GetComponent<rtype::engine::ECS::Velocity>(entity);
         
         // Apply velocity to position
-        transform.x += velocity.dx * dt;
-        transform.y += velocity.dy * dt;
+        position.x += velocity.dx * dt;
+        position.y += velocity.dy * dt;
         
         // Clamp to max speed
         float speed = std::sqrt(velocity.dx * velocity.dx + velocity.dy * velocity.dy);

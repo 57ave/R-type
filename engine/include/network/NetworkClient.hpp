@@ -19,7 +19,7 @@ public:
     void disconnect();
 
     // Send input to server
-    void sendInput(uint8_t playerId, uint8_t inputMask);
+    void sendInput(uint8_t playerId, uint8_t inputMask, uint8_t chargeLevel = 0);
 
     // Send HELLO to server
     void sendHello();

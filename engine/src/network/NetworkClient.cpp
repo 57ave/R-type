@@ -55,7 +55,7 @@ void NetworkClient::disconnect() {
     }
 }
 
-void NetworkClient::sendInput(uint8_t playerId, uint8_t inputMask) {
+void NetworkClient::sendInput(uint8_t playerId, uint8_t inputMask, uint8_t chargeLevel) {
     if (!connected_) return;
 
     NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
@@ -67,6 +67,7 @@ void NetworkClient::sendInput(uint8_t playerId, uint8_t inputMask) {
     ClientInput input;
     input.playerId = playerId;
     input.inputMask = inputMask;
+    input.chargeLevel = chargeLevel;
     packet.setPayload(input.serialize());
 
     client_.send(packet);

@@ -217,12 +217,20 @@ private:
                 break;
             case EntityType::ENTITY_MONSTER:
                 coordinator_->AddComponent(entity, Tag{"Enemy"});
+                // Add EnemyTag with type from server
+                coordinator_->AddComponent(entity, EnemyTag{static_cast<EnemyTag::Type>(state.enemyType)});
                 break;
             case EntityType::ENTITY_PLAYER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"PlayerBullet"});
+                // Add ProjectileTag with charge level and type
+                coordinator_->AddComponent(entity, ProjectileTag{
+                    static_cast<ProjectileTag::Type>(state.projectileType),
+                    state.chargeLevel
+                });
                 break;
             case EntityType::ENTITY_MONSTER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"EnemyBullet"});
+                coordinator_->AddComponent(entity, ProjectileTag{ProjectileTag::Type::NORMAL, 0});
                 break;
             default:
                 break;
@@ -246,9 +254,9 @@ private:
 
 public:
     // Called by game code to send input
-    void sendInput(uint8_t inputMask) {
+    void sendInput(uint8_t inputMask, uint8_t chargeLevel = 0) {
         if (networkClient_ && networkClient_->isConnected()) {
-            networkClient_->sendInput(localPlayerId_, inputMask);
+            networkClient_->sendInput(localPlayerId_, inputMask, chargeLevel);
         }
     }
 
