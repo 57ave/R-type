@@ -95,6 +95,7 @@
             std::unique_ptr<SFMLTexture> playerTexture;
             std::unique_ptr<SFMLTexture> missileTexture;
             std::unique_ptr<SFMLTexture> enemyTexture;
+            std::unique_ptr<SFMLTexture> enemyBulletTexture;  // Texture for enemy bullets
             std::unique_ptr<SFMLTexture> explosionTexture;
 
             std::vector<SFMLSprite*> allSprites;
