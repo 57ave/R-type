@@ -1,9 +1,11 @@
 #pragma once
 
 #include "../ecs/System.hpp"
+#include "../ecs/Coordinator.hpp"
 #include "LuaState.hpp"
 #include <sol/sol.hpp>
 #include <string>
+#include <memory>
 
 namespace Scripting {
 

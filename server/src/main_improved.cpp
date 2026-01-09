@@ -226,6 +226,8 @@ private:
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
                             std::cout << "[GameServer] Missile " << id << " hit enemy " << enemyId << "!" << std::endl;
+                            // Create explosion at enemy position
+                            spawnExplosion(enemy.x, enemy.y);
                             toRemove.push_back(id);
                             toRemove.push_back(enemyId);
                             break;
@@ -239,6 +241,8 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
+                            // Create small explosion at missile hit
+                            spawnExplosion(entity.x, entity.y);
                             toRemove.push_back(id);
                             player.hp -= 10; // Damage player
                             if (player.hp <= 0) {
@@ -255,6 +259,8 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
+                            // Create explosion at collision point
+                            spawnExplosion(entity.x, entity.y);
                             toRemove.push_back(id); // Destroy enemy
                             player.hp -= 20; // Heavy damage to player
                             if (player.hp <= 0) {
@@ -371,6 +377,24 @@ private:
         broadcastEntitySpawn(missile);
         
         std::cout << "[GameServer] Enemy " << enemy.id << " fired missile " << missile.id << " at (" << missile.x << ", " << missile.y << ")" << std::endl;
+    }
+
+    void spawnExplosion(float x, float y) {
+        ServerEntity explosion;
+        explosion.id = nextEntityId_++;
+        explosion.type = EntityType::ENTITY_EXPLOSION;
+        explosion.x = x;
+        explosion.y = y;
+        explosion.vx = 0.0f;
+        explosion.vy = 0.0f;
+        explosion.hp = 1;
+        explosion.playerId = 0;
+        explosion.playerLine = 0;
+        
+        entities_[explosion.id] = explosion;
+        broadcastEntitySpawn(explosion);
+        
+        std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ")" << std::endl;
     }
 
     void sendWorldSnapshot() {

@@ -29,9 +29,10 @@ echo "Choose a mode:"
 echo "  1) Start SERVER only"
 echo "  2) Start LOCAL game (no network)"
 echo "  3) Start NETWORK game (connects to localhost:12345)"
-echo "  4) Full test: Server + 2 clients in separate terminals"
+echo "  4) Full test: Server + 2 clients (tmux)"
+echo "  5) Full test: Server + 2 clients (separate windows) - RECOMMENDED"
 echo ""
-read -p "Enter choice (1-4): " choice
+read -p "Enter choice (1-5): " choice
 
 case $choice in
     1)
@@ -149,6 +150,92 @@ case $choice in
             echo -e "${BLUE}💡 Tip: Install tmux for automatic multiplayer testing:${NC}"
             echo "  sudo dnf install tmux     # Fedora/RHEL"
             echo "  sudo apt install tmux     # Debian/Ubuntu"
+            exit 1
+        fi
+        ;;
+    5)
+        echo -e "${BLUE}🚀 Starting full multiplayer test in separate windows...${NC}"
+        echo ""
+        
+        # Détecter le terminal disponible
+        if command -v gnome-terminal &> /dev/null; then
+            TERM_CMD="gnome-terminal"
+            TERM_TITLE="--title"
+            echo -e "${GREEN}Using gnome-terminal...${NC}"
+            
+            # Lancer le serveur
+            $TERM_CMD $TERM_TITLE "🚀 R-Type SERVER" -- bash -c "cd $(pwd) && echo '🚀 SERVER - Port 12345' && echo '' && $BUILD_DIR/server/r-type_server; echo ''; echo 'Server stopped. Press Enter to close...'; read" &
+            sleep 2
+            
+            # Lancer Player 1
+            $TERM_CMD $TERM_TITLE "🎮 R-Type PLAYER 1" -- bash -c "cd $(pwd) && echo '🎮 PLAYER 1 - Connecting to localhost:12345' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 1 stopped. Press Enter to close...'; read" &
+            sleep 1
+            
+            # Lancer Player 2
+            $TERM_CMD $TERM_TITLE "🎮 R-Type PLAYER 2" -- bash -c "cd $(pwd) && echo '🎮 PLAYER 2 - Connecting to localhost:12345' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 2 stopped. Press Enter to close...'; read" &
+            
+            echo -e "${GREEN}✅ All terminals launched!${NC}"
+            echo -e "${BLUE}3 separate windows opened:${NC}"
+            echo "  - Server window (port 12345)"
+            echo "  - Player 1 window"
+            echo "  - Player 2 window"
+            echo ""
+            echo -e "${BLUE}💡 Tip: Arrange windows side by side to see all logs${NC}"
+            
+        elif command -v konsole &> /dev/null; then
+            TERM_CMD="konsole"
+            echo -e "${GREEN}Using konsole...${NC}"
+            
+            $TERM_CMD --title "🚀 R-Type SERVER" -e bash -c "cd $(pwd) && echo '🚀 SERVER - Port 12345' && echo '' && $BUILD_DIR/server/r-type_server; echo ''; echo 'Server stopped. Press Enter to close...'; read" &
+            sleep 2
+            $TERM_CMD --title "🎮 R-Type PLAYER 1" -e bash -c "cd $(pwd) && echo '🎮 PLAYER 1' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 1 stopped. Press Enter to close...'; read" &
+            sleep 1
+            $TERM_CMD --title "🎮 R-Type PLAYER 2" -e bash -c "cd $(pwd) && echo '🎮 PLAYER 2' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 2 stopped. Press Enter to close...'; read" &
+            
+            echo -e "${GREEN}✅ All terminals launched!${NC}"
+            
+        elif command -v xterm &> /dev/null; then
+            TERM_CMD="xterm"
+            echo -e "${GREEN}Using xterm...${NC}"
+            
+            $TERM_CMD -title "SERVER" -geometry 100x30+0+0 -e bash -c "cd $(pwd) && echo '🚀 SERVER - Port 12345' && echo '' && $BUILD_DIR/server/r-type_server; echo ''; echo 'Server stopped. Press Enter to close...'; read" &
+            sleep 2
+            $TERM_CMD -title "PLAYER 1" -geometry 100x30+700+0 -e bash -c "cd $(pwd) && echo '🎮 PLAYER 1' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 1 stopped. Press Enter to close...'; read" &
+            sleep 1
+            $TERM_CMD -title "PLAYER 2" -geometry 100x30+1400+0 -e bash -c "cd $(pwd) && echo '🎮 PLAYER 2' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 2 stopped. Press Enter to close...'; read" &
+            
+            echo -e "${GREEN}✅ All terminals launched!${NC}"
+            
+        elif command -v alacritty &> /dev/null; then
+            TERM_CMD="alacritty"
+            echo -e "${GREEN}Using alacritty...${NC}"
+            
+            $TERM_CMD --title "SERVER" -e bash -c "cd $(pwd) && echo '🚀 SERVER - Port 12345' && echo '' && $BUILD_DIR/server/r-type_server; echo ''; echo 'Server stopped. Press Enter to close...'; read" &
+            sleep 2
+            $TERM_CMD --title "PLAYER 1" -e bash -c "cd $(pwd) && echo '🎮 PLAYER 1' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 1 stopped. Press Enter to close...'; read" &
+            sleep 1
+            $TERM_CMD --title "PLAYER 2" -e bash -c "cd $(pwd) && echo '🎮 PLAYER 2' && echo '' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; echo ''; echo 'Player 2 stopped. Press Enter to close...'; read" &
+            
+            echo -e "${GREEN}✅ All terminals launched!${NC}"
+            
+        else
+            echo -e "${RED}❌ No supported terminal emulator found${NC}"
+            echo ""
+            echo -e "${BLUE}Supported terminals: gnome-terminal, konsole, xterm, alacritty${NC}"
+            echo ""
+            echo -e "${BLUE}📋 Please run manually in 3 separate terminals:${NC}"
+            echo ""
+            echo -e "${GREEN}Terminal 1 (Server):${NC}"
+            echo "  cd $(pwd)"
+            echo "  $BUILD_DIR/server/r-type_server"
+            echo ""
+            echo -e "${GREEN}Terminal 2 (Player 1):${NC}"
+            echo "  cd $(pwd)"
+            echo "  $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345"
+            echo ""
+            echo -e "${GREEN}Terminal 3 (Player 2):${NC}"
+            echo "  cd $(pwd)"
+            echo "  $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345"
             exit 1
         fi
         ;;

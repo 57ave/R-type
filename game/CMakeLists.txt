@@ -1,6 +1,10 @@
 # ==================== Game Logic Library ====================
 # Logique métier spécifique au R-Type
 
+# Trouver Lua et Sol3
+set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/external/sol3/include" CACHE PATH "Path to Sol3")
+find_package(Lua REQUIRED)
+
 file(GLOB_RECURSE GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/components/*.cpp"
@@ -12,11 +16,15 @@ if(GAME_SOURCES)
 
     target_include_directories(game PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${SOL3_INCLUDE_DIR}
+        ${LUA_INCLUDE_DIR}
     )
 
     # Game dépend de l'engine
     target_link_libraries(game PUBLIC
         engine
+        scripting
+        ${LUA_LIBRARIES}
     )
 else()
     # Placeholder si pas de fichiers game encore
@@ -39,6 +47,7 @@ target_link_libraries(r-type_game PRIVATE
     game
     core
     network
+    scripting
     MovementSystem
     CollisionSystem
     AnimationSystem

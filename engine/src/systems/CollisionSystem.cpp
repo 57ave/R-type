@@ -118,15 +118,10 @@ void CollisionSystem::HandleCollision(ECS::Entity a, ECS::Entity b) {
         }
     }
 
-    // Destroy projectile on impact (typical behavior)
-    if (m_Coordinator->HasComponent<ProjectileTag>(a)) {
-        m_Coordinator->DestroyEntity(a);
-    }
-    if (m_Coordinator->HasComponent<ProjectileTag>(b)) {
-        m_Coordinator->DestroyEntity(b);
-    }
-
-    // Call custom callback if set
+    // NOTE: Projectile destruction is now handled by the callback
+    // to avoid destroying entities before the callback can access them
+    
+    // Call custom callback if set (handles entity destruction)
     if (m_CollisionCallback) {
         m_CollisionCallback(a, b);
     }

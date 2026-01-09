@@ -14,6 +14,11 @@ void Game::ProcessDestroyedEntities() {
         if (gCoordinator.HasComponent<Sprite>(entity)) {
             auto& sprite = gCoordinator.GetComponent<Sprite>(entity);
             if (sprite.sprite) {
+                // Remove from allSprites before deleting to avoid double-free
+                auto it = std::find(allSprites.begin(), allSprites.end(), sprite.sprite);
+                if (it != allSprites.end()) {
+                    allSprites.erase(it);
+                }
                 delete sprite.sprite;
                 sprite.sprite = nullptr;
             }
@@ -309,20 +314,33 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
 
 // Helper function to create explosion effect
 ECS::Entity Game::CreateExplosion(float x, float y) {
+    std::cout << "[CreateExplosion] Starting at (" << x << ", " << y << ")" << std::endl;
+    
+    // Verify explosion texture is loaded
+    if (!explosionTexture || explosionTexture->getSize().x == 0) {
+        std::cerr << "[Game] Cannot create explosion: texture not loaded" << std::endl;
+        return 0;
+    }
+
+    std::cout << "[CreateExplosion] Creating entity..." << std::endl;
     ECS::Entity explosion = gCoordinator.CreateEntity();
     RegisterEntity(explosion);
+    std::cout << "[CreateExplosion] Entity " << explosion << " created" << std::endl;
 
     // Position
+    std::cout << "[CreateExplosion] Adding Position component..." << std::endl;
     gCoordinator.AddComponent(explosion, Position{x, y});
 
     // Sprite
+    std::cout << "[CreateExplosion] Creating sprite..." << std::endl;
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
     sprite->setTexture(explosionTexture.get());
-    IntRect rect(129, 0, 34, 35);
+    IntRect rect(130, 1, 33, 32);  // Match animation parameters
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
 
+    std::cout << "[CreateExplosion] Adding Sprite component..." << std::endl;
     Sprite spriteComp;
     spriteComp.sprite = sprite;
     spriteComp.textureRect = rect;
@@ -332,30 +350,30 @@ ECS::Entity Game::CreateExplosion(float x, float y) {
     gCoordinator.AddComponent(explosion, spriteComp);
 
     // Animation
+    std::cout << "[CreateExplosion] Adding Animation component..." << std::endl;
     Animation anim;
-    anim.frameTime = 0.15f; // Slower animation (was 0.1f)
+    anim.frameTime = 0.08f; // Faster animation for smoother effect
     anim.currentFrame = 0;
-    anim.frameCount = 6;
+    anim.frameCount = 6;   // Try 5 frames instead of 6
     anim.loop = false;
-    anim.frameWidth = 34;
-    anim.frameHeight = 35;
-    anim.startX = 129;
-    anim.startY = 0;
-    anim.spacing = 33;  // Average spacing between explosion frames
+    anim.frameWidth = 32;  // Adjusted frame width
+    anim.frameHeight = 32; // Adjusted frame height
+    anim.startX = 130;     // Adjusted start position
+    anim.startY = 1;       // Slight Y offset
+    anim.spacing = 1.5;     // Spacing between explosion frames
     gCoordinator.AddComponent(explosion, anim);
 
     // Lifetime (destroy after animation finishes)
+    std::cout << "[CreateExplosion] Adding Lifetime component..." << std::endl;
     Lifetime lifetime;
-    lifetime.maxLifetime = 1.0f; // 1 second before disappearing
+    lifetime.maxLifetime = 0.5f; // 1 second before disappearing
     gCoordinator.AddComponent(explosion, lifetime);
 
-    // Effect tag
-    Effect effect;
-    effect.effectType = Effect::Type::EXPLOSION;
-    gCoordinator.AddComponent(explosion, effect);
-
+    // Tag for identification
+    std::cout << "[CreateExplosion] Adding Tag component..." << std::endl;
     gCoordinator.AddComponent(explosion, Tag{"explosion"});
 
+    std::cout << "[CreateExplosion] Explosion " << explosion << " created successfully!" << std::endl;
     return explosion;
 }
 
@@ -421,6 +439,7 @@ int Game::Run(int argc, char* argv[])
 
     if (argc > 1 && std::string(argv[1]) == "--network") {
         networkMode = true;
+        isNetworkClient = true;  // Mark as network client
         if (argc > 2) {
             serverAddress = argv[2];
         }
@@ -428,8 +447,10 @@ int Game::Run(int argc, char* argv[])
             serverPort = static_cast<short>(std::stoi(argv[3]));
         }
         std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
+        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     } else {
         std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
+        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     }
 
     // Initialize ECS Coordinator
@@ -459,130 +480,98 @@ int Game::Run(int argc, char* argv[])
     std::cout << "[Game] Components registered" << std::endl;
 
     // ========================================
+    // INITIALIZE LUA SCRIPTING
+    // ========================================
+    std::cout << "🌙 Initializing Lua Scripting..." << std::endl;
+
+    auto& luaState = Scripting::LuaState::Instance();
+    luaState.Init();
+    luaState.EnableHotReload(true);
+
+    // Register all components to Lua
+    Scripting::ComponentBindings::RegisterAll(luaState.GetState());
+    Scripting::ComponentBindings::RegisterCoordinator(luaState.GetState(), &gCoordinator);
+
+    std::cout << "[Game] Lua components registered" << std::endl;
+
+    // ========================================
     // INITIALIZE ALL SYSTEMS
     // ========================================
     std::cout << "🔧 Initializing Systems..." << std::endl;
 
-    // Create all systems (pass coordinator pointer)
-    auto movementSystem = std::make_shared<MovementSystem>(&gCoordinator);
-    auto animationSystem = std::make_shared<AnimationSystem>();
-    animationSystem->SetCoordinator(&gCoordinator);
-    auto stateMachineAnimSystem = std::make_shared<StateMachineAnimationSystem>(&gCoordinator);
-    auto lifetimeSystem = std::make_shared<LifetimeSystem>(&gCoordinator);
-    auto movementPatternSystem = std::make_shared<MovementPatternSystem>(&gCoordinator);
-    auto scrollingBgSystem = std::make_shared<ScrollingBackgroundSystem>(&gCoordinator);
-    auto boundarySystem = std::make_shared<BoundarySystem>();
-    boundarySystem->SetCoordinator(&gCoordinator);
-    boundarySystem->SetWindowSize(1920.0f, 1080.0f);
-    auto collisionSystem = std::make_shared<CollisionSystem>(&gCoordinator);
-    auto healthSystem = std::make_shared<HealthSystem>(&gCoordinator);
-    
-    // Create RenderSystem (renderer will be set later)
-    auto renderSystem = std::make_shared<RenderSystem>();
-    renderSystem->SetCoordinator(&gCoordinator);
-
-    // Setup collision callback
-    collisionSystem->SetCollisionCallback([this](ECS::Entity a, ECS::Entity b) {
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
-
-        // Create explosion at the center between both entities
-        if (gCoordinator.HasComponent<Position>(a) && gCoordinator.HasComponent<Position>(b)) {
-            auto& posA = gCoordinator.GetComponent<Position>(a);
-            auto& posB = gCoordinator.GetComponent<Position>(b);
-            
-            // Get sprite sizes to calculate centers
-            float centerX = posB.x;
-            float centerY = posB.y;
-            
-            // Adjust for sprite scale if available
-            if (gCoordinator.HasComponent<Sprite>(b) && gCoordinator.HasComponent<Collider>(b)) {
-                auto& spriteB = gCoordinator.GetComponent<Sprite>(b);
-                auto& colliderB = gCoordinator.GetComponent<Collider>(b);
-                centerX += colliderB.width / 2.0f;
-                centerY += colliderB.height / 2.0f;
-            }
-            
-            CreateExplosion(centerX, centerY);
-        }
-
-        // Damage entities with health
-        if (gCoordinator.HasComponent<Health>(a)) {
-            auto& health = gCoordinator.GetComponent<Health>(a);
-            health.current -= 1;
-            if (health.current <= 0 && health.destroyOnDeath) {
-                DestroyEntityDeferred(a);
-            }
-        }
-        if (gCoordinator.HasComponent<Health>(b)) {
-            auto& health = gCoordinator.GetComponent<Health>(b);
-            health.current -= 1;
-            if (health.current <= 0 && health.destroyOnDeath) {
-                DestroyEntityDeferred(b);
-            }
-        }
-
-        // Destroy projectiles on collision
-        if (gCoordinator.HasComponent<ProjectileTag>(a)) {
-            DestroyEntityDeferred(a);
-        }
-        if (gCoordinator.HasComponent<ProjectileTag>(b)) {
-            DestroyEntityDeferred(b);
-        }
-    });
+    // Systems will be created by the Coordinator when registered
+    std::shared_ptr<MovementSystem> movementSystem = nullptr;
+    std::shared_ptr<AnimationSystem> animationSystem = nullptr;
+    std::shared_ptr<StateMachineAnimationSystem> stateMachineAnimSystem = nullptr;
+    std::shared_ptr<LifetimeSystem> lifetimeSystem = nullptr;
+    std::shared_ptr<MovementPatternSystem> movementPatternSystem = nullptr;
+    std::shared_ptr<ScrollingBackgroundSystem> scrollingBgSystem = nullptr;
+    std::shared_ptr<BoundarySystem> boundarySystem = nullptr;
+    std::shared_ptr<CollisionSystem> collisionSystem = nullptr;
+    std::shared_ptr<HealthSystem> healthSystem = nullptr;
+    std::shared_ptr<RenderSystem> renderSystem = nullptr;
 
     // Register systems with ECS and set signatures
-    gCoordinator.RegisterSystem<MovementSystem>(&gCoordinator);
+    // Register and get all system instances from Coordinator
+    movementSystem = gCoordinator.RegisterSystem<MovementSystem>(&gCoordinator);
     ECS::Signature movementSig;
     movementSig.set(gCoordinator.GetComponentType<Position>());
     movementSig.set(gCoordinator.GetComponentType<Velocity>());
     gCoordinator.SetSystemSignature<MovementSystem>(movementSig);
 
-    gCoordinator.RegisterSystem<AnimationSystem>();
+    animationSystem = gCoordinator.RegisterSystem<AnimationSystem>();
+    animationSystem->SetCoordinator(&gCoordinator);
     ECS::Signature animSig;
     animSig.set(gCoordinator.GetComponentType<Animation>());
     animSig.set(gCoordinator.GetComponentType<Sprite>());
     gCoordinator.SetSystemSignature<AnimationSystem>(animSig);
 
-    gCoordinator.RegisterSystem<StateMachineAnimationSystem>(&gCoordinator);
+    stateMachineAnimSystem = gCoordinator.RegisterSystem<StateMachineAnimationSystem>(&gCoordinator);
     ECS::Signature stateMachineSig;
     stateMachineSig.set(gCoordinator.GetComponentType<StateMachineAnimation>());
     stateMachineSig.set(gCoordinator.GetComponentType<Sprite>());
     gCoordinator.SetSystemSignature<StateMachineAnimationSystem>(stateMachineSig);
 
-    gCoordinator.RegisterSystem<LifetimeSystem>(&gCoordinator);
+    lifetimeSystem = gCoordinator.RegisterSystem<LifetimeSystem>(&gCoordinator);
     ECS::Signature lifetimeSig;
     lifetimeSig.set(gCoordinator.GetComponentType<Lifetime>());
     gCoordinator.SetSystemSignature<LifetimeSystem>(lifetimeSig);
 
-    gCoordinator.RegisterSystem<MovementPatternSystem>();
+    movementPatternSystem = gCoordinator.RegisterSystem<MovementPatternSystem>();
+    movementPatternSystem->SetCoordinator(&gCoordinator);
     ECS::Signature patternSig;
     patternSig.set(gCoordinator.GetComponentType<MovementPattern>());
     patternSig.set(gCoordinator.GetComponentType<Position>());
     gCoordinator.SetSystemSignature<MovementPatternSystem>(patternSig);
 
-    gCoordinator.RegisterSystem<ScrollingBackgroundSystem>();
+    scrollingBgSystem = gCoordinator.RegisterSystem<ScrollingBackgroundSystem>();
+    scrollingBgSystem->SetCoordinator(&gCoordinator);
     ECS::Signature scrollingSig;
     scrollingSig.set(gCoordinator.GetComponentType<ScrollingBackground>());
     scrollingSig.set(gCoordinator.GetComponentType<Position>());
     gCoordinator.SetSystemSignature<ScrollingBackgroundSystem>(scrollingSig);
 
-    gCoordinator.RegisterSystem<BoundarySystem>();
+    boundarySystem = gCoordinator.RegisterSystem<BoundarySystem>();
+    boundarySystem->SetCoordinator(&gCoordinator);
+    boundarySystem->SetWindowSize(1920.0f, 1080.0f);
     ECS::Signature boundarySig;
     boundarySig.set(gCoordinator.GetComponentType<Position>());
     gCoordinator.SetSystemSignature<BoundarySystem>(boundarySig);
 
-    gCoordinator.RegisterSystem<CollisionSystem>(&gCoordinator);
+    collisionSystem = gCoordinator.RegisterSystem<CollisionSystem>(&gCoordinator);
     ECS::Signature collisionSig;
     collisionSig.set(gCoordinator.GetComponentType<Position>());
     collisionSig.set(gCoordinator.GetComponentType<Collider>());
     gCoordinator.SetSystemSignature<CollisionSystem>(collisionSig);
 
-    gCoordinator.RegisterSystem<HealthSystem>();
+    healthSystem = gCoordinator.RegisterSystem<HealthSystem>();
+    healthSystem->SetCoordinator(&gCoordinator);
     ECS::Signature healthSig;
     healthSig.set(gCoordinator.GetComponentType<Health>());
     gCoordinator.SetSystemSignature<HealthSystem>(healthSig);
 
-    gCoordinator.RegisterSystem<RenderSystem>();
+    renderSystem = gCoordinator.RegisterSystem<RenderSystem>();
+    renderSystem->SetCoordinator(&gCoordinator);
     ECS::Signature renderSig;
     renderSig.set(gCoordinator.GetComponentType<Position>());
     renderSig.set(gCoordinator.GetComponentType<Sprite>());
@@ -599,6 +588,58 @@ int Game::Run(int argc, char* argv[])
     collisionSystem->Init();
     healthSystem->Init();
     renderSystem->Init();
+
+    // Setup collision callback after collision system is created
+    collisionSystem->SetCollisionCallback([this](ECS::Entity a, ECS::Entity b) {
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b 
+                  << " | isNetworkClient=" << (isNetworkClient ? "TRUE" : "FALSE") << std::endl;
+
+        // Create explosion at collision point (ONLY if not a network client)
+        // Network clients should receive explosion entities from server
+        if (!isNetworkClient) {
+            std::cout << "[Game] Creating explosion (NOT a network client)" << std::endl;
+            if (gCoordinator.HasComponent<Position>(b)) {
+                auto& posB = gCoordinator.GetComponent<Position>(b);
+                float centerX = posB.x;
+                float centerY = posB.y;
+                
+                // Adjust for sprite scale if available
+                if (gCoordinator.HasComponent<Collider>(b)) {
+                    auto& colliderB = gCoordinator.GetComponent<Collider>(b);
+                    centerX += colliderB.width / 2.0f;
+                    centerY += colliderB.height / 2.0f;
+                }
+                
+                std::cout << "[Game] Creating explosion at (" << centerX << ", " << centerY << ")" << std::endl;
+                CreateExplosion(centerX, centerY);
+                std::cout << "[Game] Explosion created successfully" << std::endl;
+            }
+        } else {
+            std::cout << "[Game] Skipping explosion creation (network client)" << std::endl;
+        }
+
+        // Check if entities should be destroyed based on health (damage already applied by CollisionSystem)
+        if (gCoordinator.HasComponent<Health>(a)) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            if (health.current <= 0 && health.destroyOnDeath) {
+                DestroyEntityDeferred(a);
+            }
+        }
+        if (gCoordinator.HasComponent<Health>(b)) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            if (health.current <= 0 && health.destroyOnDeath) {
+                DestroyEntityDeferred(b);
+            }
+        }
+
+        // Destroy projectiles on collision
+        if (gCoordinator.HasComponent<ProjectileTag>(a)) {
+            DestroyEntityDeferred(a);
+        }
+        if (gCoordinator.HasComponent<ProjectileTag>(b)) {
+            DestroyEntityDeferred(b);
+        }
+    });
 
     std::cout << "[Game] All Systems initialized!" << std::endl;
 
@@ -617,22 +658,12 @@ int Game::Run(int argc, char* argv[])
                 std::cout << "[Game] Registered network entity " << entity << std::endl;
             });
 
-            // Set callback for entity destruction (to create explosions)
+            // Set callback for entity destruction
+            // NOTE: We do NOT create explosions here on the client side!
+            // The server creates explosion entities and sends them to clients.
             networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
-                // Get entity position before destroying
-                if (gCoordinator.HasComponent<Position>(entity)) {
-                    auto& pos = gCoordinator.GetComponent<Position>(entity);
-
-                    // Check if it's an enemy or player (not bullets)
-                    if (gCoordinator.HasComponent<Tag>(entity)) {
-                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
-                        if (tag.name == "Enemy" || tag.name == "Player") {
-                            // Create explosion at entity position
-                            std::cout << "[Game] Creating explosion at (" << pos.x << ", " << pos.y << ")" << std::endl;
-                            CreateExplosion(pos.x, pos.y);
-                        }
-                    }
-                }
+                std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed by server" << std::endl;
+                // Just log, don't create explosions - server handles that
             });
 
             networkClient->start();
@@ -682,7 +713,8 @@ int Game::Run(int argc, char* argv[])
 
     // Load textures (try multiple paths for flexibility)
     backgroundTexture = std::make_unique<SFMLTexture>();
-    bool bgLoaded = backgroundTexture->loadFromFile("../../client/assets/background.png") ||
+    bool bgLoaded = backgroundTexture->loadFromFile("game/assets/background.png") ||
+                    backgroundTexture->loadFromFile("../../client/assets/background.png") ||
                     backgroundTexture->loadFromFile("../client/assets/background.png") ||
                     backgroundTexture->loadFromFile("client/assets/background.png");
     if (!bgLoaded) {
@@ -692,7 +724,8 @@ int Game::Run(int argc, char* argv[])
     }
 
     playerTexture = std::make_unique<SFMLTexture>();
-    bool playerLoaded = playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
+    bool playerLoaded = playerTexture->loadFromFile("game/assets/players/r-typesheet42.png") ||
+                        playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
                         playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
                         playerTexture->loadFromFile("client/assets/players/r-typesheet42.png");
     if (!playerLoaded) {
@@ -701,7 +734,8 @@ int Game::Run(int argc, char* argv[])
     }
 
     missileTexture = std::make_unique<SFMLTexture>();
-    bool missileLoaded = missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
+    bool missileLoaded = missileTexture->loadFromFile("game/assets/players/r-typesheet1.png") ||
+                         missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
                          missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
                          missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
     if (!missileLoaded) {
@@ -710,16 +744,19 @@ int Game::Run(int argc, char* argv[])
     }
 
     enemyTexture = std::make_unique<SFMLTexture>();
-    bool enemyLoaded = enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
+    bool enemyLoaded = enemyTexture->loadFromFile("game/assets/enemies/r-typesheet5.png") ||
+                       enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
                        enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
                        enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
     if (!enemyLoaded) {
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
     }
+    std::cout << "[Game] ✅ Enemy texture loaded: " << enemyTexture->getSize().x << "x" << enemyTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
-    bool explosionLoaded = explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
+    bool explosionLoaded = explosionTexture->loadFromFile("game/assets/enemies/r-typesheet44.png") ||
+                           explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
                            explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
                            explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
     if (!explosionLoaded) {
@@ -728,7 +765,8 @@ int Game::Run(int argc, char* argv[])
     }
 
     // Load sound
-    bool soundLoaded = shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
+    bool soundLoaded = shootBuffer.loadFromFile("game/assets/vfx/shoot.ogg") ||
+                       shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
                        shootBuffer.loadFromFile("../client/assets/vfx/shoot.ogg") ||
                        shootBuffer.loadFromFile("client/assets/vfx/shoot.ogg");
     if (!soundLoaded) {
@@ -736,6 +774,46 @@ int Game::Run(int argc, char* argv[])
     } else {
         shootSound.setBuffer(shootBuffer);
         shootSound.setVolume(80.f);
+    }
+
+    // ========================================
+    // REGISTER FACTORIES TO LUA
+    // ========================================
+    std::cout << "🏭 Registering Factories to Lua..." << std::endl;
+
+    // Prepare texture map for factories
+    std::unordered_map<std::string, SFMLTexture*> textureMap;
+    textureMap["enemy"] = enemyTexture.get();
+    textureMap["missile"] = missileTexture.get();
+    textureMap["player"] = playerTexture.get();
+    textureMap["background"] = backgroundTexture.get();
+    textureMap["explosion"] = explosionTexture.get();
+
+    Scripting::FactoryBindings::RegisterFactories(
+        luaState.GetState(), 
+        &gCoordinator, 
+        textureMap, 
+        &allSprites
+    );
+
+    // Load Lua scripts
+    std::cout << "📜 Loading Lua scripts..." << std::endl;
+    
+    // Load configuration
+    if (!luaState.LoadScript("assets/scripts/config/game_config.lua")) {
+        std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    }
+
+    // Load spawn system
+    spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
+        "assets/scripts/systems/spawn_system.lua",
+        &gCoordinator
+    );
+
+    if (spawnScriptSystem) {
+        std::cout << "[Game] Spawn system loaded from Lua" << std::endl;
+    } else {
+        std::cerr << "[Game] Warning: Spawn system failed to load" << std::endl;
     }
 
     // Create game entities
@@ -799,9 +877,31 @@ int Game::Run(int argc, char* argv[])
         if (networkMode && networkSystem) {
             networkSystem->Update(deltaTime);
 
+            // Count entities with Enemy tag
+            int enemyCount = 0;
+            int enemyWithSpriteCount = 0;
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<Tag>(entity)) {
+                    auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                    if (tag.name == "Enemy") {
+                        enemyCount++;
+                        if (gCoordinator.HasComponent<Sprite>(entity)) {
+                            enemyWithSpriteCount++;
+                        }
+                    }
+                }
+            }
+            
+            static int frameCounter = 0;
+            if (frameCounter++ % 60 == 0) {  // Log every 60 frames
+                std::cout << "[Game] Enemies: " << enemyCount << " total, " << enemyWithSpriteCount 
+                          << " with sprites, " << (enemyCount - enemyWithSpriteCount) << " invisible" << std::endl;
+            }
+
             // Add sprites to network entities that don't have them
             for (auto entity : allEntities) {
                 if (entitiesWithSprites.find(entity) == entitiesWithSprites.end() &&
+                    !gCoordinator.HasComponent<Sprite>(entity) &&  // IMPORTANT: Don't add sprite if already exists
                     gCoordinator.HasComponent<NetworkId>(entity) &&
                     gCoordinator.HasComponent<Position>(entity) &&
                     gCoordinator.HasComponent<Tag>(entity)) {
@@ -810,14 +910,17 @@ int Game::Run(int argc, char* argv[])
                     auto& pos = gCoordinator.GetComponent<Position>(entity);
                     auto& networkId = gCoordinator.GetComponent<NetworkId>(entity);
 
+                    std::cout << "[Game] Adding sprite to entity " << entity << " with tag: " << tag.name 
+                              << " at position (" << pos.x << ", " << pos.y << ")" << std::endl;
+
                     // Create sprite based on tag - with proper visuals
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
 
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
-                    spriteComp.layer = 10;
-                    spriteComp.scaleX = 3.0f;
+                    spriteComp.layer = 10;  // Default layer for players/enemies
+                    spriteComp.scaleX = 3.0f;  // Default scale, will be overridden per entity type
                     spriteComp.scaleY = 3.0f;
 
                     if (tag.name == "Player") {
@@ -827,6 +930,8 @@ int Game::Run(int argc, char* argv[])
                         IntRect rect(33 * 2, line * 17, 33, 17);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
+                        spriteComp.layer = 10;  // Players on layer 10
+                        // Player keeps default scale of 3.0x
 
                         // Add animation component
                         StateMachineAnimation anim;
@@ -839,21 +944,28 @@ int Game::Run(int argc, char* argv[])
                         gCoordinator.AddComponent(entity, anim);
 
                     } else if (tag.name == "Enemy") {
-                        // Enemy sprite - check enemyType if available
+                        // Enemy sprite - r-typesheet5.png is a single horizontal line (533x36)
                         sprite->setTexture(enemyTexture.get());
                         
-                        int enemyLine = 3; // Default to line 3
+                        // Use different horizontal positions for variety, always line 0
+                        int enemyFrame = 0; // Default frame
                         if (gCoordinator.HasComponent<EnemyTag>(entity)) {
                             auto& enemyTag = gCoordinator.GetComponent<EnemyTag>(entity);
-                            // Map enemy type to spritesheet line
-                            enemyLine = static_cast<int>(enemyTag.type);
+                            // Map enemy type to horizontal frame (0-15 available)
+                            enemyFrame = static_cast<int>(enemyTag.type) % 16;
                         }
                         
-                        IntRect rect(0, enemyLine * 33, 32, 32);
+                        // All enemies are on line 0, different horizontal frames
+                        IntRect rect(enemyFrame * 33, 0, 32, 32);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
+                        spriteComp.layer = 9;  // Enemies on layer 9 (behind players)
+                        spriteComp.scaleX = 2.5f;  // CRITICAL: Enemy scale (same as CreateEnemy)
+                        spriteComp.scaleY = 2.5f;
+                        
+                        std::cout << "[Game] Enemy entity " << entity << " set to scale 2.5x" << std::endl;
 
-                        // Add animation for enemy
+                        // Add animation for enemy (2 frames horizontally)
                         Animation anim;
                         anim.frameCount = 2;
                         anim.currentFrame = 0;
@@ -862,8 +974,8 @@ int Game::Run(int argc, char* argv[])
                         anim.loop = true;
                         anim.frameWidth = 32;
                         anim.frameHeight = 32;
-                        anim.startX = 0;
-                        anim.startY = enemyLine * 33;
+                        anim.startX = enemyFrame * 33;  // Start at the enemy's frame
+                        anim.startY = 0;  // Always line 0
                         gCoordinator.AddComponent(entity, anim);
 
                     } else if (tag.name == "PlayerBullet" || tag.name == "bullet" || tag.name == "charged_bullet") {
@@ -917,17 +1029,74 @@ int Game::Run(int argc, char* argv[])
                         
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
-                        spriteComp.scaleX = 3.0f;
+                        spriteComp.layer = 7;  // Player bullets on layer 7 (behind enemies)
+                        spriteComp.scaleX = 3.0f;  // Missile scale
                         spriteComp.scaleY = 3.0f;
 
                     } else if (tag.name == "EnemyBullet") {
-                        // Enemy missile sprite
+                        // Enemy missile sprite - animated bullet from enemy spritesheet line 0
                         sprite->setTexture(enemyTexture.get());
-                        IntRect rect(0, 0, 16, 16); // Use enemy bullet sprite
+                        IntRect rect(0, 0, 16, 16); // First frame of line 0
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
-                        spriteComp.scaleX = 2.0f;
-                        spriteComp.scaleY = 2.0f;
+                        spriteComp.layer = 6;  // Enemy bullets on layer 6 (behind player bullets)
+                        spriteComp.scaleX = 2.5f;  // Match enemy scale for visibility
+                        spriteComp.scaleY = 2.5f;
+                        
+                        // Add animation - 4 first frames of line 0
+                        Animation anim;
+                        anim.frameTime = 0.15f;  // Slightly slower to see animation better
+                        anim.currentFrame = 0;
+                        anim.frameCount = 4;  // Only first 4 frames (not the mirrored ones)
+                        anim.loop = true;
+                        anim.frameWidth = 16;
+                        anim.frameHeight = 16;
+                        anim.startX = 0;
+                        anim.startY = 0;  // First line
+                        anim.spacing = 0;  // No gap between frames (frames are consecutive)
+                        gCoordinator.AddComponent(entity, anim);
+
+                    } else if (tag.name == "Explosion") {
+                        // Explosion sprite - animated explosion from explosion spritesheet
+                        // IMPORTANT: Use EXACT same parameters as CreateExplosion()
+                        sprite->setTexture(explosionTexture.get());
+                        IntRect rect(130, 1, 33, 32);  // Match CreateExplosion parameters
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        spriteComp.layer = 15;  // Explosions on top layer
+                        spriteComp.scaleX = 2.5f;  // Match CreateExplosion scale
+                        spriteComp.scaleY = 2.5f;
+                        
+                        // Add animation - EXACT same parameters as CreateExplosion
+                        Animation anim;
+                        anim.frameTime = 0.08f;
+                        anim.currentFrame = 0;
+                        anim.frameCount = 6;
+                        anim.loop = false;  // Play once
+                        anim.frameWidth = 32;
+                        anim.frameHeight = 32;
+                        anim.startX = 130;  // Match CreateExplosion
+                        anim.startY = 1;    // Match CreateExplosion
+                        anim.spacing = 1.5; // Match CreateExplosion
+                        gCoordinator.AddComponent(entity, anim);
+                        
+                        // Add lifetime component so explosion disappears after animation
+                        Lifetime lifetime;
+                        lifetime.maxLifetime = 0.5f;  // Match CreateExplosion
+                        lifetime.timeAlive = 0.0f;
+                        gCoordinator.AddComponent(entity, lifetime);
+                        
+                        std::cout << "[Game] Added explosion sprite to network entity " << entity << std::endl;
+
+                    } else {
+                        // Unknown entity type - log warning and use default enemy appearance
+                        std::cerr << "[Game] WARNING: Unknown entity tag '" << tag.name << "' for entity " << entity << std::endl;
+                        sprite->setTexture(enemyTexture.get());
+                        IntRect rect(0, 0, 32, 32);
+                        sprite->setTextureRect(rect);
+                        spriteComp.textureRect = rect;
+                        spriteComp.scaleX = 2.5f;  // Default enemy scale
+                        spriteComp.scaleY = 2.5f;
                     }
 
                     sprite->setPosition(Vector2f(pos.x, pos.y));
@@ -935,7 +1104,8 @@ int Game::Run(int argc, char* argv[])
                     gCoordinator.AddComponent(entity, spriteComp);
                     entitiesWithSprites.insert(entity);
 
-                    std::cout << "[Game] Added sprite to network entity " << entity << " (" << tag.name << ")" << std::endl;
+                    std::cout << "[Game] Added sprite to network entity " << entity << " (" << tag.name 
+                              << ") scale=" << spriteComp.scaleX << "x" << spriteComp.scaleY << std::endl;
                 }
             }
         }
@@ -1145,23 +1315,14 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
-        // 4. LOCAL ENEMY SPAWNING (Only in local mode)
+        // 4. LOCAL ENEMY SPAWNING (Only in local mode - NOW SCRIPTED!)
         // ========================================
-        if (!networkMode) {
-            enemySpawnTimer += deltaTime;
-            if (enemySpawnTimer >= enemySpawnInterval) {
-                enemySpawnTimer = 0.0f;
-                float spawnY = 100.0f + (rand() % 800);
-                MovementPattern::Type patterns[] = {
-                    MovementPattern::Type::STRAIGHT,
-                    MovementPattern::Type::SINE_WAVE,
-                    MovementPattern::Type::ZIGZAG,
-                    MovementPattern::Type::CIRCULAR,
-                    MovementPattern::Type::DIAGONAL_DOWN,
-                    MovementPattern::Type::DIAGONAL_UP
-                };
-                CreateEnemy(1920.0f + 50.0f, spawnY, patterns[rand() % 6]);
-            }
+        if (!networkMode && spawnScriptSystem) {
+            // Hot-reload Lua scripts every frame
+            luaState.CheckForChanges();
+            
+            // Update spawn system from Lua
+            spawnScriptSystem->Update(deltaTime);
         }
 
         // ========================================
@@ -1198,12 +1359,21 @@ int Game::Run(int argc, char* argv[])
     }
 
     // Cleanup
-    for (auto sprite : allSprites) {
-        delete sprite;
+    std::cout << "[Game] Starting cleanup..." << std::endl;
+    std::cout << "[Game] Deleting " << allSprites.size() << " sprites..." << std::endl;
+    
+    for (size_t i = 0; i < allSprites.size(); ++i) {
+        if (allSprites[i]) {
+            delete allSprites[i];
+            allSprites[i] = nullptr;
+        }
     }
     allSprites.clear();
+    std::cout << "[Game] Sprites deleted." << std::endl;
 
+    std::cout << "[Game] Shutting down Coordinator..." << std::endl;
     gCoordinator.Shutdown();
+    std::cout << "[Game] Coordinator shutdown complete." << std::endl;
 
     std::cout << "Game shutdown complete." << std::endl;
     return 0;

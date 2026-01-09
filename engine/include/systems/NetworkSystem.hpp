@@ -219,6 +219,7 @@ private:
                 coordinator_->AddComponent(entity, Tag{"Enemy"});
                 // Add EnemyTag with type from server
                 coordinator_->AddComponent(entity, EnemyTag{static_cast<EnemyTag::Type>(state.enemyType)});
+                std::cout << "[NetworkSystem] Created Enemy entity " << entity << " at (" << state.x << ", " << state.y << ")" << std::endl;
                 break;
             case EntityType::ENTITY_PLAYER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"PlayerBullet"});
@@ -231,6 +232,9 @@ private:
             case EntityType::ENTITY_MONSTER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"EnemyBullet"});
                 coordinator_->AddComponent(entity, ProjectileTag{ProjectileTag::Type::NORMAL, 0});
+                break;
+            case EntityType::ENTITY_EXPLOSION:
+                coordinator_->AddComponent(entity, Tag{"Explosion"});
                 break;
             default:
                 break;

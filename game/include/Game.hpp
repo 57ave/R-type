@@ -35,6 +35,12 @@
     #include <factories/ProjectileFactory.hpp>
     #include <systems/NetworkSystem.hpp>
 
+    // Scripting
+    #include <scripting/LuaState.hpp>
+    #include <scripting/ComponentBindings.hpp>
+    #include <FactoryBindings.hpp>
+    #include <scripting/ScriptSystem.hpp>
+
     // Systems
     #include <systems/MovementSystem.hpp>
     #include <systems/AnimationSystem.hpp>
@@ -83,6 +89,8 @@
             std::vector<ECS::Entity> allEntities;
             std::vector<ECS::Entity> entitiesToDestroy;
 
+            bool isNetworkClient = false;  // Track if running as network client
+
             std::unique_ptr<SFMLTexture> backgroundTexture;
             std::unique_ptr<SFMLTexture> playerTexture;
             std::unique_ptr<SFMLTexture> missileTexture;
@@ -93,6 +101,9 @@
 
             rtype::engine::SoundBuffer shootBuffer;
             rtype::engine::Sound shootSound;
+
+            // Scripting systems
+            std::shared_ptr<Scripting::ScriptSystem> spawnScriptSystem;
     };
 
 #endif // GAME_HPP

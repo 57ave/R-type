@@ -1,6 +1,7 @@
 #include <systems/RenderSystem.hpp>
 #include <components/Position.hpp>
 #include <components/Sprite.hpp>
+#include <components/Tag.hpp>
 #include <ecs/Coordinator.hpp>
 #include <rendering/Types.hpp>
 #include <rendering/IRenderer.hpp>
@@ -37,6 +38,22 @@ void RenderSystem::Update(float /*dt*/)
             coordinator_->HasComponent<Sprite>(entity)) {
             renderableEntities.push_back(entity);
         }
+    }
+
+    // Debug: Log enemy sprites being rendered
+    static int frameCounter = 0;
+    if (frameCounter++ % 60 == 0) {  // Every 60 frames
+        int enemyCount = 0;
+        for (auto entity : renderableEntities) {
+            if (coordinator_->HasComponent<Tag>(entity)) {
+                auto& tag = coordinator_->GetComponent<Tag>(entity);
+                if (tag.name == "Enemy") {
+                    enemyCount++;
+                }
+            }
+        }
+        std::cout << "[RenderSystem] Rendering " << renderableEntities.size() 
+                  << " entities (" << enemyCount << " enemies)" << std::endl;
     }
 
     // Sort by layer (lower layer = drawn first = background)

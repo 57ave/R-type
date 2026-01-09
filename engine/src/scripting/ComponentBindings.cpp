@@ -3,17 +3,17 @@
 namespace Scripting {
 
 // Use ECS namespace for components
-using ECS::Transform;
-using ECS::Velocity;
-using ECS::Sprite;
-using ECS::Health;
-using ECS::Damage;
-using ECS::AIController;
-using ECS::Collider;
-using ECS::Player;
-using ECS::Enemy;
-using ECS::Projectile;
-using ECS::PowerUp;
+using rtype::engine::ECS::Transform;
+using rtype::engine::ECS::Velocity;
+using rtype::engine::ECS::Sprite;
+using rtype::engine::ECS::Health;
+using rtype::engine::ECS::Damage;
+using rtype::engine::ECS::AIController;
+using rtype::engine::ECS::Collider;
+using rtype::engine::ECS::Player;
+using rtype::engine::ECS::Enemy;
+using rtype::engine::ECS::Projectile;
+using rtype::engine::ECS::PowerUp;
 
 void ComponentBindings::RegisterAll(sol::state& lua) {
     RegisterTransform(lua);
@@ -141,76 +141,93 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
     // Create global Coordinator table
     lua["Coordinator"] = lua.create_table();
     
-    // Entity management
-    lua["Coordinator"]["CreateEntity"] = [coordinator]() {
+    // Entity management using std::function
+    std::function<ECS::Entity()> createEntity = [coordinator]() {
         return coordinator->CreateEntity();
     };
+    lua.set_function("CreateEntity", createEntity);
+    lua["Coordinator"]["CreateEntity"] = createEntity;
     
-    lua["Coordinator"]["DestroyEntity"] = [coordinator](ECS::Entity entity) {
+    std::function<void(ECS::Entity)> destroyEntity = [coordinator](ECS::Entity entity) {
         coordinator->DestroyEntity(entity);
     };
+    lua["Coordinator"]["DestroyEntity"] = destroyEntity;
     
-    lua["Coordinator"]["GetLivingEntityCount"] = [coordinator]() {
+    std::function<uint32_t()> getLivingCount = [coordinator]() {
         return coordinator->GetLivingEntityCount();
     };
+    lua["Coordinator"]["GetLivingEntityCount"] = getLivingCount;
 
     // Component management - Transform
-    lua["Coordinator"]["AddTransform"] = [coordinator](ECS::Entity entity, Transform comp) {
+    std::function<void(ECS::Entity, Transform)> addTransform = [coordinator](ECS::Entity entity, Transform comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddTransform"] = addTransform;
     
-    lua["Coordinator"]["GetTransform"] = [coordinator](ECS::Entity entity) -> Transform& {
+    std::function<Transform&(ECS::Entity)> getTransform = [coordinator](ECS::Entity entity) -> Transform& {
         return coordinator->GetComponent<Transform>(entity);
     };
+    lua["Coordinator"]["GetTransform"] = getTransform;
     
-    lua["Coordinator"]["HasTransform"] = [coordinator](ECS::Entity entity) {
+    std::function<bool(ECS::Entity)> hasTransform = [coordinator](ECS::Entity entity) {
         return coordinator->HasComponent<Transform>(entity);
     };
+    lua["Coordinator"]["HasTransform"] = hasTransform;
 
     // Component management - Velocity
-    lua["Coordinator"]["AddVelocity"] = [coordinator](ECS::Entity entity, Velocity comp) {
+    std::function<void(ECS::Entity, Velocity)> addVelocity = [coordinator](ECS::Entity entity, Velocity comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddVelocity"] = addVelocity;
     
-    lua["Coordinator"]["GetVelocity"] = [coordinator](ECS::Entity entity) -> Velocity& {
+    std::function<Velocity&(ECS::Entity)> getVelocity = [coordinator](ECS::Entity entity) -> Velocity& {
         return coordinator->GetComponent<Velocity>(entity);
     };
+    lua["Coordinator"]["GetVelocity"] = getVelocity;
 
     // Component management - Sprite
-    lua["Coordinator"]["AddSprite"] = [coordinator](ECS::Entity entity, Sprite comp) {
+    std::function<void(ECS::Entity, Sprite)> addSprite = [coordinator](ECS::Entity entity, Sprite comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddSprite"] = addSprite;
     
-    lua["Coordinator"]["GetSprite"] = [coordinator](ECS::Entity entity) -> Sprite& {
+    std::function<Sprite&(ECS::Entity)> getSprite = [coordinator](ECS::Entity entity) -> Sprite& {
         return coordinator->GetComponent<Sprite>(entity);
     };
+    lua["Coordinator"]["GetSprite"] = getSprite;
 
     // Component management - Health
-    lua["Coordinator"]["AddHealth"] = [coordinator](ECS::Entity entity, Health comp) {
+    std::function<void(ECS::Entity, Health)> addHealth = [coordinator](ECS::Entity entity, Health comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddHealth"] = addHealth;
     
-    lua["Coordinator"]["GetHealth"] = [coordinator](ECS::Entity entity) -> Health& {
+    std::function<Health&(ECS::Entity)> getHealth = [coordinator](ECS::Entity entity) -> Health& {
         return coordinator->GetComponent<Health>(entity);
     };
+    lua["Coordinator"]["GetHealth"] = getHealth;
 
     // Component management - AIController
-    lua["Coordinator"]["AddAIController"] = [coordinator](ECS::Entity entity, AIController comp) {
+    std::function<void(ECS::Entity, AIController)> addAI = [coordinator](ECS::Entity entity, AIController comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddAIController"] = addAI;
     
-    lua["Coordinator"]["GetAIController"] = [coordinator](ECS::Entity entity) -> AIController& {
+    std::function<AIController&(ECS::Entity)> getAI = [coordinator](ECS::Entity entity) -> AIController& {
         return coordinator->GetComponent<AIController>(entity);
     };
+    lua["Coordinator"]["GetAIController"] = getAI;
 
     // Component management - Collider
-    lua["Coordinator"]["AddCollider"] = [coordinator](ECS::Entity entity, Collider comp) {
+    std::function<void(ECS::Entity, Collider)> addCollider = [coordinator](ECS::Entity entity, Collider comp) {
         coordinator->AddComponent(entity, comp);
     };
+    lua["Coordinator"]["AddCollider"] = addCollider;
     
-    lua["Coordinator"]["GetCollider"] = [coordinator](ECS::Entity entity) -> Collider& {
+    std::function<Collider&(ECS::Entity)> getCollider = [coordinator](ECS::Entity entity) -> Collider& {
         return coordinator->GetComponent<Collider>(entity);
     };
+    lua["Coordinator"]["GetCollider"] = getCollider;
 }
 
 } // namespace Scripting
