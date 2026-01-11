@@ -32,7 +32,77 @@ namespace rtype
                     return m_window.isOpen();
                 }
 
-                bool SFMLWindow::pollEvent(sf::Event &event)
+                bool SFMLWindow::pollEvent(rtype::engine::InputEvent &event)
+                {
+                    sf::Event sfEvent;
+                    if (!m_window.pollEvent(sfEvent)) {
+                        return false;
+                    }
+
+                    // Convert SFML event to engine event
+                    switch (sfEvent.type) {
+                        case sf::Event::Closed:
+                            event.type = rtype::engine::EventType::Closed;
+                            break;
+                        case sf::Event::Resized:
+                            event.type = rtype::engine::EventType::Resized;
+                            event.size.width = sfEvent.size.width;
+                            event.size.height = sfEvent.size.height;
+                            break;
+                        case sf::Event::LostFocus:
+                            event.type = rtype::engine::EventType::LostFocus;
+                            break;
+                        case sf::Event::GainedFocus:
+                            event.type = rtype::engine::EventType::GainedFocus;
+                            break;
+                        case sf::Event::KeyPressed:
+                            event.type = rtype::engine::EventType::KeyPressed;
+                            event.key.code = rtype::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
+                            event.key.alt = sfEvent.key.alt;
+                            event.key.control = sfEvent.key.control;
+                            event.key.shift = sfEvent.key.shift;
+                            event.key.system = sfEvent.key.system;
+                            break;
+                        case sf::Event::KeyReleased:
+                            event.type = rtype::engine::EventType::KeyReleased;
+                            event.key.code = rtype::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
+                            event.key.alt = sfEvent.key.alt;
+                            event.key.control = sfEvent.key.control;
+                            event.key.shift = sfEvent.key.shift;
+                            event.key.system = sfEvent.key.system;
+                            break;
+                        case sf::Event::MouseMoved:
+                            event.type = rtype::engine::EventType::MouseMoved;
+                            event.mouseMove.x = sfEvent.mouseMove.x;
+                            event.mouseMove.y = sfEvent.mouseMove.y;
+                            break;
+                        case sf::Event::MouseButtonPressed:
+                            event.type = rtype::engine::EventType::MouseButtonPressed;
+                            event.mouseButton.button = sfEvent.mouseButton.button;
+                            event.mouseButton.x = sfEvent.mouseButton.x;
+                            event.mouseButton.y = sfEvent.mouseButton.y;
+                            break;
+                        case sf::Event::MouseButtonReleased:
+                            event.type = rtype::engine::EventType::MouseButtonReleased;
+                            event.mouseButton.button = sfEvent.mouseButton.button;
+                            event.mouseButton.x = sfEvent.mouseButton.x;
+                            event.mouseButton.y = sfEvent.mouseButton.y;
+                            break;
+                        case sf::Event::MouseWheelScrolled:
+                            event.type = rtype::engine::EventType::MouseWheelScrolled;
+                            event.mouseWheelScroll.delta = sfEvent.mouseWheelScroll.delta;
+                            event.mouseWheelScroll.x = sfEvent.mouseWheelScroll.x;
+                            event.mouseWheelScroll.y = sfEvent.mouseWheelScroll.y;
+                            break;
+                        default:
+                            // Unknown event type, skip
+                            return pollEvent(event); // Try next event
+                    }
+
+                    return true;
+                }
+
+                bool SFMLWindow::pollEventSFML(sf::Event &event)
                 {
                     return m_window.pollEvent(event);
                 }

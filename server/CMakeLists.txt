@@ -1,14 +1,17 @@
 # ==================== Server Executable ====================
 
-# Sources du serveur
-file(GLOB_RECURSE SERVER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
+# Choose which server to build (use main_improved.cpp for full game server)
+option(USE_IMPROVED_SERVER "Use improved game server" ON)
 
-# Créer l'exécutable serveur
-add_executable(r-type_server
-    ${SERVER_SOURCES}
-)
+if(USE_IMPROVED_SERVER)
+    add_executable(r-type_server
+        src/main_improved.cpp
+    )
+else()
+    add_executable(r-type_server
+        src/main.cpp
+    )
+endif()
 
 target_include_directories(r-type_server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include

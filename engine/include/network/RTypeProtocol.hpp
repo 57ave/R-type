@@ -168,6 +168,7 @@ struct EntityState {
     int16_t vx; // Quantized velocity
     int16_t vy;
     uint8_t hp;
+    uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
 
     EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0), y(0), vx(0), vy(0), hp(0) {}
 

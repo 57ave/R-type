@@ -111,3 +111,15 @@ std::pair<NetworkPacket, asio::ip::udp::endpoint> NetworkServer::getNextReceived
     receivedPackets_.pop();
     return packet;
 }
+
+void NetworkServer::broadcast(const NetworkPacket& packet) {
+    server_.broadcast(packet);
+}
+
+void NetworkServer::sendTo(const NetworkPacket& packet, const asio::ip::udp::endpoint& endpoint) {
+    server_.sendTo(packet, endpoint);
+}
+
+void NetworkServer::checkTimeouts() {
+    server_.checkTimeouts();
+}

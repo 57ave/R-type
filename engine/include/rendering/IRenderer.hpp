@@ -3,7 +3,7 @@
 
 #include <rendering/ISprite.hpp>
 #include <rendering/Camera.hpp>
-#include <rendering/Types.hpp>
+#include "rendering/Types.hpp"
 
 namespace rtype
 {

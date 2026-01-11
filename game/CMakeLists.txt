@@ -29,3 +29,29 @@ else()
         engine
     )
 endif()
+
+# ==================== Game Executable ====================
+add_executable(r-type_game main.cpp)
+
+target_link_libraries(r-type_game PRIVATE
+    engine
+    game
+    core
+    network
+    MovementSystem
+    CollisionSystem
+    InputSystem
+    LifetimeSystem
+    AnimationSystem
+    StateMachineAnimationSystem
+    WeaponSystem
+    EnemySpawnSystem
+    MovementPatternSystem
+    ScrollingBackgroundSystem
+    BoundarySystem
+    HealthSystem
+    sfml-graphics
+    sfml-window
+    sfml-system
+    sfml-audio
+)
