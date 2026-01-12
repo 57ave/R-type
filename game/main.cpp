@@ -10,6 +10,8 @@
 #include <ecs/ECS.hpp>
 #include <ecs/Coordinator.hpp>
 #include <core/Logger.hpp>
+#include <core/Profiler.hpp>
+#include <core/ProfilerOverlay.hpp>
 
 // Engine includes - Rendering
 #include <rendering/sfml/SFMLWindow.hpp>
@@ -495,6 +497,13 @@ int main(int argc, char* argv[])
     logger.init(".log", "rtype_game.log");
     LOG_INFO("GAME", "R-Type Game Starting with ECS Engine (Refactored)...");
     
+    // Initialize Profiler
+    auto& profiler = rtype::core::Profiler::getInstance();
+    profiler.init();
+    
+    // Create profiler overlay (will be initialized after window creation)
+    rtype::core::ProfilerOverlay profilerOverlay;
+    
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
     
     // Parse command line arguments
@@ -749,6 +758,12 @@ int main(int argc, char* argv[])
     
     SFMLRenderer renderer(&window.getSFMLWindow());
     
+    // Initialize profiler overlay
+    profilerOverlay.init(); // Will auto-detect system fonts
+    profilerOverlay.setNetworkMode(networkMode);
+    profilerOverlay.setMode(rtype::core::OverlayMode::COMPACT); // Start with compact mode
+    LOG_INFO("PROFILER", "Profiler overlay initialized (F3 to toggle, F4 to cycle modes)");
+    
     // Load textures (try multiple paths for flexibility)
     LOG_INFO("ASSETS", "Loading textures...");
     backgroundTexture = std::make_unique<SFMLTexture>();
@@ -855,9 +870,16 @@ int main(int argc, char* argv[])
     LOG_INFO("GAMELOOP", "Entering main game loop");
     
     while (window.isOpen()) {
+        // Start profiler frame
+        profiler.beginFrame();
+        
         float deltaTime = clock.restart();
         frameCount++;
         frameTimeAccum += deltaTime;
+        
+        // Update profiler metrics
+        profiler.setEntityCount(allEntities.size());
+        profiler.updateMemoryUsage();
         
         // Periodic stats logging
         if (frameTimeAccum >= statsInterval) {
@@ -876,6 +898,7 @@ int main(int argc, char* argv[])
         // ========================================
         // 1. NETWORK UPDATE (Receives server state)
         // ========================================
+        profiler.beginSection("Network");
         if (networkMode && networkSystem) {
             networkSystem->Update(deltaTime);
             
@@ -967,13 +990,26 @@ int main(int argc, char* argv[])
                 }
             }
         }
+        profiler.endSection("Network");
         
         // Reset input mask
         inputMask = 0;
         
         // Event handling using engine abstractions
+        profiler.beginSection("Input");
         rtype::engine::InputEvent event;
         while (window.pollEvent(event)) {
+            // Handle profiler overlay controls first
+            if (event.type == rtype::engine::EventType::KeyPressed) {
+                if (event.key.code == rtype::engine::Key::F3) {
+                    profilerOverlay.toggle();
+                    LOG_DEBUG("PROFILER", "Overlay toggled");
+                } else if (event.key.code == rtype::engine::Key::F4) {
+                    profilerOverlay.cycleMode();
+                    LOG_DEBUG("PROFILER", "Overlay mode cycled");
+                }
+            }
+            
             if (event.type == rtype::engine::EventType::Closed) {
                 LOG_INFO("GAME", "Window close requested");
                 window.close();
@@ -1137,6 +1173,7 @@ int main(int argc, char* argv[])
                 else playerAnim.targetColumn = 2;
             }
         }
+        profiler.endSection("Input");
         
         // ========================================
         // 4. LOCAL ENEMY SPAWNING (Only in local mode)
@@ -1161,6 +1198,7 @@ int main(int argc, char* argv[])
         // ========================================
         // 5. SYSTEM UPDATES (ECS Architecture!)
         // ========================================
+        profiler.beginSection("Systems");
         
         // Always update scrolling background
         scrollingBgSystem->Update(deltaTime);
@@ -1181,11 +1219,14 @@ int main(int argc, char* argv[])
             animationSystem->Update(deltaTime);
             lifetimeSystem->Update(deltaTime);
         }
+        profiler.endSection("Systems");
         
         // Process destroyed entities
         ProcessDestroyedEntities();
         
         // Render
+        profiler.beginSection("Rendering");
+        profiler.resetDrawCalls();
         window.clear();
         
         // Manual render (sort by layer)
@@ -1215,13 +1256,25 @@ int main(int argc, char* argv[])
                 transform.scale = Vector2f(sprite.scaleX, sprite.scaleY);
                 
                 renderer.draw(*sprite.sprite, transform);
+                profiler.addDrawCall();
             }
         }
+        profiler.endSection("Rendering");
+        
+        // Update and render profiler overlay
+        profilerOverlay.update();
+        profilerOverlay.render(window.getSFMLWindow());
+        
+        // End profiler frame
+        profiler.endFrame();
         
         window.display();
     }
     
     // Cleanup
+    profiler.logReport();
+    profiler.shutdown();
+    
     for (auto sprite : allSprites) {
         delete sprite;
     }
