@@ -1,15 +1,20 @@
 cmake_minimum_required(VERSION 3.15)
-project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX)
+project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Compiler warnings
+# Compiler warnings (only for our code, not dependencies)
 if(MSVC)
     add_compile_options(/W4)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
+    # Use generator expressions to apply warnings only to CXX
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall> $<$<COMPILE_LANGUAGE:CXX>:-Wextra>)
+    # Remove -Werror for Objective-C files (SFML macOS issue)
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wno-error>)
+    add_compile_options($<$<COMPILE_LANGUAGE:OBJC>:-Wno-error>)
+    add_compile_options($<$<COMPILE_LANGUAGE:OBJCXX>:-Wno-error>)
 endif()
 
 # Find Lua (optional for scripting)
@@ -39,11 +44,32 @@ include(cmake/CPM.cmake)
 
 # Dépendance ASIO
 CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
-# Dépendance SFML: prefer system package, fallback to CPM
-find_package(SFML 2.6 COMPONENTS graphics window system QUIET)
-if (NOT SFML_FOUND)
-    CPMAddPackage("gh:SFML/SFML#2.6.0")
+
+# Dépendance SFML: Force SFML 2.6 via CPM (project not compatible with SFML 3.x API)
+# Skip system SFML to avoid version conflicts
+option(USE_SYSTEM_SFML "Use system SFML instead of CPM" OFF)
+
+# SFML build options - disable warnings as errors (causes issues on macOS with ObjC files)
+set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+
+if(USE_SYSTEM_SFML)
+    find_package(SFML 2.6 COMPONENTS graphics window system audio QUIET)
 endif()
+if (NOT SFML_FOUND)
+    message(STATUS "Using CPM to download SFML 2.6.0")
+    # Add SFML with OPTIONS to disable warnings as errors
+    CPMAddPackage(
+        NAME SFML
+        GITHUB_REPOSITORY SFML/SFML
+        GIT_TAG 2.6.0
+        OPTIONS
+            "WARNINGS_AS_ERRORS OFF"
+            "SFML_BUILD_EXAMPLES OFF"
+    )
+endif()
+set(SFML_VERSION_MAJOR 2)
 
 # Enable PIC for ecs library (needed for shared library systems)
 set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -69,6 +95,7 @@ set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Must be defined before rendering because rendering depends on it
 add_library(core STATIC
     src/core/SystemLoader.cpp
+    src/core/Logger.cpp
     src/engine/Input.cpp
     src/engine/Keyboard.cpp
     src/engine/Clock.cpp

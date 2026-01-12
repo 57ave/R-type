@@ -21,8 +21,7 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find SFML (required by all sub-projects)
-find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
+# SFML is handled by engine/CMakeLists.txt via CPM
 
 # Build engine library
 add_subdirectory(engine)
