@@ -9,6 +9,7 @@
 // Engine includes - Core
 #include <ecs/ECS.hpp>
 #include <ecs/Coordinator.hpp>
+#include <core/Logger.hpp>
 
 // Engine includes - Rendering
 #include <rendering/sfml/SFMLWindow.hpp>
@@ -83,9 +84,13 @@ void RegisterEntity(ECS::Entity entity) {
 
 void DestroyEntityDeferred(ECS::Entity entity) {
     entitiesToDestroy.push_back(entity);
+    LOG_DEBUG("ENTITY", "Marked entity #" + std::to_string(entity) + " for destruction");
 }
 
 void ProcessDestroyedEntities() {
+    if (!entitiesToDestroy.empty()) {
+        LOG_DEBUG("ECS", "Processing " + std::to_string(entitiesToDestroy.size()) + " entities for destruction");
+    }
     for (auto entity : entitiesToDestroy) {
         // Clean up sprite if exists
         if (gCoordinator.HasComponent<Sprite>(entity)) {
@@ -96,6 +101,7 @@ void ProcessDestroyedEntities() {
             }
         }
         
+        LOG_DEBUG("ENTITY", "Destroyed entity #" + std::to_string(entity));
         gCoordinator.DestroyEntity(entity);
         
         // Remove from allEntities
@@ -108,6 +114,7 @@ void ProcessDestroyedEntities() {
 ECS::Entity CreatePlayer(float x, float y, int line = 0) {
     ECS::Entity player = gCoordinator.CreateEntity();
     RegisterEntity(player);
+    LOG_DEBUG("ENTITY", "Created player entity #" + std::to_string(player) + " at (" + std::to_string(x) + ", " + std::to_string(y) + ") line=" + std::to_string(line));
     
     // Position
     gCoordinator.AddComponent(player, Position{x, y});
@@ -173,6 +180,7 @@ ECS::Entity CreatePlayer(float x, float y, int line = 0) {
 ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst) {
     ECS::Entity bg = gCoordinator.CreateEntity();
     RegisterEntity(bg);
+    LOG_DEBUG("ENTITY", "Created background entity #" + std::to_string(bg));
     
     // Position
     gCoordinator.AddComponent(bg, Position{x, y});
@@ -219,6 +227,7 @@ ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst)
 ECS::Entity CreateEnemy(float x, float y, MovementPattern::Type pattern) {
     ECS::Entity enemy = gCoordinator.CreateEntity();
     RegisterEntity(enemy);
+    LOG_DEBUG("ENTITY", "Spawned enemy #" + std::to_string(enemy) + " at (" + std::to_string(x) + ", " + std::to_string(y) + ") pattern=" + std::to_string(static_cast<int>(pattern)));
     
     // Position
     gCoordinator.AddComponent(enemy, Position{x, y});
@@ -289,6 +298,11 @@ ECS::Entity CreateEnemy(float x, float y, MovementPattern::Type pattern) {
 ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel) {
     ECS::Entity missile = gCoordinator.CreateEntity();
     RegisterEntity(missile);
+    if (isCharged) {
+        LOG_DEBUG("ENTITY", "Created charged missile #" + std::to_string(missile) + " (level " + std::to_string(chargeLevel) + ") at (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+    } else {
+        LOG_DEBUG("ENTITY", "Created missile #" + std::to_string(missile) + " at (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+    }
     
     // Position
     gCoordinator.AddComponent(missile, Position{x, y});
@@ -374,6 +388,7 @@ ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel) {
 ECS::Entity CreateExplosion(float x, float y) {
     ECS::Entity explosion = gCoordinator.CreateEntity();
     RegisterEntity(explosion);
+    LOG_DEBUG("VFX", "Created explosion #" + std::to_string(explosion) + " at (" + std::to_string(x) + ", " + std::to_string(y) + ")");
     
     // Position
     gCoordinator.AddComponent(explosion, Position{x, y});
@@ -475,6 +490,11 @@ ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent) {
 
 int main(int argc, char* argv[])
 {
+    // Initialize Logger
+    auto& logger = rtype::core::Logger::getInstance();
+    logger.init(".log", "rtype_game.log");
+    LOG_INFO("GAME", "R-Type Game Starting with ECS Engine (Refactored)...");
+    
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
     
     // Parse command line arguments
@@ -490,13 +510,16 @@ int main(int argc, char* argv[])
         if (argc > 3) {
             serverPort = static_cast<short>(std::stoi(argv[3]));
         }
+        LOG_INFO("NETWORK", "Network mode enabled. Server: " + serverAddress + ":" + std::to_string(serverPort));
         std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
     } else {
+        LOG_INFO("GAME", "Local mode (use --network <ip> <port> for multiplayer)");
         std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
     }
     
     // Initialize ECS Coordinator
     gCoordinator.Init();
+    LOG_DEBUG("ECS", "Coordinator initialized");
     
     // Register all components
     gCoordinator.RegisterComponent<Position>();
@@ -519,11 +542,13 @@ int main(int argc, char* argv[])
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
     
+    LOG_INFO("ECS", "All components registered (20 types)");
     std::cout << "[Game] Components registered" << std::endl;
     
     // ========================================
     // INITIALIZE ALL SYSTEMS
     // ========================================
+    LOG_INFO("ECS", "Initializing systems...");
     std::cout << "🔧 Initializing Systems..." << std::endl;
     
     // Create all systems (pass coordinator pointer)
@@ -542,7 +567,10 @@ int main(int argc, char* argv[])
     
     // Setup collision callback
     collisionSystem->SetCollisionCallback([&](ECS::Entity a, ECS::Entity b) {
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+        // Get tag names for better logging
+        std::string tagA = gCoordinator.HasComponent<Tag>(a) ? gCoordinator.GetComponent<Tag>(a).name : "unknown";
+        std::string tagB = gCoordinator.HasComponent<Tag>(b) ? gCoordinator.GetComponent<Tag>(b).name : "unknown";
+        LOG_DEBUG("COLLISION", "Entity #" + std::to_string(a) + " (" + tagA + ") <-> Entity #" + std::to_string(b) + " (" + tagB + ")");
         
         // Create explosion at collision point
         if (gCoordinator.HasComponent<Position>(a)) {
@@ -554,14 +582,18 @@ int main(int argc, char* argv[])
         if (gCoordinator.HasComponent<Health>(a)) {
             auto& health = gCoordinator.GetComponent<Health>(a);
             health.current -= 1;
+            LOG_DEBUG("COMBAT", "Entity #" + std::to_string(a) + " took damage, health: " + std::to_string(health.current) + "/" + std::to_string(health.max));
             if (health.current <= 0 && health.destroyOnDeath) {
+                LOG_INFO("COMBAT", "Entity #" + std::to_string(a) + " (" + tagA + ") destroyed!");
                 DestroyEntityDeferred(a);
             }
         }
         if (gCoordinator.HasComponent<Health>(b)) {
             auto& health = gCoordinator.GetComponent<Health>(b);
             health.current -= 1;
+            LOG_DEBUG("COMBAT", "Entity #" + std::to_string(b) + " took damage, health: " + std::to_string(health.current) + "/" + std::to_string(health.max));
             if (health.current <= 0 && health.destroyOnDeath) {
+                LOG_INFO("COMBAT", "Entity #" + std::to_string(b) + " (" + tagB + ") destroyed!");
                 DestroyEntityDeferred(b);
             }
         }
@@ -638,6 +670,7 @@ int main(int argc, char* argv[])
     collisionSystem->Init();
     healthSystem->Init();
     
+    LOG_INFO("ECS", "All systems initialized (10 systems)");
     std::cout << "[Game] All Systems initialized!" << std::endl;
     
     // Network setup
@@ -712,15 +745,18 @@ int main(int argc, char* argv[])
     // Create window and renderer
     SFMLWindow window;
     window.create(1920, 1080, "R-Type - ECS Version");
+    LOG_INFO("RENDERING", "Window created (1920x1080)");
     
     SFMLRenderer renderer(&window.getSFMLWindow());
     
     // Load textures (try multiple paths for flexibility)
+    LOG_INFO("ASSETS", "Loading textures...");
     backgroundTexture = std::make_unique<SFMLTexture>();
     bool bgLoaded = backgroundTexture->loadFromFile("../../client/assets/background.png") ||
                     backgroundTexture->loadFromFile("../client/assets/background.png") ||
                     backgroundTexture->loadFromFile("client/assets/background.png");
     if (!bgLoaded) {
+        LOG_ERROR("ASSETS", "Failed to load background.png");
         std::cerr << "Error: Could not load background.png" << std::endl;
         std::cerr << "Tried paths: ../../client/assets/, ../client/assets/, client/assets/" << std::endl;
         return 1;
@@ -731,6 +767,7 @@ int main(int argc, char* argv[])
                         playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
                         playerTexture->loadFromFile("client/assets/players/r-typesheet42.png");
     if (!playerLoaded) {
+        LOG_ERROR("ASSETS", "Failed to load player sprite");
         std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
     }
@@ -740,6 +777,7 @@ int main(int argc, char* argv[])
                          missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
                          missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
     if (!missileLoaded) {
+        LOG_ERROR("ASSETS", "Failed to load missile sprite");
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
@@ -749,6 +787,7 @@ int main(int argc, char* argv[])
                        enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
                        enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
     if (!enemyLoaded) {
+        LOG_ERROR("ASSETS", "Failed to load enemy sprite");
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
     }
@@ -758,9 +797,12 @@ int main(int argc, char* argv[])
                            explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
                            explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
     if (!explosionLoaded) {
+        LOG_ERROR("ASSETS", "Failed to load explosion sprite");
         std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;
     }
+    
+    LOG_INFO("ASSETS", "All textures loaded successfully (5 textures)");
     
     // Load sound
     bool soundLoaded = shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
@@ -793,6 +835,7 @@ int main(int argc, char* argv[])
     bool hasChargingEffect = false;
     
     std::cout << "Game initialized successfully!" << std::endl;
+    LOG_INFO("GAME", "Game initialization complete");
     
     // Input mask for network
     uint8_t inputMask = 0;
@@ -800,16 +843,33 @@ int main(int argc, char* argv[])
     // Track entities we've added sprites to
     std::set<ECS::Entity> entitiesWithSprites;
     
+    // Frame stats for periodic logging
+    int frameCount = 0;
+    float frameTimeAccum = 0.0f;
+    float statsInterval = 5.0f; // Log stats every 5 seconds
+    
     // ========================================
     // MAIN GAME LOOP (System-Driven)
     // ========================================
     std::cout << "[Game] Starting game loop..." << std::endl;
+    LOG_INFO("GAMELOOP", "Entering main game loop");
     
     while (window.isOpen()) {
         float deltaTime = clock.restart();
+        frameCount++;
+        frameTimeAccum += deltaTime;
+        
+        // Periodic stats logging
+        if (frameTimeAccum >= statsInterval) {
+            float avgFps = frameCount / frameTimeAccum;
+            LOG_INFO("PERF", "Stats: " + std::to_string(avgFps) + " FPS, " + std::to_string(allEntities.size()) + " entities");
+            frameCount = 0;
+            frameTimeAccum = 0.0f;
+        }
         
         // Cap deltaTime to prevent huge jumps (max 0.1s = 10 FPS minimum)
         if (deltaTime > 0.1f) {
+            LOG_WARNING("PERF", "Frame time spike: " + std::to_string(deltaTime) + "s - capping to 0.1s");
             deltaTime = 0.1f;
         }
         
@@ -870,7 +930,6 @@ int main(int argc, char* argv[])
                         anim.frameCount = 2;
                         anim.currentFrame = 0;
                         anim.frameTime = 0.2f;
-                        anim.currentTime = 0.0f;
                         anim.loop = true;
                         anim.frameWidth = 32;
                         anim.frameHeight = 32;
@@ -916,6 +975,7 @@ int main(int argc, char* argv[])
         rtype::engine::InputEvent event;
         while (window.pollEvent(event)) {
             if (event.type == rtype::engine::EventType::Closed) {
+                LOG_INFO("GAME", "Window close requested");
                 window.close();
             }
             
@@ -937,9 +997,11 @@ int main(int argc, char* argv[])
                     
                     if (chargeLevel > 0) {
                         // Create charged missile
+                        LOG_INFO("INPUT", "Player fired charged shot (level " + std::to_string(chargeLevel) + ")");
                         CreateMissile(playerPos.x + 99.0f, playerPos.y + 25.0f, true, chargeLevel);
                     } else {
                         // Create normal missile
+                        LOG_DEBUG("INPUT", "Player fired normal shot");
                         CreateMissile(playerPos.x + 99.0f, playerPos.y + 30.0f, false, 0);
                         
                         // Play shoot sound using engine abstraction
@@ -1166,6 +1228,9 @@ int main(int argc, char* argv[])
     allSprites.clear();
     
     gCoordinator.Shutdown();
+    
+    LOG_INFO("GAME", "Game shutdown complete.");
+    logger.shutdown();
     
     std::cout << "Game shutdown complete." << std::endl;
     return 0;
