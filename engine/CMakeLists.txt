@@ -96,6 +96,8 @@ set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(core STATIC
     src/core/SystemLoader.cpp
     src/core/Logger.cpp
+    src/core/Profiler.cpp
+    src/core/ProfilerOverlay.cpp
     src/engine/Input.cpp
     src/engine/Keyboard.cpp
     src/engine/Clock.cpp
@@ -106,7 +108,7 @@ target_include_directories(core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(core PUBLIC ecs sfml-window sfml-system sfml-audio ${CMAKE_DL_LIBS})
+target_link_libraries(core PUBLIC ecs sfml-graphics sfml-window sfml-system sfml-audio ${CMAKE_DL_LIBS})
 
 set_target_properties(core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
