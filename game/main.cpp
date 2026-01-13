@@ -5,6 +5,8 @@
 #include <string>
 #include <set>
 #include <functional>
+#include <sstream>
+#include <iomanip>
 
 // Engine includes - Core
 #include <ecs/ECS.hpp>
@@ -12,6 +14,7 @@
 #include <core/Logger.hpp>
 #include <core/Profiler.hpp>
 #include <core/ProfilerOverlay.hpp>
+#include <core/DevConsole.hpp>
 
 // Engine includes - Rendering
 #include <rendering/sfml/SFMLWindow.hpp>
@@ -764,6 +767,11 @@ int main(int argc, char* argv[])
     profilerOverlay.setMode(rtype::core::OverlayMode::COMPACT); // Start with compact mode
     LOG_INFO("PROFILER", "Profiler overlay initialized (F3 to toggle, F4 to cycle modes)");
     
+    // Initialize developer console
+    rtype::core::DevConsole devConsole;
+    devConsole.init();
+    LOG_INFO("CONSOLE", "Developer console initialized (F1 or ` to toggle)");
+    
     // Load textures (try multiple paths for flexibility)
     LOG_INFO("ASSETS", "Loading textures...");
     backgroundTexture = std::make_unique<SFMLTexture>();
@@ -837,6 +845,113 @@ int main(int argc, char* argv[])
         player = CreatePlayer(100.0f, 400.0f);
     }
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
+    
+    // God mode state (used by console command)
+    bool godMode = false;
+    
+    // ========================================
+    // REGISTER GAME-SPECIFIC CONSOLE COMMANDS
+    // ========================================
+    devConsole.registerCommand("spawn", "Spawn an enemy", "spawn [x] [y]",
+        [&](const std::vector<std::string>& args) -> std::string {
+            if (networkMode) {
+                return "Cannot spawn in network mode (server controls entities)";
+            }
+            float x = 1920.0f;
+            float y = 500.0f;
+            if (args.size() > 1) x = std::stof(args[1]);
+            if (args.size() > 2) y = std::stof(args[2]);
+            CreateEnemy(x, y, MovementPattern::Type::STRAIGHT);
+            return "Spawned enemy at (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+        });
+    
+    devConsole.registerCommand("entities", "Show entity count", "entities",
+        [&](const std::vector<std::string>&) -> std::string {
+            return "Active entities: " + std::to_string(allEntities.size());
+        });
+    
+    devConsole.registerCommand("kill", "Destroy all enemies", "kill",
+        [&](const std::vector<std::string>&) -> std::string {
+            if (networkMode) {
+                return "Cannot kill in network mode (server controls entities)";
+            }
+            int count = 0;
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<EnemyTag>(entity)) {
+                    DestroyEntityDeferred(entity);
+                    count++;
+                }
+            }
+            return "Marked " + std::to_string(count) + " enemies for destruction";
+        });
+    
+    devConsole.registerCommand("god", "Toggle god mode (invincibility)", "god",
+        [&](const std::vector<std::string>&) -> std::string {
+            godMode = !godMode;
+            if (!networkMode && player != 0 && gCoordinator.HasComponent<Health>(player)) {
+                auto& health = gCoordinator.GetComponent<Health>(player);
+                if (godMode) {
+                    health.current = 99999;
+                    health.max = 99999;
+                } else {
+                    health.current = 100;
+                    health.max = 100;
+                }
+            }
+            return godMode ? "God mode ON" : "God mode OFF";
+        });
+    
+    devConsole.registerCommand("spawn_wave", "Spawn a wave of enemies", "spawn_wave [count]",
+        [&](const std::vector<std::string>& args) -> std::string {
+            if (networkMode) {
+                return "Cannot spawn in network mode (server controls entities)";
+            }
+            int count = 5;
+            if (args.size() > 1) count = std::stoi(args[1]);
+            MovementPattern::Type patterns[] = {
+                MovementPattern::Type::STRAIGHT,
+                MovementPattern::Type::SINE_WAVE,
+                MovementPattern::Type::ZIGZAG,
+                MovementPattern::Type::DIAGONAL_DOWN,
+                MovementPattern::Type::DIAGONAL_UP
+            };
+            for (int i = 0; i < count; i++) {
+                float y = 100.0f + (i * (800.0f / count));
+                CreateEnemy(1920.0f + 50.0f + (i * 50.0f), y, patterns[i % 5]);
+            }
+            return "Spawned wave of " + std::to_string(count) + " enemies";
+        });
+    
+    devConsole.registerCommand("teleport", "Teleport player", "teleport <x> <y>",
+        [&](const std::vector<std::string>& args) -> std::string {
+            if (networkMode) {
+                return "Cannot teleport in network mode";
+            }
+            if (args.size() < 3) {
+                return "Usage: teleport <x> <y>";
+            }
+            float x = std::stof(args[1]);
+            float y = std::stof(args[2]);
+            if (player != 0 && gCoordinator.HasComponent<Position>(player)) {
+                auto& pos = gCoordinator.GetComponent<Position>(player);
+                pos.x = x;
+                pos.y = y;
+                return "Teleported to (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+            }
+            return "No player to teleport";
+        });
+    
+    devConsole.registerCommand("network", "Show network status", "network",
+        [&](const std::vector<std::string>&) -> std::string {
+            if (!networkMode) {
+                return "Not in network mode";
+            }
+            auto& stats = profiler.getNetworkStats();
+            std::ostringstream ss;
+            ss << "Network: " << stats.packetsSent << " sent, " << stats.packetsReceived << " recv, "
+               << std::fixed << std::setprecision(1) << stats.latencyMs << "ms latency";
+            return ss.str();
+        });
     
     // Game variables using engine abstractions
     rtype::engine::Clock clock;
@@ -995,28 +1110,39 @@ int main(int argc, char* argv[])
         // Reset input mask
         inputMask = 0;
         
-        // Event handling using engine abstractions
+        // Event handling using SFML events (needed for DevConsole)
         profiler.beginSection("Input");
-        rtype::engine::InputEvent event;
-        while (window.pollEvent(event)) {
-            // Handle profiler overlay controls first
-            if (event.type == rtype::engine::EventType::KeyPressed) {
-                if (event.key.code == rtype::engine::Key::F3) {
+        
+        // Update DevConsole
+        devConsole.update(deltaTime);
+        
+        // Process SFML events for DevConsole and game
+        sf::Event sfEvent;
+        while (window.pollEventSFML(sfEvent)) {
+            // Let DevConsole handle events first
+            if (devConsole.handleEvent(sfEvent)) {
+                // Console consumed the event, skip game input
+                continue;
+            }
+            
+            // Handle profiler overlay controls
+            if (sfEvent.type == sf::Event::KeyPressed) {
+                if (sfEvent.key.code == sf::Keyboard::F3) {
                     profilerOverlay.toggle();
                     LOG_DEBUG("PROFILER", "Overlay toggled");
-                } else if (event.key.code == rtype::engine::Key::F4) {
+                } else if (sfEvent.key.code == sf::Keyboard::F4) {
                     profilerOverlay.cycleMode();
                     LOG_DEBUG("PROFILER", "Overlay mode cycled");
                 }
             }
             
-            if (event.type == rtype::engine::EventType::Closed) {
+            if (sfEvent.type == sf::Event::Closed) {
                 LOG_INFO("GAME", "Window close requested");
                 window.close();
             }
             
-            // Handle space key release for shooting
-            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
+            // Handle space key release for shooting (only when console is closed)
+            if (!devConsole.isOpen() && sfEvent.type == sf::Event::KeyReleased && sfEvent.key.code == sf::Keyboard::Space) {
                 if (spacePressed && gCoordinator.HasComponent<Position>(player)) {
                     auto& playerPos = gCoordinator.GetComponent<Position>(player);
                     
@@ -1061,8 +1187,8 @@ int main(int argc, char* argv[])
             }
         }
         
-        // Handle continuous input
-        if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
+        // Handle continuous input (only when console is closed)
+        if (!devConsole.isOpen() && rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
             if (!spacePressed) {
                 spacePressed = true;
             }
@@ -1264,6 +1390,9 @@ int main(int argc, char* argv[])
         // Update and render profiler overlay
         profilerOverlay.update();
         profilerOverlay.render(window.getSFMLWindow());
+        
+        // Render developer console (on top of everything)
+        devConsole.render(window.getSFMLWindow());
         
         // End profiler frame
         profiler.endFrame();

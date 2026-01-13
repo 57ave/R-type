@@ -98,6 +98,7 @@ add_library(core STATIC
     src/core/Logger.cpp
     src/core/Profiler.cpp
     src/core/ProfilerOverlay.cpp
+    src/core/DevConsole.cpp
     src/engine/Input.cpp
     src/engine/Keyboard.cpp
     src/engine/Clock.cpp
