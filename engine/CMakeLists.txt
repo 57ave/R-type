@@ -40,7 +40,7 @@ include(cmake/CPM.cmake)
 # Dépendance ASIO
 CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 # Dépendance SFML: prefer system package, fallback to CPM
-find_package(SFML 2.5 COMPONENTS graphics window system QUIET)
+find_package(SFML 2.6 COMPONENTS graphics window system QUIET)
 if (NOT SFML_FOUND)
     CPMAddPackage("gh:SFML/SFML#2.6.0")
 endif()
