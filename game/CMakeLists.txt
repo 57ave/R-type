@@ -63,6 +63,7 @@ target_link_libraries(r-type_game PRIVATE
     ScrollingBackgroundSystem
     BoundarySystem
     HealthSystem
+    UISystem
     
     # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
     shootemup

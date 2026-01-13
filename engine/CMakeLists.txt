@@ -90,6 +90,8 @@ add_library(rendering STATIC
     src/rendering/sfml/SFMLSprite.cpp
     src/rendering/sfml/SFMLTexture.cpp
     src/rendering/sfml/SFMLWindow.cpp
+    src/rendering/sfml/SFMLFont.cpp
+    src/rendering/sfml/SFMLText.cpp
     src/systems/RenderSystem.cpp
 )
 
@@ -133,10 +135,12 @@ if(LUA_FOUND)
         src/scripting/ComponentBindings.cpp
         src/scripting/PrefabManager.cpp
         src/scripting/ScriptSystem.cpp
+        src/scripting/UIBindings.cpp
     )
 
     target_include_directories(scripting PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../game/include
         ${LUA_INCLUDE_DIR}
         ${SOL3_INCLUDE_DIR}
     )
@@ -254,6 +258,21 @@ target_include_directories(HealthSystem PUBLIC
 )
 
 target_link_libraries(HealthSystem PUBLIC ecs)
+
+# UI System - for menus and UI elements
+add_library(UISystem SHARED
+    src/systems/UISystem.cpp
+    src/systems/UISystemRender.cpp
+    src/systems/UISystemEntities.cpp
+)
+
+target_include_directories(UISystem PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${LUA_INCLUDE_DIR}
+    ${SOL3_INCLUDE_DIR}
+)
+
+target_link_libraries(UISystem PUBLIC ecs rendering scripting)
 
 # Installation
 install(TARGETS ecs rendering core scripting network

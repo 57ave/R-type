@@ -56,6 +56,13 @@
     // Scripting - R-Type specific
     #include <scripting/GameScriptBindings.hpp>
     #include <scripting/FactoryBindings.hpp>
+    #include <scripting/UIBindings.hpp>
+
+    // UI System
+    #include <systems/UISystem.hpp>
+
+    // Game State Management
+    #include "GameStateManager.hpp"
 
     // Generic Engine Systems
     #include <systems/MovementSystem.hpp>
@@ -81,8 +88,21 @@
     #include <components/NetworkId.hpp>
     #include <components/Boundary.hpp>
 
+    // UI Components
+    #include <components/UIElement.hpp>
+    #include <components/UIText.hpp>
+    #include <components/UIButton.hpp>
+    #include <components/UISlider.hpp>
+    #include <components/UIInputField.hpp>
+    #include <components/UIPanel.hpp>
+    #include <components/UICheckbox.hpp>
+    #include <components/UIDropdown.hpp>
+
     using namespace rtype::engine::rendering;
     using namespace rtype::engine::rendering::sfml;
+
+    // Helper function to resolve asset paths from different working directories
+    std::string ResolveAssetPath(const std::string& relativePath);
 
     class Game {
         public:
@@ -116,6 +136,9 @@
 
             rtype::engine::SoundBuffer shootBuffer;
             rtype::engine::Sound shootSound;
+
+            // UI System
+            std::shared_ptr<UISystem> uiSystem;
 
             // Scripting systems
             std::shared_ptr<Scripting::ScriptSystem> spawnScriptSystem;

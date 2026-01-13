@@ -32,6 +32,29 @@ namespace rtype
                     }
                 }
 
+                void SFMLRenderer::drawText(IText &text)
+                {
+                    SFMLText *sfmlText = dynamic_cast<SFMLText *>(&text);
+                    if (sfmlText) {
+                        window_->draw(sfmlText->getNativeText());
+                    }
+                }
+
+                void SFMLRenderer::drawRect(const FloatRect &rect, uint32_t fillColor, uint32_t outlineColor, float outlineThickness)
+                {
+                    sf::RectangleShape shape;
+                    shape.setPosition(rect.left, rect.top);
+                    shape.setSize(sf::Vector2f(rect.width, rect.height));
+                    shape.setFillColor(toSFMLColor(fillColor));
+                    
+                    if (outlineThickness > 0.0f) {
+                        shape.setOutlineColor(toSFMLColor(outlineColor));
+                        shape.setOutlineThickness(outlineThickness);
+                    }
+                    
+                    window_->draw(shape);
+                }
+
                 void SFMLRenderer::display()
                 {
                     window_->display();
@@ -49,6 +72,16 @@ namespace rtype
                     view.setViewport(sf::FloatRect(0.f, 0.f, 1.f, 1.f));
 
                     window_->setView(view);
+                }
+
+                sf::Color SFMLRenderer::toSFMLColor(uint32_t rgba)
+                {
+                    // Format: 0xRRGGBBAA
+                    uint8_t r = (rgba >> 24) & 0xFF;
+                    uint8_t g = (rgba >> 16) & 0xFF;
+                    uint8_t b = (rgba >> 8) & 0xFF;
+                    uint8_t a = rgba & 0xFF;
+                    return sf::Color(r, g, b, a);
                 }
 
             }

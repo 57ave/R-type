@@ -43,6 +43,24 @@ namespace rtype
                 IntRect(int left, int top, int width, int height) : left(left), top(top), width(width), height(height) {}
             };
 
+            struct FloatRect {
+                float left;
+                float top;
+                float width;
+                float height;
+
+                FloatRect() : left(0.0f), top(0.0f), width(0.0f), height(0.0f) {}
+                FloatRect(float left, float top, float width, float height) : left(left), top(top), width(width), height(height) {}
+
+                bool contains(float x, float y) const {
+                    return x >= left && x <= left + width && y >= top && y <= top + height;
+                }
+
+                bool contains(const Vector2f& point) const {
+                    return contains(point.x, point.y);
+                }
+            };
+
             struct Transform {
                 Vector2f position;
                 float rotation;

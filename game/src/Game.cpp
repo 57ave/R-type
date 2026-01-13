@@ -1,4 +1,41 @@
 #include "Game.hpp"
+#include <filesystem>
+#include <fstream>
+
+// Cache for the resolved base path
+static std::string g_basePath = "";
+
+// Helper function to resolve asset paths from different working directories
+std::string ResolveAssetPath(const std::string& relativePath) {
+    // If we already found the base path, use it
+    if (!g_basePath.empty()) {
+        return g_basePath + relativePath;
+    }
+
+    // List of possible base paths to check
+    std::vector<std::string> basePaths = {
+        "",                    // Current directory (running from project root)
+        "../../",              // Running from build/game/
+        "../../../",           // Running from deeper build directories
+    };
+
+    // Test file to check if we're in the right directory
+    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
+
+    for (const auto& base : basePaths) {
+        std::string fullPath = base + testFile;
+        std::ifstream file(fullPath);
+        if (file.good()) {
+            g_basePath = base;
+            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
+            return g_basePath + relativePath;
+        }
+    }
+
+    // Fallback: return the path as-is
+    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
+    return relativePath;
+}
 
 void Game::RegisterEntity(ECS::Entity entity) {
     allEntities.push_back(entity);
@@ -464,6 +501,7 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<StateMachineAnimation>();
     gCoordinator.RegisterComponent<Collider>();
     gCoordinator.RegisterComponent<Health>();
+    gCoordinator.RegisterComponent<Boundary>();
     gCoordinator.RegisterComponent<ShootEmUp::Components::Weapon>();
     gCoordinator.RegisterComponent<Tag>();
     gCoordinator.RegisterComponent<ShootEmUp::Components::PlayerTag>();
@@ -476,6 +514,16 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
+
+    // Register UI components
+    gCoordinator.RegisterComponent<Components::UIElement>();
+    gCoordinator.RegisterComponent<Components::UIText>();
+    gCoordinator.RegisterComponent<Components::UIButton>();
+    gCoordinator.RegisterComponent<Components::UISlider>();
+    gCoordinator.RegisterComponent<Components::UIInputField>();
+    gCoordinator.RegisterComponent<Components::UIPanel>();
+    gCoordinator.RegisterComponent<Components::UICheckbox>();
+    gCoordinator.RegisterComponent<Components::UIDropdown>();
 
     std::cout << "[Game] Components registered" << std::endl;
 
@@ -493,6 +541,16 @@ int Game::Run(int argc, char* argv[])
     Scripting::ComponentBindings::RegisterCoordinator(luaState.GetState(), &gCoordinator);
 
     std::cout << "[Game] Lua components registered" << std::endl;
+
+    // ========================================
+    // INITIALIZE GAME STATE MANAGER
+    // ========================================
+    std::cout << "🎮 Initializing Game State Manager..." << std::endl;
+
+    auto& gameStateManager = GameStateManager::Instance();
+    gameStateManager.SetState(GameState::MainMenu);  // Start at main menu
+
+    std::cout << "[Game] Game State Manager initialized" << std::endl;
 
     // ========================================
     // INITIALIZE ALL SYSTEMS
@@ -556,6 +614,7 @@ int Game::Run(int argc, char* argv[])
     boundarySystem->SetWindowSize(1920.0f, 1080.0f);
     ECS::Signature boundarySig;
     boundarySig.set(gCoordinator.GetComponentType<Position>());
+    boundarySig.set(gCoordinator.GetComponentType<Boundary>());
     gCoordinator.SetSystemSignature<BoundarySystem>(boundarySig);
 
     collisionSystem = gCoordinator.RegisterSystem<CollisionSystem>(&gCoordinator);
@@ -577,6 +636,13 @@ int Game::Run(int argc, char* argv[])
     renderSig.set(gCoordinator.GetComponentType<Sprite>());
     gCoordinator.SetSystemSignature<RenderSystem>(renderSig);
 
+    // UI System
+    uiSystem = gCoordinator.RegisterSystem<UISystem>();
+    uiSystem->SetCoordinator(&gCoordinator);
+    ECS::Signature uiSig;
+    uiSig.set(gCoordinator.GetComponentType<Components::UIElement>());
+    gCoordinator.SetSystemSignature<UISystem>(uiSig);
+
     // Initialize all systems
     movementSystem->Init();
     animationSystem->Init();
@@ -588,6 +654,14 @@ int Game::Run(int argc, char* argv[])
     collisionSystem->Init();
     healthSystem->Init();
     renderSystem->Init();
+    uiSystem->Init();
+
+    // Load default font for UI
+    if (!uiSystem->LoadFont("default", ResolveAssetPath("game/assets/fonts/Roboto-Regular.ttf"))) {
+        std::cerr << "Warning: Could not load default UI font" << std::endl;
+    } else {
+        std::cout << "[Game] Default UI font loaded" << std::endl;
+    }
 
     // Setup collision callback after collision system is created
     collisionSystem->SetCollisionCallback([this](ECS::Entity a, ECS::Entity b) {
@@ -849,44 +923,30 @@ int Game::Run(int argc, char* argv[])
     // Set renderer for RenderSystem
     renderSystem->SetRenderer(&renderer);
 
-    // Load textures (try multiple paths for flexibility)
+    // Set window for UISystem
+    uiSystem->SetWindow(&window);
+
+    // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
-    bool bgLoaded = backgroundTexture->loadFromFile("game/assets/background.png") ||
-                    backgroundTexture->loadFromFile("../../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("client/assets/background.png");
-    if (!bgLoaded) {
+    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
-        std::cerr << "Tried paths: ../../client/assets/, ../client/assets/, client/assets/" << std::endl;
         return 1;
     }
 
     playerTexture = std::make_unique<SFMLTexture>();
-    bool playerLoaded = playerTexture->loadFromFile("game/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("cliFent/assets/players/r-typesheet42.png");
-    if (!playerLoaded) {
+    if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
         std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
     }
 
     missileTexture = std::make_unique<SFMLTexture>();
-    bool missileLoaded = missileTexture->loadFromFile("game/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
-    if (!missileLoaded) {
+    if (!missileTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet1.png"))) {
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
 
     enemyTexture = std::make_unique<SFMLTexture>();
-    bool enemyLoaded = enemyTexture->loadFromFile("game/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
-    if (!enemyLoaded) {
+    if (!enemyTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet5.png"))) {
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
     }
@@ -894,32 +954,20 @@ int Game::Run(int argc, char* argv[])
 
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
-    bool enemyBulletLoaded = enemyBulletTexture->loadFromFile("game/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("../../client/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("../client/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("client/assets/enemies/enemy_bullets.png");
-    if (!enemyBulletLoaded) {
+    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
         std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
-    bool explosionLoaded = explosionTexture->loadFromFile("game/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
-    if (!explosionLoaded) {
+    if (!explosionTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet44.png"))) {
         std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;
     }
 
     // Load sound
-    bool soundLoaded = shootBuffer.loadFromFile("game/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("client/assets/vfx/shoot.ogg");
-    if (!soundLoaded) {
+    if (!shootBuffer.loadFromFile(ResolveAssetPath("game/assets/vfx/shoot.ogg"))) {
         std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
     } else {
         shootSound.setBuffer(shootBuffer);
@@ -950,13 +998,46 @@ int Game::Run(int argc, char* argv[])
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
     // Load configuration
-    if (!luaState.LoadScript("assets/scripts/config/game_config.lua")) {
+    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
         std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    }
+
+    // Register UI bindings to Lua (must be after UISystem is created)
+    Scripting::UIBindings::RegisterAll(luaState.GetState(), uiSystem.get());
+    std::cout << "[Game] UI bindings registered to Lua" << std::endl;
+
+    // Set Lua state for UISystem callbacks
+    uiSystem->SetLuaState(&luaState.GetState());
+    std::cout << "[Game] Lua state set for UISystem" << std::endl;
+
+    // Pass base path to Lua for asset resolution
+    luaState.GetState()["ASSET_BASE_PATH"] = g_basePath;
+    std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
+
+    // Load UI scripts
+    std::cout << "🎨 Loading UI scripts..." << std::endl;
+    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/ui_init.lua"))) {
+        std::cerr << "Warning: Could not load ui_init.lua" << std::endl;
+    } else {
+        // Initialize UI from Lua
+        sol::state& lua = luaState.GetState();
+        sol::protected_function initUI = lua["InitUI"];
+        if (initUI.valid()) {
+            sol::protected_function_result result = initUI(1920, 1080);
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "[Game] InitUI() error: " << err.what() << std::endl;
+            } else {
+                std::cout << "[Game] UI initialized from Lua" << std::endl;
+            }
+        } else {
+            std::cerr << "[Game] InitUI function not found in Lua" << std::endl;
+        }
     }
 
     // Load spawn system
     spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
-        "assets/scripts/systems/spawn_system.lua",
+        ResolveAssetPath("assets/scripts/systems/spawn_system.lua"),
         &gCoordinator
     );
 
@@ -966,12 +1047,11 @@ int Game::Run(int argc, char* argv[])
         std::cerr << "[Game] Warning: Spawn system failed to load" << std::endl;
     }
 
-    // Create game entities
+    // Create game entities - but NOT the player yet (created when game starts)
     ECS::Entity player = 0;
-    if (!networkMode) {
-        // Only create player in local mode - server creates it in network mode
-        player = CreatePlayer(100.0f, 400.0f);
-    }
+    bool playerCreated = false;
+    
+    // Only create background for now - player will be created when game starts
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
 
     // Game variables using engine abstractions
@@ -1005,6 +1085,25 @@ int Game::Run(int argc, char* argv[])
         if (deltaTime > 0.1f) {
             deltaTime = 0.1f;
         }
+
+        // ========================================
+        // GAME STATE MANAGEMENT
+        // ========================================
+        auto currentState = GameStateManager::Instance().GetState();
+        
+        // Create player when transitioning to Playing state
+        if (currentState == GameState::Playing && !playerCreated && !networkMode) {
+            player = CreatePlayer(100.0f, 400.0f);
+            playerCreated = true;
+            std::cout << "[Game] Player created - game starting!" << std::endl;
+        }
+
+        // Skip game logic updates when in menu states
+        bool inMenu = (currentState == GameState::MainMenu || 
+                       currentState == GameState::Paused ||
+                       currentState == GameState::Options ||
+                       currentState == GameState::Lobby ||
+                       currentState == GameState::Credits);
 
         // Find local player entity in network mode
         if (networkMode && player == 0 && networkSystem) {
@@ -1257,6 +1356,10 @@ int Game::Run(int argc, char* argv[])
         // Reset input mask
         inputMask = 0;
 
+        // Get current game state for input handling
+        auto& gsm = GameStateManager::Instance();
+        auto currentGameState = gsm.GetState();
+
         // Event handling using engine abstractions
         rtype::engine::InputEvent event;
         while (window.pollEvent(event)) {
@@ -1264,8 +1367,29 @@ int Game::Run(int argc, char* argv[])
                 window.close();
             }
 
-            // Handle space key release for shooting
-            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
+            // Handle Escape key for pause menu toggle
+            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Escape) {
+                if (currentGameState == GameState::Playing) {
+                    gsm.SetState(GameState::Paused);
+                    std::cout << "[Game] Game paused" << std::endl;
+                } else if (currentGameState == GameState::Paused) {
+                    gsm.SetState(GameState::Playing);
+                    std::cout << "[Game] Game resumed" << std::endl;
+                } else if (currentGameState == GameState::Options || currentGameState == GameState::Credits) {
+                    // Return to main menu from sub-menus
+                    gsm.SetState(GameState::MainMenu);
+                    std::cout << "[Game] Returned to main menu" << std::endl;
+                }
+            }
+
+            // Pass events to UI system when in menu states
+            if (currentGameState != GameState::Playing) {
+                uiSystem->HandleEvent(event);
+            }
+
+            // Handle space key release for shooting (only during gameplay)
+            if (currentGameState == GameState::Playing &&
+                event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
                 if (spacePressed && gCoordinator.HasComponent<Position>(player)) {
                     auto& playerPos = gCoordinator.GetComponent<Position>(player);
 
@@ -1317,8 +1441,8 @@ int Game::Run(int argc, char* argv[])
             }
         }
 
-        // Handle continuous input
-        if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
+        // Handle continuous input (only during gameplay)
+        if (!inMenu && rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
             if (!spacePressed) {
                 spacePressed = true;
             }
@@ -1386,13 +1510,18 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
-        // 2. INPUT CAPTURE & NETWORK SEND
+        // 2. INPUT CAPTURE & NETWORK SEND (Only during gameplay)
         // ========================================
-        bool movingUp = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Up);
-        bool movingDown = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Down);
-        bool movingLeft = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left);
-        bool movingRight = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right);
-        bool firing = spacePressed;
+        bool movingUp = false, movingDown = false, movingLeft = false, movingRight = false;
+        bool firing = false;
+        
+        if (!inMenu) {
+            movingUp = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Up);
+            movingDown = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Down);
+            movingLeft = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left);
+            movingRight = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right);
+            firing = spacePressed;
+        }
 
         // Build input mask for network (bit flags from Protocol.md)
         inputMask = 0;
@@ -1459,9 +1588,9 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
-        // 4. LOCAL ENEMY SPAWNING (Only in local mode - NOW SCRIPTED!)
+        // 4. LOCAL ENEMY SPAWNING (Only in local mode during gameplay)
         // ========================================
-        if (!networkMode && spawnScriptSystem) {
+        if (!inMenu && !networkMode && spawnScriptSystem) {
             // Hot-reload Lua scripts every frame
             luaState.CheckForChanges();
 
@@ -1473,32 +1602,47 @@ int Game::Run(int argc, char* argv[])
         // 5. SYSTEM UPDATES (ECS Architecture!)
         // ========================================
 
-        // Always update scrolling background
+        // Always update scrolling background (for visual effect even in menus)
         scrollingBgSystem->Update(deltaTime);
 
-        // In network mode, server handles physics - only update animations/visuals
-        if (networkMode) {
-            stateMachineAnimSystem->Update(deltaTime);
-            animationSystem->Update(deltaTime);
-            lifetimeSystem->Update(deltaTime);
-        } else {
-            // Local mode: Full simulation
-            movementPatternSystem->Update(deltaTime);
-            movementSystem->Update(deltaTime);
-            boundarySystem->Update(deltaTime);
-            collisionSystem->Update(deltaTime);
-            healthSystem->Update(deltaTime);
-            stateMachineAnimSystem->Update(deltaTime);
-            animationSystem->Update(deltaTime);
-            lifetimeSystem->Update(deltaTime);
+        // Only update game systems during gameplay
+        if (!inMenu) {
+            // In network mode, server handles physics - only update animations/visuals
+            if (networkMode) {
+                stateMachineAnimSystem->Update(deltaTime);
+                animationSystem->Update(deltaTime);
+                lifetimeSystem->Update(deltaTime);
+            } else {
+                // Local mode: Full simulation
+                movementPatternSystem->Update(deltaTime);
+                movementSystem->Update(deltaTime);
+                boundarySystem->Update(deltaTime);
+                collisionSystem->Update(deltaTime);
+                healthSystem->Update(deltaTime);
+                stateMachineAnimSystem->Update(deltaTime);
+                animationSystem->Update(deltaTime);
+                lifetimeSystem->Update(deltaTime);
+            }
         }
 
         // Process destroyed entities
         ProcessDestroyedEntities();
 
+        // ========================================
+        // 6. UI SYSTEM UPDATE
+        // ========================================
+        // Update UI system (handles input when in menu states)
+        if (inMenu) {
+            uiSystem->Update(deltaTime);
+        }
+
         // Render using RenderSystem
         window.clear();
         renderSystem->Update(deltaTime);
+
+        // Render UI on top of game (always, so menus are visible)
+        uiSystem->Render(&window);
+
         window.display();
     }
 
