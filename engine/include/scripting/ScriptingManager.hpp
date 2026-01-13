@@ -12,6 +12,7 @@
 
 #include "LuaState.hpp"
 #include "ComponentBindings.hpp"
+#include "CoreBindings.hpp"
 #include "DevConsoleBindings.hpp"
 #include "GameBindings.hpp"
 #include "PrefabManager.hpp"

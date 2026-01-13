@@ -161,6 +161,7 @@ if(LUA_FOUND)
     add_library(scripting STATIC
         src/scripting/LuaState.cpp
         src/scripting/ComponentBindings.cpp
+        src/scripting/CoreBindings.cpp
         src/scripting/DevConsoleBindings.cpp
         src/scripting/GameBindings.cpp
         src/scripting/PrefabManager.cpp

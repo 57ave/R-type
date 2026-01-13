@@ -9,6 +9,7 @@
 
 #if RTYPE_SCRIPTING_ENABLED
 
+#include <scripting/CoreBindings.hpp>
 #include <core/Logger.hpp>
 #include <filesystem>
 
@@ -32,6 +33,9 @@ bool ScriptingManager::init(ECS::Coordinator* coordinator, rtype::core::DevConso
     LuaState::Instance().Init();
     
     auto& lua = LuaState::Instance().GetState();
+    
+    // Register core bindings (Logger + Profiler)
+    CoreBindings::Register(lua);
     
     // Register component bindings
     ComponentBindings::RegisterAll(lua);
@@ -109,6 +113,14 @@ bool ScriptingManager::loadGameScripts(const std::string& configPath) {
         std::string gameCommandsPath = configPath + "/game_commands.lua";
         if (fs::exists(gameCommandsPath)) {
             if (!loadScript(gameCommandsPath)) {
+                success = false;
+            }
+        }
+        
+        // Load debug tools (Logger + Profiler commands)
+        std::string debugToolsPath = configPath + "/debug_tools.lua";
+        if (fs::exists(debugToolsPath)) {
+            if (!loadScript(debugToolsPath)) {
                 success = false;
             }
         }
