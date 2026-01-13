@@ -30,42 +30,56 @@
     #include <network/RTypeProtocol.hpp>
     #include <systems/NetworkSystem.hpp>
 
-    // Factories
+    // Shoot'em Up Module Components
+    #include <components/ShootEmUpTags.hpp>
+    #include <components/PowerUp.hpp>
+    #include <components/AIController.hpp>
+    #include <components/Weapon.hpp>
+    #include <components/MovementPattern.hpp>
+    #include <components/Attachment.hpp>
+    #include <components/Effect.hpp>
+
+    // Shoot'em Up Module Factories
     #include <factories/EnemyFactory.hpp>
     #include <factories/ProjectileFactory.hpp>
-    #include <systems/NetworkSystem.hpp>
 
-    // Scripting
+    // Shoot'em Up Module Systems
+    #include <systems/WeaponSystem.hpp>
+    #include <systems/MovementPatternSystem.hpp>
+    #include <systems/EnemySpawnSystem.hpp>
+
+    // Scripting - Engine generic
     #include <scripting/LuaState.hpp>
     #include <scripting/ComponentBindings.hpp>
-    #include <FactoryBindings.hpp>
     #include <scripting/ScriptSystem.hpp>
 
-    // Systems
+    // Scripting - R-Type specific
+    #include <scripting/GameScriptBindings.hpp>
+    #include <scripting/FactoryBindings.hpp>
+
+    // Generic Engine Systems
     #include <systems/MovementSystem.hpp>
     #include <systems/AnimationSystem.hpp>
     #include <systems/StateMachineAnimationSystem.hpp>
     #include <systems/LifetimeSystem.hpp>
     #include <systems/RenderSystem.hpp>
-    #include <systems/MovementPatternSystem.hpp>
     #include <systems/ScrollingBackgroundSystem.hpp>
     #include <systems/BoundarySystem.hpp>
     #include <systems/CollisionSystem.hpp>
     #include <systems/HealthSystem.hpp>
 
-    // Components
+    // Generic Engine Components
     #include <components/Position.hpp>
     #include <components/Velocity.hpp>
     #include <components/Sprite.hpp>
     #include <components/Animation.hpp>
     #include <components/Collider.hpp>
     #include <components/Health.hpp>
-    #include <components/Weapon.hpp>
     #include <components/Tag.hpp>
     #include <components/ScrollingBackground.hpp>
-    #include <components/MovementPattern.hpp>
     #include <components/Lifetime.hpp>
     #include <components/NetworkId.hpp>
+    #include <components/Boundary.hpp>
 
     using namespace rtype::engine::rendering;
     using namespace rtype::engine::rendering::sfml;
@@ -76,7 +90,7 @@
 
             ECS::Entity CreatePlayer(float x, float y, int line = 0);
             ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst);
-            ECS::Entity CreateEnemy(float x, float y, MovementPattern::Type pattern);
+            ECS::Entity CreateEnemy(float x, float y, std::string patternType = "straight");
             ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel);
             ECS::Entity CreateExplosion(float x, float y);
             ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent);

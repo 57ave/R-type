@@ -12,6 +12,7 @@
 #include <components/Health.hpp>
 #include <components/Tag.hpp>
 #include <components/MovementPattern.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <vector>
 
 using namespace rtype::engine::rendering::sfml;
@@ -84,11 +85,12 @@ public:
     );
 
     /**
-     * @brief Crée un ennemi générique selon le type
+     * @brief Crée un ennemi générique selon le type (string-based)
+     * @param enemyType Type d'ennemi défini en Lua (ex: "basic", "zigzag", "boss")
      */
     static ECS::Entity CreateEnemy(
         ECS::Coordinator& coordinator,
-        EnemyTag::Type enemyType,
+        const std::string& enemyType,
         float x, float y,
         SFMLTexture* texture,
         std::vector<SFMLSprite*>& spriteList

@@ -81,7 +81,7 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     gCoordinator.AddComponent(player, health);
 
     // Weapon
-    Weapon weapon;
+    ShootEmUp::Components::Weapon weapon;
     weapon.fireRate = 0.2f;
     weapon.supportsCharge = true;
     weapon.minChargeTime = 0.1f;
@@ -92,7 +92,7 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
 
     // Tags
     gCoordinator.AddComponent(player, Tag{"player"});
-    gCoordinator.AddComponent(player, PlayerTag{0});
+    gCoordinator.AddComponent(player, ShootEmUp::Components::PlayerTag{0});
 
     return player;
 }
@@ -144,7 +144,7 @@ ECS::Entity Game::CreateBackground(float x, float y, float windowHeight, bool is
 }
 
 // Helper function to create enemy entity
-ECS::Entity Game::CreateEnemy(float x, float y, MovementPattern::Type pattern) {
+ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     ECS::Entity enemy = gCoordinator.CreateEntity();
     RegisterEntity(enemy);
 
@@ -184,8 +184,8 @@ ECS::Entity Game::CreateEnemy(float x, float y, MovementPattern::Type pattern) {
     gCoordinator.AddComponent(enemy, anim);
 
     // Movement pattern
-    MovementPattern movementPattern;
-    movementPattern.pattern = pattern;
+    ShootEmUp::Components::MovementPattern movementPattern;
+    movementPattern.patternType = patternType;
     movementPattern.speed = 200.0f + (rand() % 200);
     movementPattern.amplitude = 50.0f + (rand() % 100);
     movementPattern.frequency = 1.0f + (rand() % 3);
@@ -210,11 +210,10 @@ ECS::Entity Game::CreateEnemy(float x, float y, MovementPattern::Type pattern) {
 
     // Tags
     gCoordinator.AddComponent(enemy, Tag{"enemy"});
-    EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::BASIC;
+    ShootEmUp::Components::EnemyTag enemyTag;
+    enemyTag.enemyType = "basic";
     enemyTag.scoreValue = 100;
     enemyTag.aiAggressiveness = 1.0f;
-    enemyTag.enemyType = "basic"; // backward compatibility
     gCoordinator.AddComponent(enemy, enemyTag);
 
     return enemy;
@@ -298,10 +297,11 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
 
     // Tags
     gCoordinator.AddComponent(missile, Tag{isCharged ? "charged_bullet" : "bullet"});
-    ProjectileTag projTag;
-    projTag.type = isCharged ? ProjectileTag::Type::CHARGED : ProjectileTag::Type::NORMAL;
+    ShootEmUp::Components::ProjectileTag projTag;
+    projTag.projectileType = isCharged ? "charged" : "normal";
     projTag.ownerId = 0;
     projTag.isPlayerProjectile = true;
+    projTag.chargeLevel = isCharged ? chargeLevel : 0;
     gCoordinator.AddComponent(missile, projTag);
 
     // Lifetime (destroy after 5 seconds or when off-screen)
@@ -418,8 +418,8 @@ ECS::Entity Game::CreateShootEffect(float x, float y, ECS::Entity parent) {
     gCoordinator.AddComponent(effect, lifetime);
 
     // Effect tag
-    Effect effectTag;
-    effectTag.effectType = Effect::Type::SHOOT;
+    ShootEmUp::Components::Effect effectTag;
+    effectTag.effectType = "shoot";
     effectTag.followParent = true;
     gCoordinator.AddComponent(effect, effectTag);
 
@@ -464,15 +464,15 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<StateMachineAnimation>();
     gCoordinator.RegisterComponent<Collider>();
     gCoordinator.RegisterComponent<Health>();
-    gCoordinator.RegisterComponent<Weapon>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::Weapon>();
     gCoordinator.RegisterComponent<Tag>();
-    gCoordinator.RegisterComponent<PlayerTag>();
-    gCoordinator.RegisterComponent<EnemyTag>();
-    gCoordinator.RegisterComponent<ProjectileTag>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::PlayerTag>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::EnemyTag>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::ProjectileTag>();
     gCoordinator.RegisterComponent<ScrollingBackground>();
-    gCoordinator.RegisterComponent<MovementPattern>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::MovementPattern>();
     gCoordinator.RegisterComponent<Lifetime>();
-    gCoordinator.RegisterComponent<Effect>();
+    gCoordinator.RegisterComponent<ShootEmUp::Components::Effect>();
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
@@ -540,7 +540,7 @@ int Game::Run(int argc, char* argv[])
     movementPatternSystem = gCoordinator.RegisterSystem<MovementPatternSystem>();
     movementPatternSystem->SetCoordinator(&gCoordinator);
     ECS::Signature patternSig;
-    patternSig.set(gCoordinator.GetComponentType<MovementPattern>());
+    patternSig.set(gCoordinator.GetComponentType<ShootEmUp::Components::MovementPattern>());
     patternSig.set(gCoordinator.GetComponentType<Position>());
     gCoordinator.SetSystemSignature<MovementPatternSystem>(patternSig);
 
@@ -633,10 +633,10 @@ int Game::Run(int argc, char* argv[])
         }
 
         // Destroy projectiles on collision
-        if (gCoordinator.HasComponent<ProjectileTag>(a)) {
+        if (gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(a)) {
             DestroyEntityDeferred(a);
         }
-        if (gCoordinator.HasComponent<ProjectileTag>(b)) {
+        if (gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(b)) {
             DestroyEntityDeferred(b);
         }
     });
@@ -652,10 +652,149 @@ int Game::Run(int argc, char* argv[])
             networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
             networkSystem = std::make_shared<rtype::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
 
-            // Set callback to register new entities
+            // Set callback to register new entities and add sprites
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
                 allEntities.push_back(entity);
-                std::cout << "[Game] Registered network entity " << entity << std::endl;
+                
+                // Only add sprite if it doesn't already have one (network entities only)
+                if (gCoordinator.HasComponent<Sprite>(entity)) {
+                    std::cout << "[Game] Entity " << entity << " already has sprite, skipping" << std::endl;
+                    return;
+                }
+                
+                // Add sprite based on entity tag
+                if (!gCoordinator.HasComponent<Tag>(entity)) {
+                    std::cout << "[Game] ⚠️  Network entity " << entity << " has NO Tag component!" << std::endl;
+                    return;
+                }
+                
+                auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                std::cout << "[Game] 🎨 Creating sprite for network entity " << entity << " (Tag: " << tag.name << ")" << std::endl;
+                    
+                if (tag.name == "Player" && gCoordinator.HasComponent<NetworkId>(entity)) {
+                    // Create player sprite
+                    auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    sprite->setTexture(playerTexture.get());
+                    IntRect rect(33 * 2, netId.playerLine * 17, 33, 17);
+                    sprite->setTextureRect(rect);
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.textureRect = rect;
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    std::cout << "[Game] Created player sprite for entity " << entity << " (line " << (int)netId.playerLine << ")" << std::endl;
+                }
+                else if (tag.name == "Enemy") {
+                    // Create enemy sprite
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    sprite->setTexture(enemyTexture.get());
+                    IntRect rect(0, 0, 33, 36);
+                    sprite->setTextureRect(rect);
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.textureRect = rect;
+                    spriteComp.scaleX = 2.5f;
+                    spriteComp.scaleY = 2.5f;
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    
+                    // Add animation for enemy (8 frames horizontally)
+                    Animation anim;
+                    anim.frameCount = 8;
+                    anim.currentFrame = 0;
+                    anim.frameTime = 0.1f;
+                    anim.currentTime = 0.0f;
+                    anim.loop = true;
+                    anim.frameWidth = 33;
+                    anim.frameHeight = 32;
+                    anim.startX = 0;  // Start at frame 0 - les 8 premières frames
+                    anim.startY = 0;
+                    anim.spacing = 33;
+                    gCoordinator.AddComponent(entity, anim);
+                    
+                    std::cout << "[Game] Created enemy sprite for entity " << entity << " with animation" << std::endl;
+                }
+                else if (tag.name == "PlayerBullet") {
+                    // Create player missile sprite
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    sprite->setTexture(missileTexture.get());
+                    IntRect rect(245, 85, 20, 20);  // Correct rect from CreateMissile!
+                    sprite->setTextureRect(rect);
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.textureRect = rect;
+                    spriteComp.scaleX = 3.0f;  // Same as local mode
+                    spriteComp.scaleY = 3.0f;
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    std::cout << "[Game] Created player bullet sprite for entity " << entity << std::endl;
+                }
+                else if (tag.name == "EnemyBullet") {
+                    // Create enemy bullet sprite - orange balls
+                    // Trying different coordinates in enemy_bullets.png (400x85)
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    sprite->setTexture(enemyBulletTexture.get());
+                    IntRect rect(110, 0, 15, 15);  // Try middle area where balls might be
+                    sprite->setTextureRect(rect);
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.textureRect = rect;
+                    spriteComp.scaleX = 4.0f;  // Scale for visibility
+                    spriteComp.scaleY = 4.0f;
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    
+                    // Add animation - 4 frames of orange balls
+                    Animation anim;
+                    anim.frameTime = 0.1f;
+                    anim.currentFrame = 0;
+                    anim.frameCount = 4;
+                    anim.loop = true;
+                    anim.frameWidth = 15;
+                    anim.frameHeight = 15;
+                    anim.startX = 110;  // Start at middle area
+                    anim.startY = 0;
+                    anim.spacing = 15;  // Distance between frames
+                    gCoordinator.AddComponent(entity, anim);
+                    
+                    std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation at (110,0)" << std::endl;
+                }
+                else if (tag.name == "Explosion") {
+                    // Create explosion sprite with animation
+                    auto* sprite = new SFMLSprite();
+                    allSprites.push_back(sprite);
+                    sprite->setTexture(explosionTexture.get());
+                    IntRect rect(130, 1, 33, 32);  // Match CreateExplosion!
+                    sprite->setTextureRect(rect);
+                    Sprite spriteComp;
+                    spriteComp.sprite = sprite;
+                    spriteComp.textureRect = rect;
+                    spriteComp.scaleX = 2.5f;  // Match CreateExplosion scale
+                    spriteComp.scaleY = 2.5f;
+                    gCoordinator.AddComponent(entity, spriteComp);
+                    
+                    // Add animation - Match CreateExplosion parameters
+                    Animation anim;
+                    anim.frameCount = 6;
+                    anim.frameTime = 0.08f;
+                    anim.currentFrame = 0;
+                    anim.loop = false;
+                    anim.frameWidth = 32;
+                    anim.frameHeight = 32;
+                    anim.startX = 130;
+                    anim.startY = 1;
+                    anim.spacing = 1.5;
+                    gCoordinator.AddComponent(entity, anim);
+                    
+                    // Add lifetime
+                    gCoordinator.AddComponent(entity, Lifetime{0.5f});
+                    
+                    std::cout << "[Game] Created explosion sprite for entity " << entity << std::endl;
+                }
+                else {
+                    std::cout << "[Game] ⚠️  Unknown tag '" << tag.name << "' for entity " << entity << ", no sprite created" << std::endl;
+                }
             });
 
             // Set callback for entity destruction
@@ -727,7 +866,7 @@ int Game::Run(int argc, char* argv[])
     bool playerLoaded = playerTexture->loadFromFile("game/assets/players/r-typesheet42.png") ||
                         playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
                         playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("client/assets/players/r-typesheet42.png");
+                        playerTexture->loadFromFile("cliFent/assets/players/r-typesheet42.png");
     if (!playerLoaded) {
         std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
@@ -801,7 +940,7 @@ int Game::Run(int argc, char* argv[])
     textureMap["background"] = backgroundTexture.get();
     textureMap["explosion"] = explosionTexture.get();
 
-    Scripting::FactoryBindings::RegisterFactories(
+    RType::Scripting::FactoryBindings::RegisterFactories(
         luaState.GetState(),
         &gCoordinator,
         textureMap,
@@ -961,10 +1100,12 @@ int Game::Run(int argc, char* argv[])
 
                         // Use different horizontal positions for variety, always line 0
                         int enemyFrame = 0; // Default frame
-                        if (gCoordinator.HasComponent<EnemyTag>(entity)) {
-                            auto& enemyTag = gCoordinator.GetComponent<EnemyTag>(entity);
+                        if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
+                            auto& enemyTag = gCoordinator.GetComponent<ShootEmUp::Components::EnemyTag>(entity);
                             // Map enemy type to horizontal frame (0-15 available)
-                            enemyFrame = static_cast<int>(enemyTag.type) % 16;
+                            // Use hash of enemyType string for variety
+                            std::hash<std::string> hasher;
+                            enemyFrame = static_cast<int>(hasher(enemyTag.enemyType)) % 16;
                         }
 
                         // All enemies are on line 0, different horizontal frames
@@ -977,17 +1118,18 @@ int Game::Run(int argc, char* argv[])
 
                         std::cout << "[Game] Enemy entity " << entity << " set to scale 2.5x" << std::endl;
 
-                        // Add animation for enemy (2 frames horizontally)
+                        // Add animation for enemy (8 frames horizontally from middle for left-facing)
                         Animation anim;
-                        anim.frameCount = 2;
+                        anim.frameCount = 8;  // All 8 frames for consistent animation
                         anim.currentFrame = 0;
-                        anim.frameTime = 0.2f;
+                        anim.frameTime = 0.1f;
                         anim.currentTime = 0.0f;
                         anim.loop = true;
-                        anim.frameWidth = 32;
+                        anim.frameWidth = 33;
                         anim.frameHeight = 32;
-                        anim.startX = enemyFrame * 33;  // Start at the enemy's frame
+                        anim.startX = 264;  // Start at frame 8 (8 * 33 = 264) for left-facing enemy
                         anim.startY = 0;  // Always line 0
+                        anim.spacing = 33;  // Spacing between frames
                         gCoordinator.AddComponent(entity, anim);
 
                     } else if (tag.name == "PlayerBullet" || tag.name == "bullet" || tag.name == "charged_bullet") {
@@ -998,8 +1140,8 @@ int Game::Run(int argc, char* argv[])
                         bool isCharged = false;
                         int chargeLevel = 0;
 
-                        if (gCoordinator.HasComponent<ProjectileTag>(entity)) {
-                            auto& projTag = gCoordinator.GetComponent<ProjectileTag>(entity);
+                        if (gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
+                            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(entity);
                             isCharged = projTag.chargeLevel > 0;
                             chargeLevel = projTag.chargeLevel;
                         }
@@ -1226,8 +1368,8 @@ int Game::Run(int argc, char* argv[])
                 anim.spacing = 34;
                 gCoordinator.AddComponent(chargeEffect, anim);
 
-                Effect effectTag;
-                effectTag.effectType = Effect::Type::CHARGE;
+                ShootEmUp::Components::Effect effectTag;
+                effectTag.effectType = "charge";
                 effectTag.followParent = true;
                 gCoordinator.AddComponent(chargeEffect, effectTag);
 
@@ -1303,17 +1445,17 @@ int Game::Run(int argc, char* argv[])
         if (!networkMode && player != 0 && gCoordinator.HasComponent<Velocity>(player)) {
             auto& playerVel = gCoordinator.GetComponent<Velocity>(player);
             float speed = 500.0f;
-            playerVel.vx = 0.0f;
-            playerVel.vy = 0.0f;
+            playerVel.dx = 0.0f;
+            playerVel.dy = 0.0f;
 
             if (movingUp)
-                playerVel.vy = -speed;
+                playerVel.dy = -speed;
             if (movingDown)
-                playerVel.vy = speed;
+                playerVel.dy = speed;
             if (movingLeft)
-                playerVel.vx = -speed;
+                playerVel.dx = -speed;
             if (movingRight)
-                playerVel.vx = speed;
+                playerVel.dx = speed;
 
             // Update animation target
             if (gCoordinator.HasComponent<StateMachineAnimation>(player)) {

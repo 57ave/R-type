@@ -41,8 +41,8 @@ void NetworkClient::process() {
 
 void NetworkClient::disconnect() {
     if (connected_) {
-        // Send disconnect packet
-        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_DISCONNECT));
+        // Send disconnect packet (type 0x04 is common convention)
+        NetworkPacket packet(0x04);  // CLIENT_DISCONNECT
         packet.header.seq = sequenceNumber_++;
         packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()
@@ -55,27 +55,16 @@ void NetworkClient::disconnect() {
     }
 }
 
-void NetworkClient::sendInput(uint8_t playerId, uint8_t inputMask, uint8_t chargeLevel) {
+// Generic packet send - game should create NetworkPacket with their specific protocol
+void NetworkClient::sendPacket(const NetworkPacket& packet) {
     if (!connected_) return;
-
-    NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
-    packet.header.seq = sequenceNumber_++;
-    packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()
-    ).count();
-
-    ClientInput input;
-    input.playerId = playerId;
-    input.inputMask = inputMask;
-    input.chargeLevel = chargeLevel;
-    packet.setPayload(input.serialize());
-
     client_.send(packet);
     lastInputSent_ = std::chrono::steady_clock::now();
 }
 
 void NetworkClient::sendHello() {
-    NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_HELLO));
+    // Generic HELLO packet - type 0x01 is common convention
+    NetworkPacket packet(0x01);  // CLIENT_HELLO
     packet.header.seq = sequenceNumber_++;
     packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()

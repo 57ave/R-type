@@ -4,15 +4,17 @@
 #include "ecs/Coordinator.hpp"
 #include "network/NetworkClient.hpp"
 #include "network/RTypeProtocol.hpp"
-#include "components/NetworkId.hpp"
-#include "components/Position.hpp"
-#include "components/Velocity.hpp"
-#include "components/Health.hpp"
-#include "components/Tag.hpp"
+#include <components/NetworkId.hpp>
+#include <components/Position.hpp>
+#include <components/Velocity.hpp>
+#include <components/Health.hpp>
+#include <components/Tag.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <memory>
 #include <unordered_map>
 #include <functional>
 #include <iostream>
+#include <cstring>
 
 namespace rtype {
 namespace engine {
@@ -179,8 +181,8 @@ private:
             
             if (coordinator_->HasComponent<Velocity>(entity)) {
                 auto& vel = coordinator_->GetComponent<Velocity>(entity);
-                vel.vx = state.vx;
-                vel.vy = state.vy;
+                vel.dx = state.vx;
+                vel.dy = state.vy;
             }
             
             if (coordinator_->HasComponent<Health>(entity)) {
@@ -218,20 +220,32 @@ private:
             case EntityType::ENTITY_MONSTER:
                 coordinator_->AddComponent(entity, Tag{"Enemy"});
                 // Add EnemyTag with type from server
-                coordinator_->AddComponent(entity, EnemyTag{static_cast<EnemyTag::Type>(state.enemyType)});
+                {
+                    ShootEmUp::Components::EnemyTag enemyTag;
+                    enemyTag.enemyType = "basic"; // TODO: Map from state.enemyType
+                    coordinator_->AddComponent(entity, enemyTag);
+                }
                 std::cout << "[NetworkSystem] Created Enemy entity " << entity << " at (" << state.x << ", " << state.y << ")" << std::endl;
                 break;
             case EntityType::ENTITY_PLAYER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"PlayerBullet"});
                 // Add ProjectileTag with charge level and type
-                coordinator_->AddComponent(entity, ProjectileTag{
-                    static_cast<ProjectileTag::Type>(state.projectileType),
-                    state.chargeLevel
-                });
+                {
+                    ShootEmUp::Components::ProjectileTag projTag;
+                    projTag.projectileType = (state.chargeLevel > 0) ? "charged" : "normal";
+                    projTag.chargeLevel = state.chargeLevel;
+                    coordinator_->AddComponent(entity, projTag);
+                }
+                std::cout << "[NetworkSystem] Created PlayerBullet entity " << entity << " at (" << state.x << ", " << state.y << ")" << std::endl;
                 break;
             case EntityType::ENTITY_MONSTER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"EnemyBullet"});
-                coordinator_->AddComponent(entity, ProjectileTag{ProjectileTag::Type::NORMAL, 0});
+                {
+                    ShootEmUp::Components::ProjectileTag projTag;
+                    projTag.projectileType = "normal";
+                    projTag.chargeLevel = 0;
+                    coordinator_->AddComponent(entity, projTag);
+                }
                 break;
             case EntityType::ENTITY_EXPLOSION:
                 coordinator_->AddComponent(entity, Tag{"Explosion"});
@@ -260,7 +274,19 @@ public:
     // Called by game code to send input
     void sendInput(uint8_t inputMask, uint8_t chargeLevel = 0) {
         if (networkClient_ && networkClient_->isConnected()) {
-            networkClient_->sendInput(localPlayerId_, inputMask, chargeLevel);
+            // Build RType protocol packet
+            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
+            ClientInput input;
+            input.playerId = localPlayerId_;
+            input.inputMask = inputMask;
+            input.chargeLevel = chargeLevel;
+            
+            // Serialize input to payload
+            std::vector<char> payload(sizeof(ClientInput));
+            std::memcpy(payload.data(), &input, sizeof(ClientInput));
+            packet.setPayload(payload);
+            
+            networkClient_->sendPacket(packet);
         }
     }
 

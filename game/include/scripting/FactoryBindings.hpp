@@ -7,18 +7,27 @@
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <vector>
 
+/**
+ * @file FactoryBindings.hpp
+ * @brief R-Type specific factory bindings for Lua
+ * 
+ * This is GAME-SPECIFIC code that exposes R-Type entity factories to Lua.
+ * It belongs in game/, not engine/.
+ */
+
+namespace RType {
 namespace Scripting {
 
     /**
-     * @brief FactoryBindings - Exposes entity creation factories to Lua
+     * @brief FactoryBindings - Exposes R-Type entity creation factories to Lua
      * 
-     * This allows Lua scripts to create enemies, projectiles, and other entities
-     * using the existing C++ factory pattern.
+     * This allows Lua scripts to create enemies, projectiles, and other R-Type
+     * entities using the existing C++ factory pattern.
      */
     class FactoryBindings {
     public:
         /**
-         * @brief Register factory functions to Lua state
+         * @brief Register R-Type factory functions to Lua state
          * 
          * @param lua Sol2 state
          * @param coordinator ECS Coordinator
@@ -42,3 +51,4 @@ namespace Scripting {
     };
 
 } // namespace Scripting
+} // namespace RType

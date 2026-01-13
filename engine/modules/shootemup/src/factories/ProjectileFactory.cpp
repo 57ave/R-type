@@ -1,7 +1,9 @@
 #include "factories/ProjectileFactory.hpp"
+#include "components/ShootEmUpTags.hpp"
 #include <rendering/Types.hpp>
 
 using namespace rtype::engine::rendering;
+using namespace ShootEmUp::Components;
 
 // Helper pour créer le sprite de base
 SFMLSprite* ProjectileFactory::CreateProjectileSprite(
@@ -57,7 +59,7 @@ ECS::Entity ProjectileFactory::CreateNormalProjectile(
     coordinator.AddComponent(projectile, Tag{isPlayerProjectile ? "bullet" : "enemy_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::NORMAL;
+    projTag.projectileType = "normal";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     coordinator.AddComponent(projectile, projTag);
@@ -133,7 +135,7 @@ ECS::Entity ProjectileFactory::CreateChargedProjectile(
     coordinator.AddComponent(projectile, Tag{"charged_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::CHARGED;
+    projTag.projectileType = "charged";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     projTag.spriteRow = level;
@@ -184,7 +186,7 @@ ECS::Entity ProjectileFactory::CreateExplosiveProjectile(
     coordinator.AddComponent(projectile, Tag{"explosive_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::EXPLOSIVE;
+    projTag.projectileType = "explosive";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     coordinator.AddComponent(projectile, projTag);
@@ -234,7 +236,7 @@ ECS::Entity ProjectileFactory::CreatePiercingProjectile(
     coordinator.AddComponent(projectile, Tag{"piercing_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::PIERCING;
+    projTag.projectileType = "piercing";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     projTag.maxPierceCount = maxPierceCount;
@@ -282,7 +284,7 @@ ECS::Entity ProjectileFactory::CreateHomingProjectile(
     coordinator.AddComponent(projectile, Tag{"homing_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::HOMING;
+    projTag.projectileType = "homing";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     coordinator.AddComponent(projectile, projTag);
@@ -334,7 +336,7 @@ ECS::Entity ProjectileFactory::CreateLaserProjectile(
     coordinator.AddComponent(projectile, Tag{"laser_bullet"});
     
     ProjectileTag projTag;
-    projTag.type = ProjectileTag::Type::LASER;
+    projTag.projectileType = "laser";
     projTag.ownerId = ownerId;
     projTag.isPlayerProjectile = isPlayerProjectile;
     projTag.maxPierceCount = 999;
@@ -347,10 +349,10 @@ ECS::Entity ProjectileFactory::CreateLaserProjectile(
     return projectile;
 }
 
-// Factory générique
+// Factory générique (string-based)
 ECS::Entity ProjectileFactory::CreateProjectile(
     ECS::Coordinator& coordinator,
-    ProjectileTag::Type projectileType,
+    const std::string& projectileType,
     float x, float y,
     SFMLTexture* texture,
     std::vector<SFMLSprite*>& spriteList,
@@ -358,20 +360,20 @@ ECS::Entity ProjectileFactory::CreateProjectile(
     int ownerId,
     int level
 ) {
-    switch (projectileType) {
-        case ProjectileTag::Type::NORMAL:
-            return CreateNormalProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
-        case ProjectileTag::Type::CHARGED:
-            return CreateChargedProjectile(coordinator, x, y, level, texture, spriteList, isPlayerProjectile, ownerId);
-        case ProjectileTag::Type::EXPLOSIVE:
-            return CreateExplosiveProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
-        case ProjectileTag::Type::PIERCING:
-            return CreatePiercingProjectile(coordinator, x, y, 3, texture, spriteList, isPlayerProjectile, ownerId);
-        case ProjectileTag::Type::HOMING:
-            return CreateHomingProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
-        case ProjectileTag::Type::LASER:
-            return CreateLaserProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
-        default:
-            return CreateNormalProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
+    if (projectileType == "normal") {
+        return CreateNormalProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
+    } else if (projectileType == "charged") {
+        return CreateChargedProjectile(coordinator, x, y, level, texture, spriteList, isPlayerProjectile, ownerId);
+    } else if (projectileType == "explosive") {
+        return CreateExplosiveProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
+    } else if (projectileType == "piercing") {
+        return CreatePiercingProjectile(coordinator, x, y, 3, texture, spriteList, isPlayerProjectile, ownerId);
+    } else if (projectileType == "homing") {
+        return CreateHomingProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
+    } else if (projectileType == "laser") {
+        return CreateLaserProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
+    } else {
+        // Default to normal if unknown type
+        return CreateNormalProjectile(coordinator, x, y, texture, spriteList, isPlayerProjectile, ownerId);
     }
 }

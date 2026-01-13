@@ -2,8 +2,9 @@
 #include <components/Position.hpp>
 #include <components/Collider.hpp>
 #include <components/Health.hpp>
-#include <components/Weapon.hpp>
+#include <components/Damage.hpp>
 #include <components/Tag.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -28,9 +29,9 @@ void CollisionSystem::Update(float dt) {
 
     for (auto entity : entities) {
         // Filter by tags
-        if (m_Coordinator->HasComponent<ProjectileTag>(entity)) {
+        if (m_Coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
             projectiles.push_back(entity);
-        } else if (m_Coordinator->HasComponent<EnemyTag>(entity)) {
+        } else if (m_Coordinator->HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
             enemies.push_back(entity);
         }
     }

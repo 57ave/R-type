@@ -1,8 +1,9 @@
-#include <FactoryBindings.hpp>
+#include <scripting/FactoryBindings.hpp>
 #include <factories/EnemyFactory.hpp>
 #include <factories/ProjectileFactory.hpp>
 #include <components/MovementPattern.hpp>
 
+namespace RType {
 namespace Scripting {
 
 void FactoryBindings::RegisterFactories(
@@ -72,19 +73,7 @@ void FactoryBindings::RegisterFactories(
         auto* enemyTexture = ctx->textures["enemy"];
         if (!enemyTexture) return 0;
 
-        EnemyTag::Type type;
-        if (enemyType == "basic") type = EnemyTag::Type::BASIC;
-        else if (enemyType == "zigzag") type = EnemyTag::Type::ZIGZAG;
-        else if (enemyType == "sinewave") type = EnemyTag::Type::SINE_WAVE;
-        else if (enemyType == "kamikaze") type = EnemyTag::Type::KAMIKAZE;
-        else if (enemyType == "turret") type = EnemyTag::Type::TURRET;
-        else if (enemyType == "boss") type = EnemyTag::Type::BOSS;
-        else {
-            std::cerr << "[Factory] Unknown enemy type: " << enemyType << std::endl;
-            return 0;
-        }
-
-        return EnemyFactory::CreateEnemy(*ctx->coordinator, type, x, y, enemyTexture, *ctx->spriteList);
+        return EnemyFactory::CreateEnemy(*ctx->coordinator, enemyType, x, y, enemyTexture, *ctx->spriteList);
     };
     lua["Factory"]["CreateEnemy"] = createEnemy;
 
@@ -150,3 +139,4 @@ void FactoryBindings::RegisterFactories(
 }
 
 } // namespace Scripting
+} // namespace RType

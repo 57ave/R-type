@@ -1,7 +1,9 @@
 #include "factories/EnemyFactory.hpp"
+#include "components/ShootEmUpTags.hpp"
 #include <rendering/Types.hpp>
 
 using namespace rtype::engine::rendering;
+using namespace ShootEmUp::Components;
 
 // Helper pour créer le sprite de base
 SFMLSprite* EnemyFactory::CreateEnemySprite(
@@ -39,6 +41,10 @@ ECS::Entity EnemyFactory::CreateBasicEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
+    spriteComp.scaleX = 2.5f;  // Scale pour les ennemis
+    spriteComp.scaleY = 2.5f;
     coordinator.AddComponent(enemy, spriteComp);
 
     // Animation
@@ -56,7 +62,7 @@ ECS::Entity EnemyFactory::CreateBasicEnemy(
 
     // Movement pattern - Simple horizontal
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::STRAIGHT;
+    movementPattern.patternType = "straight";
     movementPattern.speed = 200.0f;
     movementPattern.startX = x;
     movementPattern.startY = y;
@@ -80,7 +86,7 @@ ECS::Entity EnemyFactory::CreateBasicEnemy(
     // Tags
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::BASIC;
+    enemyTag.enemyType = "basic";
     enemyTag.scoreValue = 100;
     enemyTag.aiAggressiveness = 1.0f;
     enemyTag.enemyType = "basic"; // backward compatibility
@@ -106,6 +112,8 @@ ECS::Entity EnemyFactory::CreateZigZagEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     coordinator.AddComponent(enemy, spriteComp);
 
     Animation anim;
@@ -120,7 +128,7 @@ ECS::Entity EnemyFactory::CreateZigZagEnemy(
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::ZIGZAG;
+    movementPattern.patternType = "zigzag";
     movementPattern.speed = 250.0f;
     movementPattern.amplitude = 100.0f;
     movementPattern.frequency = 2.0f;
@@ -143,7 +151,7 @@ ECS::Entity EnemyFactory::CreateZigZagEnemy(
 
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::ZIGZAG;
+    enemyTag.enemyType = "zigzag";
     enemyTag.scoreValue = 200;
     enemyTag.aiAggressiveness = 1.2f;
     enemyTag.enemyType = "zigzag";
@@ -169,6 +177,8 @@ ECS::Entity EnemyFactory::CreateSineWaveEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     coordinator.AddComponent(enemy, spriteComp);
 
     Animation anim;
@@ -183,7 +193,7 @@ ECS::Entity EnemyFactory::CreateSineWaveEnemy(
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::SINE_WAVE;
+    movementPattern.patternType = "sine_wave";
     movementPattern.speed = 200.0f;
     movementPattern.amplitude = 80.0f;
     movementPattern.frequency = 2.5f;
@@ -206,7 +216,7 @@ ECS::Entity EnemyFactory::CreateSineWaveEnemy(
 
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::SINE_WAVE;
+    enemyTag.enemyType = "sine_wave";
     enemyTag.scoreValue = 150;
     enemyTag.aiAggressiveness = 1.1f;
     enemyTag.enemyType = "sine_wave";
@@ -232,6 +242,8 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     coordinator.AddComponent(enemy, spriteComp);
 
     Animation anim;
@@ -246,7 +258,7 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::DIAGONAL_DOWN;
+    movementPattern.patternType = "diagonal_down";
     movementPattern.speed = 400.0f; // Plus rapide!
     movementPattern.startX = x;
     movementPattern.startY = y;
@@ -267,7 +279,7 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
 
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::KAMIKAZE;
+    enemyTag.enemyType = "kamikaze";
     enemyTag.scoreValue = 250;
     enemyTag.aiAggressiveness = 2.0f;
     enemyTag.enemyType = "kamikaze";
@@ -293,6 +305,8 @@ ECS::Entity EnemyFactory::CreateTurretEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     coordinator.AddComponent(enemy, spriteComp);
 
     Animation anim;
@@ -307,7 +321,7 @@ ECS::Entity EnemyFactory::CreateTurretEnemy(
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::STRAIGHT;
+    movementPattern.patternType = "straight";
     movementPattern.speed = 0.0f;
     movementPattern.startX = x;
     movementPattern.startY = y;
@@ -328,7 +342,7 @@ ECS::Entity EnemyFactory::CreateTurretEnemy(
 
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::TURRET;
+    enemyTag.enemyType = "turret";
     enemyTag.scoreValue = 300;
     enemyTag.aiAggressiveness = 1.5f;
     enemyTag.enemyType = "turret";
@@ -354,6 +368,8 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     spriteComp.sprite = sprite;
     spriteComp.textureRect = IntRect(0, 0, 33, 32);
     spriteComp.layer = 5;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     spriteComp.scaleX = 2.0f; // Boss plus gros
     spriteComp.scaleY = 2.0f;
     coordinator.AddComponent(enemy, spriteComp);
@@ -370,7 +386,7 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
-    movementPattern.pattern = MovementPattern::Type::CIRCULAR;
+    movementPattern.patternType = "circular";
     movementPattern.speed = 100.0f;
     movementPattern.amplitude = 150.0f;
     movementPattern.frequency = 1.0f;
@@ -393,7 +409,7 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
 
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
-    enemyTag.type = EnemyTag::Type::BOSS;
+    enemyTag.enemyType = "boss";
     enemyTag.scoreValue = 5000;
     enemyTag.aiAggressiveness = 3.0f;
     enemyTag.enemyType = "boss";
@@ -402,28 +418,28 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     return enemy;
 }
 
-// Factory générique qui dispatche selon le type
+// Factory générique qui dispatche selon le type (string-based)
 ECS::Entity EnemyFactory::CreateEnemy(
     ECS::Coordinator& coordinator,
-    EnemyTag::Type enemyType,
+    const std::string& enemyType,
     float x, float y,
     SFMLTexture* texture,
     std::vector<SFMLSprite*>& spriteList
 ) {
-    switch (enemyType) {
-        case EnemyTag::Type::BASIC:
-            return CreateBasicEnemy(coordinator, x, y, texture, spriteList);
-        case EnemyTag::Type::ZIGZAG:
-            return CreateZigZagEnemy(coordinator, x, y, texture, spriteList);
-        case EnemyTag::Type::SINE_WAVE:
-            return CreateSineWaveEnemy(coordinator, x, y, texture, spriteList);
-        case EnemyTag::Type::KAMIKAZE:
-            return CreateKamikazeEnemy(coordinator, x, y, texture, spriteList);
-        case EnemyTag::Type::TURRET:
-            return CreateTurretEnemy(coordinator, x, y, texture, spriteList);
-        case EnemyTag::Type::BOSS:
-            return CreateBossEnemy(coordinator, x, y, texture, spriteList);
-        default:
-            return CreateBasicEnemy(coordinator, x, y, texture, spriteList);
+    if (enemyType == "basic") {
+        return CreateBasicEnemy(coordinator, x, y, texture, spriteList);
+    } else if (enemyType == "zigzag") {
+        return CreateZigZagEnemy(coordinator, x, y, texture, spriteList);
+    } else if (enemyType == "sine_wave") {
+        return CreateSineWaveEnemy(coordinator, x, y, texture, spriteList);
+    } else if (enemyType == "kamikaze") {
+        return CreateKamikazeEnemy(coordinator, x, y, texture, spriteList);
+    } else if (enemyType == "turret") {
+        return CreateTurretEnemy(coordinator, x, y, texture, spriteList);
+    } else if (enemyType == "boss") {
+        return CreateBossEnemy(coordinator, x, y, texture, spriteList);
+    } else {
+        // Default to basic if unknown type
+        return CreateBasicEnemy(coordinator, x, y, texture, spriteList);
     }
 }

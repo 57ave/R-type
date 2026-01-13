@@ -44,16 +44,25 @@ void RenderSystem::Update(float /*dt*/)
     static int frameCounter = 0;
     if (frameCounter++ % 60 == 0) {  // Every 60 frames
         int enemyCount = 0;
+        int bulletCount = 0;
+        int playerBulletCount = 0;
+        int enemyBulletCount = 0;
         for (auto entity : renderableEntities) {
             if (coordinator_->HasComponent<Tag>(entity)) {
                 auto& tag = coordinator_->GetComponent<Tag>(entity);
                 if (tag.name == "Enemy") {
                     enemyCount++;
+                } else if (tag.name == "PlayerBullet") {
+                    playerBulletCount++;
+                } else if (tag.name == "EnemyBullet") {
+                    enemyBulletCount++;
                 }
             }
         }
         std::cout << "[RenderSystem] Rendering " << renderableEntities.size() 
-                  << " entities (" << enemyCount << " enemies)" << std::endl;
+                  << " entities (" << enemyCount << " enemies, " 
+                  << playerBulletCount << " player bullets, " 
+                  << enemyBulletCount << " enemy bullets)" << std::endl;
     }
 
     // Sort by layer (lower layer = drawn first = background)

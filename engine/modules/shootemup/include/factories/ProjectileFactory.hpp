@@ -9,9 +9,11 @@
 #include <components/Sprite.hpp>
 #include <components/Animation.hpp>
 #include <components/Collider.hpp>
-#include <components/Weapon.hpp>
+#include <components/Damage.hpp>
 #include <components/Tag.hpp>
 #include <components/Lifetime.hpp>
+#include <components/Weapon.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <vector>
 
 using namespace rtype::engine::rendering::sfml;
@@ -98,11 +100,12 @@ public:
     );
 
     /**
-     * @brief Factory générique qui dispatche selon le type
+     * @brief Factory générique qui dispatche selon le type (string-based)
+     * @param projectileType Type de projectile défini en Lua (ex: "normal", "laser", "homing")
      */
     static ECS::Entity CreateProjectile(
         ECS::Coordinator& coordinator,
-        ProjectileTag::Type projectileType,
+        const std::string& projectileType,
         float x, float y,
         SFMLTexture* texture,
         std::vector<SFMLSprite*>& spriteList,

@@ -121,8 +121,8 @@ void FireSpreadShot(float x, float y) {
         // Ajuster la vélocité selon l'angle
         auto& vel = gCoordinator.GetComponent<Velocity>(proj);
         float radians = angle * 3.14159f / 180.0f;
-        vel.vx = std::cos(radians) * 1000.0f;
-        vel.vy = std::sin(radians) * 1000.0f;
+        vel.dx = std::cos(radians) * 1000.0f;
+        vel.dy = std::sin(radians) * 1000.0f;
         
         RegisterEntity(proj);
     }

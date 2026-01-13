@@ -27,35 +27,9 @@ void LifetimeSystem::Update(float dt) {
             }
         }
         
-        // Check projectile lifetime - WRAPPED IN TRY-CATCH since Projectile may not be registered
-        try {
-            if (m_Coordinator->HasComponent<rtype::engine::ECS::Projectile>(entity)) {
-                auto& projectile = m_Coordinator->GetComponent<rtype::engine::ECS::Projectile>(entity);
-                projectile.lifetime -= dt;
-                
-                if (projectile.lifetime <= 0) {
-                    shouldDestroy = true;
-                }
-            }
-        } catch (const std::exception&) {
-            // Projectile component not registered - skip this check
-        }
-        
-        // Check power-up duration - WRAPPED IN TRY-CATCH since PowerUp may not be registered
-        try {
-            if (m_Coordinator->HasComponent<rtype::engine::ECS::PowerUp>(entity)) {
-                auto& powerup = m_Coordinator->GetComponent<rtype::engine::ECS::PowerUp>(entity);
-                if (powerup.duration > 0) {
-                    powerup.duration -= dt;
-                    
-                    if (powerup.duration <= 0) {
-                        shouldDestroy = true;
-                    }
-                }
-            }
-        } catch (const std::exception&) {
-            // PowerUp component not registered - skip this check
-        }
+        // NOTE: Game-specific lifetime components (Projectile, PowerUp, etc.) removed
+        // The generic Lifetime component handles all entity lifetime management
+        // Games can extend this system or create their own for specific behavior
         
         if (shouldDestroy) {
             toDestroy.push_back(entity);

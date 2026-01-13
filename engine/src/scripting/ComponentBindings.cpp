@@ -2,18 +2,14 @@
 
 namespace Scripting {
 
-// Use ECS namespace for components
+// Use ECS namespace for GENERIC components only
 using rtype::engine::ECS::Transform;
 using rtype::engine::ECS::Velocity;
 using rtype::engine::ECS::Sprite;
 using rtype::engine::ECS::Health;
 using rtype::engine::ECS::Damage;
-using rtype::engine::ECS::AIController;
 using rtype::engine::ECS::Collider;
-using rtype::engine::ECS::Player;
-using rtype::engine::ECS::Enemy;
-using rtype::engine::ECS::Projectile;
-using rtype::engine::ECS::PowerUp;
+using rtype::engine::ECS::Tag;
 
 void ComponentBindings::RegisterAll(sol::state& lua) {
     RegisterTransform(lua);
@@ -21,12 +17,8 @@ void ComponentBindings::RegisterAll(sol::state& lua) {
     RegisterSprite(lua);
     RegisterHealth(lua);
     RegisterDamage(lua);
-    RegisterAIController(lua);
     RegisterCollider(lua);
-    RegisterPlayer(lua);
-    RegisterEnemy(lua);
-    RegisterProjectile(lua);
-    RegisterPowerUp(lua);
+    RegisterTag(lua);
 }
 
 void ComponentBindings::RegisterTransform(sol::state& lua) {
@@ -52,7 +44,9 @@ void ComponentBindings::RegisterSprite(sol::state& lua) {
         sol::constructors<Sprite(), Sprite(const std::string&, int, int)>(),
         "texturePath", &Sprite::texturePath,
         "width", &Sprite::width,
-        "height", &Sprite::height
+        "height", &Sprite::height,
+        "layer", &Sprite::layer,
+        "visible", &Sprite::visible
     );
 }
 
@@ -60,7 +54,10 @@ void ComponentBindings::RegisterHealth(sol::state& lua) {
     lua.new_usertype<Health>("Health",
         sol::constructors<Health(), Health(int, int)>(),
         "current", &Health::current,
-        "maximum", &Health::maximum
+        "maximum", &Health::maximum,
+        "IsAlive", &Health::IsAlive,
+        "TakeDamage", &Health::TakeDamage,
+        "Heal", &Health::Heal
     );
 }
 
@@ -68,20 +65,6 @@ void ComponentBindings::RegisterDamage(sol::state& lua) {
     lua.new_usertype<Damage>("Damage",
         sol::constructors<Damage(), Damage(int)>(),
         "value", &Damage::value
-    );
-}
-
-void ComponentBindings::RegisterAIController(sol::state& lua) {
-    lua.new_usertype<AIController>("AIController",
-        sol::constructors<AIController()>(),
-        "pattern", &AIController::pattern,
-        "timer", &AIController::timer,
-        "shootTimer", &AIController::shootTimer,
-        "shootInterval", &AIController::shootInterval,
-        "centerX", &AIController::centerX,
-        "centerY", &AIController::centerY,
-        "circleRadius", &AIController::circleRadius,
-        "targetY", &AIController::targetY
     );
 }
 
@@ -93,44 +76,10 @@ void ComponentBindings::RegisterCollider(sol::state& lua) {
     );
 }
 
-void ComponentBindings::RegisterPlayer(sol::state& lua) {
-    lua.new_usertype<Player>("Player",
-        sol::constructors<Player(), Player(int)>(),
-        "playerID", &Player::playerID,
-        "score", &Player::score
-    );
-}
-
-void ComponentBindings::RegisterEnemy(sol::state& lua) {
-    lua.new_usertype<Enemy>("Enemy",
-        sol::constructors<Enemy(), Enemy(int)>(),
-        "scoreValue", &Enemy::scoreValue
-    );
-}
-
-void ComponentBindings::RegisterProjectile(sol::state& lua) {
-    lua.new_usertype<Projectile>("Projectile",
-        sol::constructors<Projectile(), Projectile(int, float)>(),
-        "ownerID", &Projectile::ownerID,
-        "lifetime", &Projectile::lifetime
-    );
-}
-
-void ComponentBindings::RegisterPowerUp(sol::state& lua) {
-    // Register PowerUp enum
-    lua.new_enum("PowerUpType",
-        "SPEED_BOOST", PowerUp::SPEED_BOOST,
-        "DAMAGE_BOOST", PowerUp::DAMAGE_BOOST,
-        "HEALTH_RESTORE", PowerUp::HEALTH_RESTORE,
-        "SHIELD", PowerUp::SHIELD,
-        "WEAPON_UPGRADE", PowerUp::WEAPON_UPGRADE
-    );
-    
-    lua.new_usertype<PowerUp>("PowerUp",
-        sol::constructors<PowerUp(), PowerUp(PowerUp::Type, float, int)>(),
-        "type", &PowerUp::type,
-        "duration", &PowerUp::duration,
-        "value", &PowerUp::value
+void ComponentBindings::RegisterTag(sol::state& lua) {
+    lua.new_usertype<Tag>("Tag",
+        sol::constructors<Tag(), Tag(const std::string&)>(),
+        "value", &Tag::value
     );
 }
 
@@ -141,7 +90,7 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
     // Create global Coordinator table
     lua["Coordinator"] = lua.create_table();
     
-    // Entity management using std::function
+    // ===== Entity management =====
     std::function<ECS::Entity()> createEntity = [coordinator]() {
         return coordinator->CreateEntity();
     };
@@ -158,7 +107,7 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
     };
     lua["Coordinator"]["GetLivingEntityCount"] = getLivingCount;
 
-    // Component management - Transform
+    // ===== Transform Component =====
     std::function<void(ECS::Entity, Transform)> addTransform = [coordinator](ECS::Entity entity, Transform comp) {
         coordinator->AddComponent(entity, comp);
     };
@@ -174,7 +123,7 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
     };
     lua["Coordinator"]["HasTransform"] = hasTransform;
 
-    // Component management - Velocity
+    // ===== Velocity Component =====
     std::function<void(ECS::Entity, Velocity)> addVelocity = [coordinator](ECS::Entity entity, Velocity comp) {
         coordinator->AddComponent(entity, comp);
     };
@@ -184,8 +133,13 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
         return coordinator->GetComponent<Velocity>(entity);
     };
     lua["Coordinator"]["GetVelocity"] = getVelocity;
+    
+    std::function<bool(ECS::Entity)> hasVelocity = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Velocity>(entity);
+    };
+    lua["Coordinator"]["HasVelocity"] = hasVelocity;
 
-    // Component management - Sprite
+    // ===== Sprite Component =====
     std::function<void(ECS::Entity, Sprite)> addSprite = [coordinator](ECS::Entity entity, Sprite comp) {
         coordinator->AddComponent(entity, comp);
     };
@@ -195,8 +149,13 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
         return coordinator->GetComponent<Sprite>(entity);
     };
     lua["Coordinator"]["GetSprite"] = getSprite;
+    
+    std::function<bool(ECS::Entity)> hasSprite = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Sprite>(entity);
+    };
+    lua["Coordinator"]["HasSprite"] = hasSprite;
 
-    // Component management - Health
+    // ===== Health Component =====
     std::function<void(ECS::Entity, Health)> addHealth = [coordinator](ECS::Entity entity, Health comp) {
         coordinator->AddComponent(entity, comp);
     };
@@ -206,19 +165,29 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
         return coordinator->GetComponent<Health>(entity);
     };
     lua["Coordinator"]["GetHealth"] = getHealth;
+    
+    std::function<bool(ECS::Entity)> hasHealth = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Health>(entity);
+    };
+    lua["Coordinator"]["HasHealth"] = hasHealth;
 
-    // Component management - AIController
-    std::function<void(ECS::Entity, AIController)> addAI = [coordinator](ECS::Entity entity, AIController comp) {
+    // ===== Damage Component =====
+    std::function<void(ECS::Entity, Damage)> addDamage = [coordinator](ECS::Entity entity, Damage comp) {
         coordinator->AddComponent(entity, comp);
     };
-    lua["Coordinator"]["AddAIController"] = addAI;
+    lua["Coordinator"]["AddDamage"] = addDamage;
     
-    std::function<AIController&(ECS::Entity)> getAI = [coordinator](ECS::Entity entity) -> AIController& {
-        return coordinator->GetComponent<AIController>(entity);
+    std::function<Damage&(ECS::Entity)> getDamage = [coordinator](ECS::Entity entity) -> Damage& {
+        return coordinator->GetComponent<Damage>(entity);
     };
-    lua["Coordinator"]["GetAIController"] = getAI;
+    lua["Coordinator"]["GetDamage"] = getDamage;
+    
+    std::function<bool(ECS::Entity)> hasDamage = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Damage>(entity);
+    };
+    lua["Coordinator"]["HasDamage"] = hasDamage;
 
-    // Component management - Collider
+    // ===== Collider Component =====
     std::function<void(ECS::Entity, Collider)> addCollider = [coordinator](ECS::Entity entity, Collider comp) {
         coordinator->AddComponent(entity, comp);
     };
@@ -228,6 +197,27 @@ void ComponentBindings::RegisterCoordinator(sol::state& lua, ECS::Coordinator* c
         return coordinator->GetComponent<Collider>(entity);
     };
     lua["Coordinator"]["GetCollider"] = getCollider;
+    
+    std::function<bool(ECS::Entity)> hasCollider = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Collider>(entity);
+    };
+    lua["Coordinator"]["HasCollider"] = hasCollider;
+
+    // ===== Tag Component =====
+    std::function<void(ECS::Entity, Tag)> addTag = [coordinator](ECS::Entity entity, Tag comp) {
+        coordinator->AddComponent(entity, comp);
+    };
+    lua["Coordinator"]["AddTag"] = addTag;
+    
+    std::function<Tag&(ECS::Entity)> getTag = [coordinator](ECS::Entity entity) -> Tag& {
+        return coordinator->GetComponent<Tag>(entity);
+    };
+    lua["Coordinator"]["GetTag"] = getTag;
+    
+    std::function<bool(ECS::Entity)> hasTag = [coordinator](ECS::Entity entity) {
+        return coordinator->HasComponent<Tag>(entity);
+    };
+    lua["Coordinator"]["HasTag"] = hasTag;
 }
 
 } // namespace Scripting

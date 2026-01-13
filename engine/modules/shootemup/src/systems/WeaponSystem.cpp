@@ -1,10 +1,13 @@
 #include <systems/WeaponSystem.hpp>
 #include <components/Weapon.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
 #include <components/Sprite.hpp>
 #include <components/Tag.hpp>
 #include <ecs/Coordinator.hpp>
+
+using namespace ShootEmUp::Components;
 
 WeaponSystem::WeaponSystem()
     : coordinator_(nullptr)
@@ -64,14 +67,15 @@ void WeaponSystem::CreateProjectile(ECS::Entity owner, bool charged, int chargeL
     
     // Add Velocity
     Velocity projVel;
-    projVel.vx = charged ? 1500.0f : 1000.0f;
-    projVel.vy = 0.0f;
+    projVel.dx = charged ? 1500.0f : 1000.0f;
+    projVel.dy = 0.0f;
     coordinator_->AddComponent<Velocity>(projectile, projVel);
     
     // Add Tag
-    ProjectileTag projTag;
+    ShootEmUp::Components::ProjectileTag projTag;
     projTag.ownerId = static_cast<int>(owner);
-    coordinator_->AddComponent<ProjectileTag>(projectile, projTag);
+    projTag.isPlayerProjectile = true; // TODO: determine from owner
+    coordinator_->AddComponent<ShootEmUp::Components::ProjectileTag>(projectile, projTag);
     
     // TODO: Add Sprite, Animation, Collider components
 }
