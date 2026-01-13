@@ -5,6 +5,7 @@
 #include <mutex>
 #include <thread>
 #include <utility>
+#include "RoomManager.hpp"
 #include "UdpServer.hpp"
 #include "Packet.hpp"
 
@@ -19,9 +20,7 @@ public:
     bool hasReceivedPackets();
     std::pair<NetworkPacket, asio::ip::udp::endpoint> getNextReceivedPacket();
     
-    void broadcast(const NetworkPacket& packet);
-    void sendTo(const NetworkPacket& packet, const asio::ip::udp::endpoint& endpoint);
-    void checkTimeouts();
+    RoomManager& getRoomManager() { return roomManager_; }
 
 private:
     asio::io_context io_context_;
@@ -29,4 +28,5 @@ private:
     UdpServer server_;
     std::queue<std::pair<NetworkPacket, asio::ip::udp::endpoint>> receivedPackets_;
     std::mutex packetsMutex_;
+    RoomManager roomManager_;
 };
