@@ -4,18 +4,8 @@
 
 namespace Scripting {
 
-// Use ECS namespace for components
-using ECS::Transform;
-using ECS::Velocity;
-using ECS::Sprite;
-using ECS::Health;
-using ECS::Damage;
-using ECS::AIController;
-using ECS::Collider;
-using ECS::Player;
-using ECS::Enemy;
-using ECS::Projectile;
-using ECS::PowerUp;
+// Use correct namespace for components
+using namespace rtype::engine::ECS;
 
 bool PrefabManager::LoadPrefab(const std::string& name, const std::string& scriptPath) {
     auto& lua = LuaState::Instance().GetState();

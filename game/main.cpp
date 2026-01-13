@@ -849,20 +849,35 @@ int main(int argc, char* argv[])
     // God mode state (used by console command)
     bool godMode = false;
     
+    // Debug visualization states
+    bool showHitboxes = false;
+    bool showEntityInfo = false;
+    bool debugMode = false; // Allows cheat commands even in network mode (for testing)
+    
     // ========================================
     // REGISTER GAME-SPECIFIC CONSOLE COMMANDS
     // ========================================
+    
+    // Debug mode toggle - allows cheats in network mode for testing
+    devConsole.registerCommand("debug", "Toggle debug mode (allows cheats in network)", "debug",
+        [&](const std::vector<std::string>&) -> std::string {
+            debugMode = !debugMode;
+            return debugMode ? "Debug mode ON - Cheats enabled (may desync!)" : "Debug mode OFF";
+        });
+    
     devConsole.registerCommand("spawn", "Spawn an enemy", "spawn [x] [y]",
         [&](const std::vector<std::string>& args) -> std::string {
-            if (networkMode) {
-                return "Cannot spawn in network mode (server controls entities)";
+            if (networkMode && !debugMode) {
+                return "Cannot spawn in network mode. Use 'debug' to enable cheats (will desync)";
             }
             float x = 1920.0f;
             float y = 500.0f;
             if (args.size() > 1) x = std::stof(args[1]);
             if (args.size() > 2) y = std::stof(args[2]);
             CreateEnemy(x, y, MovementPattern::Type::STRAIGHT);
-            return "Spawned enemy at (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+            std::string result = "Spawned enemy at (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+            if (networkMode) result += " [LOCAL ONLY - DESYNCED]";
+            return result;
         });
     
     devConsole.registerCommand("entities", "Show entity count", "entities",
@@ -872,8 +887,8 @@ int main(int argc, char* argv[])
     
     devConsole.registerCommand("kill", "Destroy all enemies", "kill",
         [&](const std::vector<std::string>&) -> std::string {
-            if (networkMode) {
-                return "Cannot kill in network mode (server controls entities)";
+            if (networkMode && !debugMode) {
+                return "Cannot kill in network mode. Use 'debug' to enable cheats (will desync)";
             }
             int count = 0;
             for (auto entity : allEntities) {
@@ -882,14 +897,24 @@ int main(int argc, char* argv[])
                     count++;
                 }
             }
-            return "Marked " + std::to_string(count) + " enemies for destruction";
+            std::string result = "Marked " + std::to_string(count) + " enemies for destruction";
+            if (networkMode) result += " [LOCAL ONLY - DESYNCED]";
+            return result;
         });
     
     devConsole.registerCommand("god", "Toggle god mode (invincibility)", "god",
         [&](const std::vector<std::string>&) -> std::string {
             godMode = !godMode;
-            if (!networkMode && player != 0 && gCoordinator.HasComponent<Health>(player)) {
-                auto& health = gCoordinator.GetComponent<Health>(player);
+            // Find player entity (works in both modes)
+            ECS::Entity playerEntity = 0;
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<PlayerTag>(entity)) {
+                    playerEntity = entity;
+                    break;
+                }
+            }
+            if (playerEntity != 0 && gCoordinator.HasComponent<Health>(playerEntity)) {
+                auto& health = gCoordinator.GetComponent<Health>(playerEntity);
                 if (godMode) {
                     health.current = 99999;
                     health.max = 99999;
@@ -898,13 +923,15 @@ int main(int argc, char* argv[])
                     health.max = 100;
                 }
             }
-            return godMode ? "God mode ON" : "God mode OFF";
+            std::string result = godMode ? "God mode ON" : "God mode OFF";
+            if (networkMode) result += " [LOCAL - server may override]";
+            return result;
         });
     
     devConsole.registerCommand("spawn_wave", "Spawn a wave of enemies", "spawn_wave [count]",
         [&](const std::vector<std::string>& args) -> std::string {
-            if (networkMode) {
-                return "Cannot spawn in network mode (server controls entities)";
+            if (networkMode && !debugMode) {
+                return "Cannot spawn in network mode. Use 'debug' to enable cheats (will desync)";
             }
             int count = 5;
             if (args.size() > 1) count = std::stoi(args[1]);
@@ -919,24 +946,36 @@ int main(int argc, char* argv[])
                 float y = 100.0f + (i * (800.0f / count));
                 CreateEnemy(1920.0f + 50.0f + (i * 50.0f), y, patterns[i % 5]);
             }
-            return "Spawned wave of " + std::to_string(count) + " enemies";
+            std::string result = "Spawned wave of " + std::to_string(count) + " enemies";
+            if (networkMode) result += " [LOCAL ONLY - DESYNCED]";
+            return result;
         });
     
     devConsole.registerCommand("teleport", "Teleport player", "teleport <x> <y>",
         [&](const std::vector<std::string>& args) -> std::string {
-            if (networkMode) {
-                return "Cannot teleport in network mode";
+            if (networkMode && !debugMode) {
+                return "Cannot teleport in network mode. Use 'debug' to enable cheats";
             }
             if (args.size() < 3) {
                 return "Usage: teleport <x> <y>";
             }
             float x = std::stof(args[1]);
             float y = std::stof(args[2]);
-            if (player != 0 && gCoordinator.HasComponent<Position>(player)) {
-                auto& pos = gCoordinator.GetComponent<Position>(player);
+            // Find player entity
+            ECS::Entity playerEntity = 0;
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<PlayerTag>(entity)) {
+                    playerEntity = entity;
+                    break;
+                }
+            }
+            if (playerEntity != 0 && gCoordinator.HasComponent<Position>(playerEntity)) {
+                auto& pos = gCoordinator.GetComponent<Position>(playerEntity);
                 pos.x = x;
                 pos.y = y;
-                return "Teleported to (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+                std::string result = "Teleported to (" + std::to_string(x) + ", " + std::to_string(y) + ")";
+                if (networkMode) result += " [LOCAL - will rubber-band]";
+                return result;
             }
             return "No player to teleport";
         });
@@ -950,6 +989,116 @@ int main(int argc, char* argv[])
             std::ostringstream ss;
             ss << "Network: " << stats.packetsSent << " sent, " << stats.packetsReceived << " recv, "
                << std::fixed << std::setprecision(1) << stats.latencyMs << "ms latency";
+            return ss.str();
+        });
+    
+    // Show hitboxes (works in all modes - visual only)
+    devConsole.registerCommand("hitboxes", "Toggle hitbox visualization", "hitboxes",
+        [&](const std::vector<std::string>&) -> std::string {
+            showHitboxes = !showHitboxes;
+            return showHitboxes ? "Hitboxes visible" : "Hitboxes hidden";
+        });
+    
+    // Show entity info (works in all modes - visual only)
+    devConsole.registerCommand("entityinfo", "Toggle entity info display", "entityinfo",
+        [&](const std::vector<std::string>&) -> std::string {
+            showEntityInfo = !showEntityInfo;
+            return showEntityInfo ? "Entity info visible" : "Entity info hidden";
+        });
+    
+    // List all entities with details (works in all modes)
+    devConsole.registerCommand("list", "List all entities", "list [type]",
+        [&](const std::vector<std::string>& args) -> std::string {
+            std::ostringstream ss;
+            std::string filter = args.size() > 1 ? args[1] : "";
+            int count = 0;
+            
+            for (auto entity : allEntities) {
+                std::string tag = "unknown";
+                if (gCoordinator.HasComponent<Tag>(entity)) {
+                    tag = gCoordinator.GetComponent<Tag>(entity).name;
+                }
+                
+                // Filter if specified
+                if (!filter.empty() && tag.find(filter) == std::string::npos) {
+                    continue;
+                }
+                
+                ss << "#" << entity << " [" << tag << "]";
+                
+                if (gCoordinator.HasComponent<Position>(entity)) {
+                    auto& pos = gCoordinator.GetComponent<Position>(entity);
+                    ss << " pos(" << (int)pos.x << "," << (int)pos.y << ")";
+                }
+                if (gCoordinator.HasComponent<Health>(entity)) {
+                    auto& hp = gCoordinator.GetComponent<Health>(entity);
+                    ss << " hp:" << hp.current << "/" << hp.max;
+                }
+                ss << "\n";
+                count++;
+                
+                if (count >= 20) {
+                    ss << "... and " << (allEntities.size() - 20) << " more\n";
+                    break;
+                }
+            }
+            
+            if (count == 0) {
+                return "No entities found" + (filter.empty() ? "" : " matching '" + filter + "'");
+            }
+            return ss.str();
+        });
+    
+    // Player info (works in all modes)
+    devConsole.registerCommand("player", "Show player info", "player",
+        [&](const std::vector<std::string>&) -> std::string {
+            std::ostringstream ss;
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<PlayerTag>(entity)) {
+                    ss << "Player Entity #" << entity << "\n";
+                    if (gCoordinator.HasComponent<Position>(entity)) {
+                        auto& pos = gCoordinator.GetComponent<Position>(entity);
+                        ss << "  Position: (" << pos.x << ", " << pos.y << ")\n";
+                    }
+                    if (gCoordinator.HasComponent<Velocity>(entity)) {
+                        auto& vel = gCoordinator.GetComponent<Velocity>(entity);
+                        ss << "  Velocity: (" << vel.vx << ", " << vel.vy << ")\n";
+                    }
+                    if (gCoordinator.HasComponent<Health>(entity)) {
+                        auto& hp = gCoordinator.GetComponent<Health>(entity);
+                        ss << "  Health: " << hp.current << "/" << hp.max << "\n";
+                    }
+                    if (gCoordinator.HasComponent<NetworkId>(entity)) {
+                        auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
+                        ss << "  Network ID: " << netId.id << (netId.isLocal ? " (local)" : "") << "\n";
+                    }
+                }
+            }
+            if (ss.str().empty()) {
+                return "No player entity found";
+            }
+            return ss.str();
+        });
+    
+    // Set time scale (visual slowmo - works in all modes for debugging)
+    devConsole.registerCommand("timescale", "Set time scale (0.1-2.0)", "timescale <value>",
+        [&](const std::vector<std::string>& args) -> std::string {
+            static float timeScale = 1.0f;
+            if (args.size() < 2) {
+                return "Current time scale: " + std::to_string(timeScale);
+            }
+            timeScale = std::clamp(std::stof(args[1]), 0.1f, 2.0f);
+            return "Time scale set to " + std::to_string(timeScale);
+        });
+    
+    // Mode info
+    devConsole.registerCommand("mode", "Show current game mode", "mode",
+        [&](const std::vector<std::string>&) -> std::string {
+            std::ostringstream ss;
+            ss << "Game Mode: " << (networkMode ? "NETWORK" : "LOCAL") << "\n";
+            ss << "Debug Mode: " << (debugMode ? "ON" : "OFF") << "\n";
+            ss << "God Mode: " << (godMode ? "ON" : "OFF") << "\n";
+            ss << "Entities: " << allEntities.size();
             return ss.str();
         });
     

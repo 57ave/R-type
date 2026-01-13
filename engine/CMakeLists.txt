@@ -160,6 +160,12 @@ endif()
 if(LUA_FOUND)
     add_library(scripting STATIC
         src/scripting/LuaState.cpp
+        src/scripting/ComponentBindings.cpp
+        src/scripting/DevConsoleBindings.cpp
+        src/scripting/GameBindings.cpp
+        src/scripting/PrefabManager.cpp
+        src/scripting/ScriptSystem.cpp
+        src/scripting/ScriptingManager.cpp
     )
 
     target_include_directories(scripting PUBLIC
@@ -170,12 +176,16 @@ if(LUA_FOUND)
 
     target_link_libraries(scripting PUBLIC
         ecs
+        core
         ${LUA_LIBRARIES}
     )
+    
+    target_compile_definitions(scripting PUBLIC RTYPE_SCRIPTING_ENABLED=1)
 else()
     message(STATUS "Lua not found. Scripting library will not be built.")
     # Create an INTERFACE library as placeholder
     add_library(scripting INTERFACE)
+    target_compile_definitions(scripting INTERFACE RTYPE_SCRIPTING_ENABLED=0)
 endif()
 
 # System libraries
