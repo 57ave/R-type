@@ -81,6 +81,10 @@ void RenderSystem::Update(float /*dt*/)
         if (!spr.sprite)
             continue; // nothing to draw
 
+        // Skip sprites with zero scale (hidden/finished animations)
+        if (spr.scaleX <= 0.0f || spr.scaleY <= 0.0f)
+            continue;
+
         // Build transform from Position
         rtype::engine::rendering::Transform t;
         t.position.x = pos.x;

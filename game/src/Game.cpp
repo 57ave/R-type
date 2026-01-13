@@ -366,7 +366,7 @@ ECS::Entity Game::CreateExplosion(float x, float y) {
     // Lifetime (destroy after animation finishes)
     std::cout << "[CreateExplosion] Adding Lifetime component..." << std::endl;
     Lifetime lifetime;
-    lifetime.maxLifetime = 0.5f; // 1 second before disappearing
+    lifetime.maxLifetime = 0.05f; // Very short lifetime
     gCoordinator.AddComponent(explosion, lifetime);
 
     // Tag for identification
@@ -786,8 +786,8 @@ int Game::Run(int argc, char* argv[])
                     anim.spacing = 1.5;
                     gCoordinator.AddComponent(entity, anim);
                     
-                    // Add lifetime
-                    gCoordinator.AddComponent(entity, Lifetime{0.5f});
+                    // Add lifetime - very short
+                    gCoordinator.AddComponent(entity, Lifetime{0.05f});
                     
                     std::cout << "[Game] Created explosion sprite for entity " << entity << std::endl;
                 }
@@ -1226,7 +1226,7 @@ int Game::Run(int argc, char* argv[])
 
                         // Add lifetime component so explosion disappears after animation
                         Lifetime lifetime;
-                        lifetime.maxLifetime = 0.5f;  // Match CreateExplosion
+                        lifetime.maxLifetime = 0.05f;  // Very short lifetime
                         lifetime.timeAlive = 0.0f;
                         gCoordinator.AddComponent(entity, lifetime);
 
