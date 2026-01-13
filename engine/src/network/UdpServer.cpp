@@ -28,7 +28,7 @@ void UdpServer::handleReceive(const std::error_code& error, std::size_t bytes_tr
             NetworkPacket packet = NetworkPacket::deserialize(recvBuffer_.data(), bytes_transferred);
 
             if (packet.header.magic != 0x5254 || packet.header.version != 1) {
-                // Invalid packet, ignore
+
             } else {
                 handleClientSession(receiverEndpoint_, packet);
 
@@ -43,7 +43,7 @@ void UdpServer::handleReceive(const std::error_code& error, std::size_t bytes_tr
         std::cerr << "[Server] Receive error: " << error.message() << std::endl;
     }
 
-    // Continue listening
+
     startReceive();
 }
 
@@ -57,19 +57,17 @@ void UdpServer::handleClientSession(const udp::endpoint& sender, const NetworkPa
 
     if (it == sessions_.end()) {
         // New Client
-        // Only accept if it's a CLIENT_HELLO (strict mode) or just accept implicitely (loose mode)
-        // For robustness, usually we wait for HELLO, but for now we auto-add.
         
         std::cout << "[Server] New session: " << key << " (ID: " << (int)nextPlayerId_ << ")" << std::endl;
         auto session = std::make_shared<ClientSession>(sender, nextPlayerId_++);
         sessions_[key] = session;
         
-        // Auto-reply Welcome could go here or in main loop
+
     } else {
-        // Existing Client: Update Keep Alive
+
         it->second->updateLastPacketTime();
         
-        // Simple Seq check (can be advanced to drop duplicates)
+
         if (packet.header.seq > it->second->lastSequenceNumber) {
             it->second->lastSequenceNumber = packet.header.seq;
         }
@@ -92,7 +90,7 @@ void UdpServer::sendTo(const NetworkPacket& packet, const udp::endpoint& endpoin
     auto buffer = packet.serialize();
     socket_.async_send_to(asio::buffer(buffer), endpoint,
         [](const std::error_code& /*error*/, std::size_t /*bytes_transferred*/) {
-            // Handle send error if needed
+
         });
 }
 
@@ -110,18 +108,30 @@ void UdpServer::broadcast(const NetworkPacket& packet) {
 
 void UdpServer::checkTimeouts() {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
-    auto now = std::chrono::steady_clock::now();
     
-    // timeout threshold (e.g., 5 seconds)
+
     auto timeout = std::chrono::seconds(5);
 
     for (auto it = sessions_.begin(); it != sessions_.end();) {
         if (it->second->isTimedOut(timeout)) {
             std::cout << "[Server] Client timed out: " << it->first << std::endl;
-            // Notify others could happen here (CLIENT_LEFT)
+
             it = sessions_.erase(it);
         } else {
             ++it;
         }
     }
+}
+
+std::shared_ptr<ClientSession> UdpServer::getSession(const udp::endpoint& endpoint) {
+    std::stringstream ss;
+    ss << endpoint;
+    std::string key = ss.str();
+
+    std::lock_guard<std::mutex> lock(sessionsMutex_);
+    auto it = sessions_.find(key);
+    if (it != sessions_.end()) {
+        return it->second;
+    }
+    return nullptr;
 }
