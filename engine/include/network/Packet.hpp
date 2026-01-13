@@ -5,6 +5,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <iostream>
+#include "Serializer.hpp"
 
 #ifdef __APPLE__
 #include <machine/endian.h>
@@ -15,26 +16,28 @@
 #pragma pack(push, 1)
 
 struct PacketHeader {
-    uint16_t magic;      // 0x5254 ('RT') but could be anything generic
+    uint16_t magic;      // 0x5254 ('RT')
     uint8_t  version;    // Protocol version
-    uint16_t type;       // Generic Packet type (ID) - User casts this to their specific Enum
+    uint8_t  flags;      // Flags (1 = Compressed)
+    uint16_t type;       // Packet type
     uint32_t seq;        // Sequence number
     uint32_t timestamp;  // Timestamp in ms
 
-    PacketHeader() : magic(0x5254), version(1), type(0), seq(0), timestamp(0) {}
+    PacketHeader() : magic(0x5254), version(1), flags(0), type(0), seq(0), timestamp(0) {}
+
+
 
     // Serialize to buffer
     std::vector<char> serialize() const {
-        std::vector<char> buffer(sizeof(*this));
-        std::memcpy(buffer.data(), this, sizeof(*this));
-        return buffer;
+        Network::Serializer serializer;
+        serializer.write(*this);
+        return serializer.getBuffer();
     }
 
     // Deserialize from buffer
     static PacketHeader deserialize(const char* data) {
-        PacketHeader header;
-        std::memcpy(&header, data, sizeof(header));
-        return header;
+        Network::Deserializer deserializer(data, sizeof(PacketHeader));
+        return deserializer.read<PacketHeader>();
     }
 };
 
@@ -52,12 +55,12 @@ public:
 
     // Serialize full packet (header + payload)
     std::vector<char> serialize() const {
-        std::vector<char> buffer(sizeof(PacketHeader) + payload.size());
-        std::memcpy(buffer.data(), &header, sizeof(PacketHeader));
+        Network::Serializer serializer;
+        serializer.write(header);
         if (!payload.empty()) {
-            std::memcpy(buffer.data() + sizeof(PacketHeader), payload.data(), payload.size());
+            serializer.writeBytes(payload.data(), payload.size());
         }
-        return buffer;
+        return serializer.getBuffer();
     }
 
     // Deserialize full packet from buffer
@@ -65,12 +68,15 @@ public:
         if (size < sizeof(PacketHeader)) {
             throw std::runtime_error("Packet too short");
         }
+        Network::Deserializer deserializer(data, size);
+        
         NetworkPacket packet;
-        packet.header = PacketHeader::deserialize(data);
+        packet.header = deserializer.read<PacketHeader>();
+        
+        // Remaining bytes are payload
         size_t payloadSize = size - sizeof(PacketHeader);
         if (payloadSize > 0) {
-            packet.payload.resize(payloadSize);
-            std::memcpy(packet.payload.data(), data + sizeof(PacketHeader), payloadSize);
+            packet.payload = deserializer.readBytes(payloadSize);
         }
         return packet;
     }
