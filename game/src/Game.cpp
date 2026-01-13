@@ -180,7 +180,7 @@ ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;  // Frames are adjacent (no gap)
     gCoordinator.AddComponent(enemy, anim);
 
     // Movement pattern
@@ -710,7 +710,7 @@ int Game::Run(int argc, char* argv[])
                     anim.frameHeight = 32;
                     anim.startX = 0;  // Start at frame 0 - les 8 premières frames
                     anim.startY = 0;
-                    anim.spacing = 33;
+                    anim.spacing = 0;  // Frames are adjacent (no gap between them)
                     gCoordinator.AddComponent(entity, anim);
                     
                     std::cout << "[Game] Created enemy sprite for entity " << entity << " with animation" << std::endl;
@@ -736,7 +736,7 @@ int Game::Run(int argc, char* argv[])
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(enemyBulletTexture.get());
-                    IntRect rect(110, 0, 15, 15);  // Try middle area where balls might be
+                    IntRect rect(135, 0, 15, 15);  // Try middle area where balls might be
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
@@ -747,15 +747,15 @@ int Game::Run(int argc, char* argv[])
                     
                     // Add animation - 4 frames of orange balls
                     Animation anim;
-                    anim.frameTime = 0.1f;
+                    anim.frameTime = 0.5f;
                     anim.currentFrame = 0;
                     anim.frameCount = 4;
                     anim.loop = true;
                     anim.frameWidth = 15;
                     anim.frameHeight = 15;
-                    anim.startX = 110;  // Start at middle area
+                    anim.startX = 135;  // Start at middle area
                     anim.startY = 0;
-                    anim.spacing = 15;  // Distance between frames
+                    anim.spacing = 0;  // Distance between frames
                     gCoordinator.AddComponent(entity, anim);
                     
                     std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation at (110,0)" << std::endl;
@@ -1098,18 +1098,8 @@ int Game::Run(int argc, char* argv[])
                         // Enemy sprite - r-typesheet5.png is a single horizontal line (533x36)
                         sprite->setTexture(enemyTexture.get());
 
-                        // Use different horizontal positions for variety, always line 0
-                        int enemyFrame = 0; // Default frame
-                        if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
-                            auto& enemyTag = gCoordinator.GetComponent<ShootEmUp::Components::EnemyTag>(entity);
-                            // Map enemy type to horizontal frame (0-15 available)
-                            // Use hash of enemyType string for variety
-                            std::hash<std::string> hasher;
-                            enemyFrame = static_cast<int>(hasher(enemyTag.enemyType)) % 16;
-                        }
-
-                        // All enemies are on line 0, different horizontal frames
-                        IntRect rect(enemyFrame * 33, 0, 32, 32);
+                        // Test: Use frame 10 (330 pixels) which should show enemy pointing left
+                        IntRect rect(0, 0, 33, 32);  // Frame 0 - match CreateEnemy exactly
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
                         spriteComp.layer = 9;  // Enemies on layer 9 (behind players)
@@ -1118,18 +1108,18 @@ int Game::Run(int argc, char* argv[])
 
                         std::cout << "[Game] Enemy entity " << entity << " set to scale 2.5x" << std::endl;
 
-                        // Add animation for enemy (8 frames horizontally from middle for left-facing)
+                        // Add animation for enemy (8 first frames - all pointing left)
                         Animation anim;
-                        anim.frameCount = 8;  // All 8 frames for consistent animation
+                        anim.frameCount = 8;  // Only the first 8 frames pointing left
                         anim.currentFrame = 0;
                         anim.frameTime = 0.1f;
                         anim.currentTime = 0.0f;
                         anim.loop = true;
-                        anim.frameWidth = 33;
-                        anim.frameHeight = 32;
-                        anim.startX = 264;  // Start at frame 8 (8 * 33 = 264) for left-facing enemy
+                        anim.frameWidth = 33;  // Match CreateEnemy
+                        anim.frameHeight = 32;  // Match CreateEnemy (NOT 36!)
+                        anim.startX = 0;  // Start at frame 0
                         anim.startY = 0;  // Always line 0
-                        anim.spacing = 33;  // Spacing between frames
+                        anim.spacing = 1000;  // Spacing between frames (33 pixels)
                         gCoordinator.AddComponent(entity, anim);
 
                     } else if (tag.name == "PlayerBullet" || tag.name == "bullet" || tag.name == "charged_bullet") {
