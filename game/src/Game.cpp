@@ -731,12 +731,11 @@ int Game::Run(int argc, char* argv[])
                     std::cout << "[Game] Created player bullet sprite for entity " << entity << std::endl;
                 }
                 else if (tag.name == "EnemyBullet") {
-                    // Create enemy bullet sprite - orange balls
-                    // Trying different coordinates in enemy_bullets.png (400x85)
+                    // Create enemy bullet sprite - orange balls with animation
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(enemyBulletTexture.get());
-                    IntRect rect(135, 0, 15, 15);  // Try middle area where balls might be
+                    IntRect rect(135, 0, 17, 17);  // First frame position (17x17 frames)
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
@@ -745,20 +744,20 @@ int Game::Run(int argc, char* argv[])
                     spriteComp.scaleY = 4.0f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
-                    // Add animation - 4 frames of orange balls
+                    // Add animation - 4 frames of orange balls (17x17 each)
                     Animation anim;
-                    anim.frameTime = 0.5f;
+                    anim.frameTime = 0.1f;
                     anim.currentFrame = 0;
                     anim.frameCount = 4;
                     anim.loop = true;
-                    anim.frameWidth = 15;
-                    anim.frameHeight = 15;
-                    anim.startX = 135;  // Start at middle area
+                    anim.frameWidth = 17;   // 17 pixels per frame (includes 1px padding)
+                    anim.frameHeight = 17;
+                    anim.startX = 135;
                     anim.startY = 0;
-                    anim.spacing = 0;  // Distance between frames
+                    anim.spacing = 0;
                     gCoordinator.AddComponent(entity, anim);
                     
-                    std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation at (110,0)" << std::endl;
+                    std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation (17x17)" << std::endl;
                 }
                 else if (tag.name == "Explosion") {
                     // Create explosion sprite with animation
