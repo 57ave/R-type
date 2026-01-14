@@ -56,7 +56,7 @@ if (enemySpawnTimer >= enemySpawnInterval) {
 
 /*
 // ANCIEN CODE
-if (weapon.isCharging && !input->IsKeyDown(rtype::engine::KeyCode::Space)) {
+if (weapon.isCharging && !input->IsKeyDown(eng::engine::KeyCode::Space)) {
     if (weapon.chargeTime >= weapon.minChargeTime) {
         int chargeLevel = std::min(5, static_cast<int>((weapon.chargeTime / weapon.maxChargeTime) * 5) + 1);
         CreateMissile(playerPos.x + 99.0f, playerPos.y + 25.0f, true, chargeLevel);
@@ -67,7 +67,7 @@ if (weapon.isCharging && !input->IsKeyDown(rtype::engine::KeyCode::Space)) {
 */
 
 // NOUVEAU CODE
-if (weapon.isCharging && !input->IsKeyDown(rtype::engine::KeyCode::Space)) {
+if (weapon.isCharging && !input->IsKeyDown(eng::engine::KeyCode::Space)) {
     ECS::Entity projectile;
     
     if (weapon.chargeTime >= weapon.minChargeTime) {

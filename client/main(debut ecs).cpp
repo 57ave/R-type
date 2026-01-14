@@ -18,9 +18,9 @@ int main()
     coordinator.RegisterDefaultComponents(); // Position, Velocity, Sprite
 
     // 2) Window & renderer (engine SFML wrappers)
-    rtype::engine::rendering::sfml::SFMLWindow window;
+    eng::engine::rendering::sfml::SFMLWindow window;
     window.create(800, 600, "R-Type - Demo");
-    rtype::engine::rendering::sfml::SFMLRenderer renderer(&window.getSFMLWindow());
+    eng::engine::rendering::sfml::SFMLRenderer renderer(&window.getSFMLWindow());
 
     // 3) Register RenderSystem
     auto renderSys = coordinator.RegisterSystem<RenderSystem>();
@@ -38,7 +38,7 @@ int main()
     coordinator.AddComponent<Position>(player, Position{400.0f, 300.0f});
 
     // // Load texture and create sprite (quick & dirty)
-    // using namespace rtype::engine::rendering::sfml;
+    // using namespace eng::engine::rendering::sfml;
     // SFMLTexture *tex = new SFMLTexture();
     // if (!tex->loadFromFile("assets/textures/player.png")) {
     //     std::cerr << "Failed to load texture\n";

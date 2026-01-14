@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_HEALTH_HPP
-#define RTYPE_ENGINE_COMPONENTS_HEALTH_HPP
+#ifndef ENG_ENGINE_COMPONENTS_HEALTH_HPP
+#define ENG_ENGINE_COMPONENTS_HEALTH_HPP
 
 struct Health {
     int current = 100;
@@ -12,4 +12,4 @@ struct Health {
     std::string deathEffect = "";     // Name of effect to spawn on death
 };
 
-#endif // RTYPE_ENGINE_COMPONENTS_HEALTH_HPP
+#endif // ENG_ENGINE_COMPONENTS_HEALTH_HPP

@@ -2,7 +2,7 @@
 ** EPITECH PROJECT, 2025
 ** Logger
 ** File description:
-** rtype
+** engine
 */
 
 #ifndef _CORE_LOGGER_
@@ -10,7 +10,7 @@
     #include <string>
     #include <iostream>
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             class Logger {
@@ -28,6 +28,6 @@
             };
 
         } // namespace core
-    } // namespace rtype
+    } // namespace eng
 
 #endif /* !_CORE_LOGGER_ */

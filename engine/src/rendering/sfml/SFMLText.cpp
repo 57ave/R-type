@@ -1,6 +1,6 @@
 #include <rendering/sfml/SFMLText.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

@@ -7,7 +7,7 @@
 #include <chrono>
 #include "UdpClient.hpp"
 #include "Packet.hpp"
-// Removed: "RTypeProtocol.hpp" - Engine should not depend on game-specific protocol
+// Removed: "GameProtocol.hpp" - Engine should not depend on game-specific protocol
 // Game-specific methods (sendInput, etc.) should be in a game wrapper class
 
 class NetworkClient {

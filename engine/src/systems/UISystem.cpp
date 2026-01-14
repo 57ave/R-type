@@ -17,7 +17,7 @@
 
 UISystem::UISystem()
 {
-    m_textRenderer = std::make_unique<rtype::engine::rendering::sfml::SFMLText>();
+    m_textRenderer = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
 }
 
 UISystem::UISystem(ECS::Coordinator* coordinator) : UISystem()
@@ -58,7 +58,7 @@ void UISystem::Shutdown()
     m_fonts.clear();
 }
 
-void UISystem::Render(rtype::engine::rendering::sfml::SFMLWindow* window)
+void UISystem::Render(eng::engine::rendering::sfml::SFMLWindow* window)
 {
     if (!m_coordinator || !window) {
         return;
@@ -71,9 +71,9 @@ void UISystem::Render(rtype::engine::rendering::sfml::SFMLWindow* window)
     RenderElements(0.0f);
 }
 
-void UISystem::HandleEvent(const rtype::engine::InputEvent& event)
+void UISystem::HandleEvent(const eng::engine::InputEvent& event)
 {
-    using namespace rtype::engine;
+    using namespace eng::engine;
 
     // Handle mouse events
     if (event.type == EventType::MouseMoved) {
@@ -125,7 +125,7 @@ void UISystem::HandleEvent(const rtype::engine::InputEvent& event)
     // Update mouse input handling
     HandleMouseInput();
 }
-void UISystem::SetRenderer(rtype::engine::rendering::IRenderer* renderer)
+void UISystem::SetRenderer(eng::engine::rendering::IRenderer* renderer)
 {
     m_renderer = renderer;
 }
@@ -140,7 +140,7 @@ void UISystem::SetLuaState(sol::state* lua)
     m_lua = lua;
 }
 
-void UISystem::SetWindow(rtype::engine::rendering::sfml::SFMLWindow* window)
+void UISystem::SetWindow(eng::engine::rendering::sfml::SFMLWindow* window)
 {
     m_window = window;
 }
@@ -148,7 +148,7 @@ void UISystem::SetWindow(rtype::engine::rendering::sfml::SFMLWindow* window)
 // Font management
 bool UISystem::LoadFont(const std::string& fontId, const std::string& filepath)
 {
-    auto font = std::make_unique<rtype::engine::rendering::sfml::SFMLFont>();
+    auto font = std::make_unique<eng::engine::rendering::sfml::SFMLFont>();
     if (font->loadFromFile(filepath)) {
         m_fonts[fontId] = std::move(font);
         std::cout << "[UISystem] Loaded font '" << fontId << "' from " << filepath << std::endl;
@@ -158,7 +158,7 @@ bool UISystem::LoadFont(const std::string& fontId, const std::string& filepath)
     return false;
 }
 
-rtype::engine::rendering::IFont* UISystem::GetFont(const std::string& fontId)
+eng::engine::rendering::IFont* UISystem::GetFont(const std::string& fontId)
 {
     auto it = m_fonts.find(fontId);
     if (it != m_fonts.end()) {

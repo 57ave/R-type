@@ -1,12 +1,12 @@
-#ifndef RTYPE_ENGINE_RENDERING_IRENDERER_HPP
-#define RTYPE_ENGINE_RENDERING_IRENDERER_HPP
+#ifndef ENG_ENGINE_RENDERING_IRENDERER_HPP
+#define ENG_ENGINE_RENDERING_IRENDERER_HPP
 
 #include <rendering/ISprite.hpp>
 #include <rendering/IText.hpp>
 #include <rendering/Camera.hpp>
 #include "rendering/Types.hpp"
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -29,4 +29,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_IRENDERER_HPP
+#endif // ENG_ENGINE_RENDERING_IRENDERER_HPP

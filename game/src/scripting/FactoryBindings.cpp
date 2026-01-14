@@ -9,8 +9,8 @@ namespace Scripting {
 void FactoryBindings::RegisterFactories(
     sol::state& lua,
     ECS::Coordinator* coordinator,
-    std::unordered_map<std::string, rtype::engine::rendering::sfml::SFMLTexture*> textures,
-    std::vector<rtype::engine::rendering::sfml::SFMLSprite*>* spriteList
+    std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*> textures,
+    std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList
 ) {
     // Store context in Lua registry for access in callbacks
     FactoryContext* ctx = new FactoryContext{coordinator, textures, spriteList};

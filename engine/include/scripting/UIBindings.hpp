@@ -1,12 +1,12 @@
-#ifndef RTYPE_ENGINE_SCRIPTING_UIBINDINGS_HPP
-#define RTYPE_ENGINE_SCRIPTING_UIBINDINGS_HPP
+#ifndef ENG_ENGINE_SCRIPTING_UIBINDINGS_HPP
+#define ENG_ENGINE_SCRIPTING_UIBINDINGS_HPP
 
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
+#include <core/GameStateCallbacks.hpp>
 
 // Forward declarations
 class UISystem;
-class GameStateManager;
 
 namespace Scripting {
 
@@ -47,14 +47,21 @@ namespace Scripting {
         static void SetUISystem(UISystem* uiSystem);
 
         /**
-         * @brief Register GameState bindings
+         * @brief Set game state callbacks (injected from game code)
+         * @param callbacks The callbacks for game state management
+         */
+        static void SetGameStateCallbacks(const eng::engine::core::GameStateCallbacks& callbacks);
+
+        /**
+         * @brief Register GameState bindings (uses injected callbacks)
          */
         static void RegisterGameState(sol::state& lua);
 
     private:
         static UISystem* s_uiSystem;
+        static eng::engine::core::GameStateCallbacks s_gameStateCallbacks;
     };
 
 } // namespace Scripting
 
-#endif // RTYPE_ENGINE_SCRIPTING_UIBINDINGS_HPP
+#endif // ENG_ENGINE_SCRIPTING_UIBINDINGS_HPP

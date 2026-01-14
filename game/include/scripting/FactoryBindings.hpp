@@ -37,16 +37,16 @@ namespace Scripting {
         static void RegisterFactories(
             sol::state& lua,
             ECS::Coordinator* coordinator,
-            std::unordered_map<std::string, rtype::engine::rendering::sfml::SFMLTexture*> textures,
-            std::vector<rtype::engine::rendering::sfml::SFMLSprite*>* spriteList
+            std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*> textures,
+            std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList
         );
 
     private:
         // Helper to store context in Lua registry
         struct FactoryContext {
             ECS::Coordinator* coordinator;
-            std::unordered_map<std::string, rtype::engine::rendering::sfml::SFMLTexture*> textures;
-            std::vector<rtype::engine::rendering::sfml::SFMLSprite*>* spriteList;
+            std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*> textures;
+            std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList;
         };
     };
 

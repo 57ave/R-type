@@ -3,13 +3,13 @@
 namespace Scripting {
 
 // Use ECS namespace for GENERIC components only
-using rtype::engine::ECS::Transform;
-using rtype::engine::ECS::Velocity;
-using rtype::engine::ECS::Sprite;
-using rtype::engine::ECS::Health;
-using rtype::engine::ECS::Damage;
-using rtype::engine::ECS::Collider;
-using rtype::engine::ECS::Tag;
+using eng::engine::ECS::Transform;
+using eng::engine::ECS::Velocity;
+using eng::engine::ECS::Sprite;
+using eng::engine::ECS::Health;
+using eng::engine::ECS::Damage;
+using eng::engine::ECS::Collider;
+using eng::engine::ECS::Tag;
 
 void ComponentBindings::RegisterAll(sol::state& lua) {
     RegisterTransform(lua);

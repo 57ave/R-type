@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_UIPANEL_HPP
-#define RTYPE_ENGINE_COMPONENTS_UIPANEL_HPP
+#ifndef ENG_ENGINE_COMPONENTS_UIPANEL_HPP
+#define ENG_ENGINE_COMPONENTS_UIPANEL_HPP
 
 #include <string>
 #include <vector>
@@ -84,4 +84,4 @@ namespace Components {
 
 } // namespace Components
 
-#endif // RTYPE_ENGINE_COMPONENTS_UIPANEL_HPP
+#endif // ENG_ENGINE_COMPONENTS_UIPANEL_HPP

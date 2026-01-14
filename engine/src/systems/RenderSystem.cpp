@@ -86,7 +86,7 @@ void RenderSystem::Update(float /*dt*/)
             continue;
 
         // Build transform from Position
-        rtype::engine::rendering::Transform t;
+        eng::engine::rendering::Transform t;
         t.position.x = pos.x;
         t.position.y = pos.y;
         t.rotation = 0.0f;

@@ -1,11 +1,11 @@
-#ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
-#define RTYPE_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
+#ifndef ENG_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
+#define ENG_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
 
 #include <rendering/ISprite.hpp>
 #include <rendering/sfml/SFMLTexture.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -38,4 +38,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP
+#endif // ENG_ENGINE_RENDERING_SFML_SFMLSPRITE_HPP

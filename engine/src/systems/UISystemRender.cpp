@@ -56,7 +56,7 @@ void UISystem::DrawText(const std::string& text, float x, float y,
     if (!fontPtr) return;
     
     // Cast to SFMLFont to get the underlying sf::Font
-    auto* sfmlFont = dynamic_cast<rtype::engine::rendering::sfml::SFMLFont*>(fontPtr);
+    auto* sfmlFont = dynamic_cast<eng::engine::rendering::sfml::SFMLFont*>(fontPtr);
     if (!sfmlFont) return;
     
     sf::Text sfText;

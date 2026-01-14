@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_DAMAGE_HPP
-#define RTYPE_ENGINE_COMPONENTS_DAMAGE_HPP
+#ifndef ENG_ENGINE_COMPONENTS_DAMAGE_HPP
+#define ENG_ENGINE_COMPONENTS_DAMAGE_HPP
 
 #include <string>
 
@@ -24,4 +24,4 @@ struct Damage {
     Damage(int dmg, const std::string& type) : amount(dmg), damageType(type) {}
 };
 
-#endif // RTYPE_ENGINE_COMPONENTS_DAMAGE_HPP
+#endif // ENG_ENGINE_COMPONENTS_DAMAGE_HPP

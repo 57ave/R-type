@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_UISYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_UISYSTEM_HPP
+#ifndef ENG_ENGINE_SYSTEMS_UISYSTEM_HPP
+#define ENG_ENGINE_SYSTEMS_UISYSTEM_HPP
 
 #include <ecs/System.hpp>
 #include <ecs/Types.hpp>
@@ -25,7 +25,7 @@ namespace sol {
     class state;
 }
 
-namespace rtype {
+namespace eng {
 namespace engine {
 namespace rendering {
 namespace sfml {
@@ -61,20 +61,20 @@ public:
     void Shutdown() override;
 
     // Render UI elements to a window
-    void Render(rtype::engine::rendering::sfml::SFMLWindow* window);
+    void Render(eng::engine::rendering::sfml::SFMLWindow* window);
     
     // Handle input events
-    void HandleEvent(const rtype::engine::InputEvent& event);
+    void HandleEvent(const eng::engine::InputEvent& event);
 
     // Dependencies injection
-    void SetRenderer(rtype::engine::rendering::IRenderer* renderer);
+    void SetRenderer(eng::engine::rendering::IRenderer* renderer);
     void SetCoordinator(ECS::Coordinator* coordinator);
     void SetLuaState(sol::state* lua);
-    void SetWindow(rtype::engine::rendering::sfml::SFMLWindow* window);
+    void SetWindow(eng::engine::rendering::sfml::SFMLWindow* window);
 
     // Font management
     bool LoadFont(const std::string& fontId, const std::string& filepath);
-    rtype::engine::rendering::IFont* GetFont(const std::string& fontId);
+    eng::engine::rendering::IFont* GetFont(const std::string& fontId);
 
     // Keyboard navigation
     void SelectNext();
@@ -182,16 +182,16 @@ private:
     void UpdateNavigationOrder();
 
     // Dependencies
-    rtype::engine::rendering::IRenderer* m_renderer = nullptr;
+    eng::engine::rendering::IRenderer* m_renderer = nullptr;
     ECS::Coordinator* m_coordinator = nullptr;
     sol::state* m_lua = nullptr;
-    rtype::engine::rendering::sfml::SFMLWindow* m_window = nullptr;
+    eng::engine::rendering::sfml::SFMLWindow* m_window = nullptr;
 
     // Font management
-    std::unordered_map<std::string, std::unique_ptr<rtype::engine::rendering::sfml::SFMLFont>> m_fonts;
+    std::unordered_map<std::string, std::unique_ptr<eng::engine::rendering::sfml::SFMLFont>> m_fonts;
     
     // Text objects pool (reused for rendering)
-    std::unique_ptr<rtype::engine::rendering::sfml::SFMLText> m_textRenderer;
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> m_textRenderer;
 
     // State
     ECS::Entity m_hoveredEntity = 0;
@@ -221,4 +221,4 @@ private:
     int m_nextTabIndex = 0;
 };
 
-#endif // RTYPE_ENGINE_SYSTEMS_UISYSTEM_HPP
+#endif // ENG_ENGINE_SYSTEMS_UISYSTEM_HPP

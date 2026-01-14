@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_UIBUTTON_HPP
-#define RTYPE_ENGINE_COMPONENTS_UIBUTTON_HPP
+#ifndef ENG_ENGINE_COMPONENTS_UIBUTTON_HPP
+#define ENG_ENGINE_COMPONENTS_UIBUTTON_HPP
 
 #include <string>
 #include <cstdint>
@@ -75,4 +75,4 @@ namespace Components {
 
 } // namespace Components
 
-#endif // RTYPE_ENGINE_COMPONENTS_UIBUTTON_HPP
+#endif // ENG_ENGINE_COMPONENTS_UIBUTTON_HPP

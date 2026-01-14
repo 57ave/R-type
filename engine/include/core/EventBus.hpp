@@ -2,7 +2,7 @@
 ** EPITECH PROJECT, 2025
 ** Eventbus
 ** File description:
-** rtype
+** engine
 */
 
 #ifndef EVENTBUS_CORE
@@ -14,7 +14,7 @@
     #include <typeindex>
     #include <memory>
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             class EventBus {
@@ -39,6 +39,6 @@
             };
 
         } // namespace core
-    } // namespace rtype
+    } // namespace eng
 
 #endif /* !EVENTBUS_CORE */

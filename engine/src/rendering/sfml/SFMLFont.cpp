@@ -1,7 +1,7 @@
 #include <rendering/sfml/SFMLFont.hpp>
 #include <iostream>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

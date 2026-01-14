@@ -1,19 +1,22 @@
 #include <scripting/UIBindings.hpp>
 #include <systems/UISystem.hpp>
-#include <GameStateManager.hpp>
+#include <core/GameStateCallbacks.hpp>
 #include <iostream>
-
-// Include GameStateManager from game/ - this creates a dependency
-// Alternative: Move GameStateManager to engine or use a callback interface
-// For now, we'll forward declare and use a function pointer approach
 
 namespace Scripting {
 
     UISystem* UIBindings::s_uiSystem = nullptr;
+    eng::engine::core::GameStateCallbacks UIBindings::s_gameStateCallbacks;
 
     void UIBindings::SetUISystem(UISystem* uiSystem)
     {
         s_uiSystem = uiSystem;
+    }
+
+    void UIBindings::SetGameStateCallbacks(const eng::engine::core::GameStateCallbacks& callbacks)
+    {
+        s_gameStateCallbacks = callbacks;
+        std::cout << "[UIBindings] Game state callbacks set" << std::endl;
     }
 
     void UIBindings::RegisterAll(sol::state& lua, UISystem* uiSystem)
@@ -277,65 +280,49 @@ namespace Scripting {
         // Create GameState namespace
         auto gameState = lua["GameState"].get_or_create<sol::table>();
 
-        // Note: This requires GameStateManager to be linked
-        // For a clean engine/game separation, you'd want to use callbacks instead
+        // Use injected callbacks for game state management
+        // This keeps the engine fully abstract - no knowledge of specific game states
         
-        // Connect to real GameStateManager
         gameState["Set"] = [](const std::string& state) {
             std::cout << "[GameState] Set called with: " << state << std::endl;
-            auto& gsm = GameStateManager::Instance();
-            if (state == "playing" || state == "Playing") {
-                gsm.SetState(GameState::Playing);
-            } else if (state == "paused" || state == "Paused") {
-                gsm.SetState(GameState::Paused);
-            } else if (state == "menu" || state == "MainMenu") {
-                gsm.SetState(GameState::MainMenu);
-            } else if (state == "options" || state == "Options") {
-                gsm.SetState(GameState::Options);
-            } else if (state == "lobby" || state == "Lobby") {
-                gsm.SetState(GameState::Lobby);
-            } else if (state == "credits" || state == "Credits") {
-                gsm.SetState(GameState::Credits);
+            if (s_gameStateCallbacks.setState) {
+                s_gameStateCallbacks.setState(state);
+            } else {
+                std::cerr << "[GameState] Warning: setState callback not set" << std::endl;
             }
         };
 
         gameState["Get"] = []() -> std::string {
-            auto state = GameStateManager::Instance().GetState();
-            switch (state) {
-                case GameState::MainMenu: return "MainMenu";
-                case GameState::Playing: return "Playing";
-                case GameState::Paused: return "Paused";
-                case GameState::Options: return "Options";
-                case GameState::Lobby: return "Lobby";
-                case GameState::Credits: return "Credits";
-                default: return "Unknown";
+            if (s_gameStateCallbacks.getState) {
+                return s_gameStateCallbacks.getState();
             }
+            std::cerr << "[GameState] Warning: getState callback not set" << std::endl;
+            return "Unknown";
         };
 
         gameState["IsPaused"] = []() -> bool {
-            return GameStateManager::Instance().GetState() == GameState::Paused;
+            if (s_gameStateCallbacks.isPaused) {
+                return s_gameStateCallbacks.isPaused();
+            }
+            return false;
         };
 
         gameState["IsPlaying"] = []() -> bool {
-            return GameStateManager::Instance().GetState() == GameState::Playing;
+            if (s_gameStateCallbacks.isPlaying) {
+                return s_gameStateCallbacks.isPlaying();
+            }
+            return false;
         };
 
         gameState["TogglePause"] = []() {
-            auto& gsm = GameStateManager::Instance();
-            if (gsm.GetState() == GameState::Playing) {
-                gsm.SetState(GameState::Paused);
-            } else if (gsm.GetState() == GameState::Paused) {
-                gsm.SetState(GameState::Playing);
+            if (s_gameStateCallbacks.togglePause) {
+                s_gameStateCallbacks.togglePause();
             }
         };
 
         gameState["GoBack"] = []() {
-            auto& gsm = GameStateManager::Instance();
-            auto state = gsm.GetState();
-            if (state == GameState::Paused) {
-                gsm.SetState(GameState::Playing);
-            } else if (state == GameState::Options || state == GameState::Credits || state == GameState::Lobby) {
-                gsm.SetState(GameState::MainMenu);
+            if (s_gameStateCallbacks.goBack) {
+                s_gameStateCallbacks.goBack();
             }
         };
 

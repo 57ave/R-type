@@ -98,8 +98,8 @@
     #include <components/UICheckbox.hpp>
     #include <components/UIDropdown.hpp>
 
-    using namespace rtype::engine::rendering;
-    using namespace rtype::engine::rendering::sfml;
+    using namespace eng::engine::rendering;
+    using namespace eng::engine::rendering::sfml;
 
     // Helper function to resolve asset paths from different working directories
     std::string ResolveAssetPath(const std::string& relativePath);
@@ -112,6 +112,7 @@
             ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst);
             ECS::Entity CreateEnemy(float x, float y, std::string patternType = "straight");
             ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel);
+            ECS::Entity CreateEnemyMissile(float x, float y);  // Enemy projectile
             ECS::Entity CreateExplosion(float x, float y);
             ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent);
             void RegisterEntity(ECS::Entity entity);
@@ -134,8 +135,8 @@
 
             std::vector<SFMLSprite*> allSprites;
 
-            rtype::engine::SoundBuffer shootBuffer;
-            rtype::engine::Sound shootSound;
+            eng::engine::SoundBuffer shootBuffer;
+            eng::engine::Sound shootSound;
 
             // UI System
             std::shared_ptr<UISystem> uiSystem;

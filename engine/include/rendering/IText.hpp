@@ -1,12 +1,12 @@
-#ifndef RTYPE_ENGINE_RENDERING_ITEXT_HPP
-#define RTYPE_ENGINE_RENDERING_ITEXT_HPP
+#ifndef ENG_ENGINE_RENDERING_ITEXT_HPP
+#define ENG_ENGINE_RENDERING_ITEXT_HPP
 
 #include "Types.hpp"
 #include "IFont.hpp"
 #include <string>
 #include <cstdint>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -85,4 +85,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_ITEXT_HPP
+#endif // ENG_ENGINE_RENDERING_ITEXT_HPP

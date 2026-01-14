@@ -140,7 +140,6 @@ if(LUA_FOUND)
 
     target_include_directories(scripting PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../game/include
         ${LUA_INCLUDE_DIR}
         ${SOL3_INCLUDE_DIR}
     )

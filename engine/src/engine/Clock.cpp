@@ -8,7 +8,7 @@
 #include "engine/Clock.hpp"
 #include <SFML/System/Clock.hpp>
 
-namespace rtype {
+namespace eng {
     namespace engine {
         namespace internal {
 
@@ -34,4 +34,4 @@ namespace rtype {
         }
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng

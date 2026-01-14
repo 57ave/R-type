@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
-#define RTYPE_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
+#ifndef ENG_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
+#define ENG_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
 
 #include <rendering/IRenderer.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
@@ -8,7 +8,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <memory>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -44,4 +44,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP
+#endif // ENG_ENGINE_RENDERING_SFML_SFMLRENDERER_HPP

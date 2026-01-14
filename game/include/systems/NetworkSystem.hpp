@@ -16,7 +16,7 @@
 #include <iostream>
 #include <cstring>
 
-namespace rtype {
+namespace eng {
 namespace engine {
 namespace systems {
 
@@ -301,4 +301,4 @@ private:
 
 } // namespace systems
 } // namespace engine
-} // namespace rtype
+} // namespace eng

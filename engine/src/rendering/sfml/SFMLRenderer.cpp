@@ -1,7 +1,7 @@
 #include <rendering/sfml/SFMLRenderer.hpp>
 #include <SFML/Graphics/View.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

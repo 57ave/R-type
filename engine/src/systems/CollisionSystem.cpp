@@ -2,9 +2,7 @@
 #include <components/Position.hpp>
 #include <components/Collider.hpp>
 #include <components/Health.hpp>
-#include <components/Damage.hpp>
 #include <components/Tag.hpp>
-#include <components/ShootEmUpTags.hpp>
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -24,29 +22,23 @@ void CollisionSystem::Update(float dt) {
     std::vector<ECS::Entity> entities(mEntities.begin(), mEntities.end());
 
     // Separate entities by type for optimized collision checks
-    std::vector<ECS::Entity> playerProjectiles;
-    std::vector<ECS::Entity> enemyProjectiles;
+    std::vector<ECS::Entity> projectiles;
     std::vector<ECS::Entity> enemies;
     std::vector<ECS::Entity> players;
 
     for (auto entity : entities) {
         // Filter by tags
-        if (m_Coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
-            auto& projTag = m_Coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(entity);
-            if (projTag.isPlayerProjectile) {
-                playerProjectiles.push_back(entity);
-            } else {
-                enemyProjectiles.push_back(entity);
-            }
-        } else if (m_Coordinator->HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
+        if (m_Coordinator->HasComponent<ProjectileTag>(entity)) {
+            projectiles.push_back(entity);
+        } else if (m_Coordinator->HasComponent<EnemyTag>(entity)) {
             enemies.push_back(entity);
-        } else if (m_Coordinator->HasComponent<ShootEmUp::Components::PlayerTag>(entity)) {
+        } else if (m_Coordinator->HasComponent<PlayerTag>(entity)) {
             players.push_back(entity);
         }
     }
 
-    // Check player projectile vs enemy collisions
-    for (auto proj : playerProjectiles) {
+    // Check projectile vs enemy collisions
+    for (auto proj : projectiles) {
         for (auto enemy : enemies) {
             if (CheckCollisionAABB(proj, enemy)) {
                 HandleCollision(proj, enemy);
@@ -54,16 +46,7 @@ void CollisionSystem::Update(float dt) {
         }
     }
 
-    // Check enemy projectile vs player collisions
-    for (auto proj : enemyProjectiles) {
-        for (auto player : players) {
-            if (CheckCollisionAABB(proj, player)) {
-                HandleCollision(proj, player);
-            }
-        }
-    }
-
-    // Check player vs enemy collisions (body collision)
+    // Check player vs enemy collisions
     for (auto player : players) {
         for (auto enemy : enemies) {
             if (CheckCollisionAABB(player, enemy)) {
