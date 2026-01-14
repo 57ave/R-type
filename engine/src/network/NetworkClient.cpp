@@ -111,7 +111,7 @@ NetworkPacket NetworkClient::getNextReceivedPacket() {
     return packet;
 }
 
-void NetworkClient::update(float dt) {
+void NetworkClient::update(float) {
     if (!connected_) return;
 
     auto now = std::chrono::steady_clock::now();

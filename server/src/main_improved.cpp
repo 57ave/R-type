@@ -103,7 +103,7 @@ private:
         }
     }
 
-    void handleClientHello(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+    void handleClientHello(const NetworkPacket&, const asio::ip::udp::endpoint& sender) {
         // Create player entity
         uint8_t playerId = nextPlayerId_++;
         
@@ -135,7 +135,7 @@ private:
         broadcastEntitySpawn(player);
     }
 
-    void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+    void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint&) {
         if (packet.payload.size() < sizeof(ClientInput)) {
             return;
         }

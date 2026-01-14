@@ -424,7 +424,7 @@ ECS::Entity CreateExplosion(float x, float y) {
 }
 
 // Helper function to create shoot effect
-ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent) {
+ECS::Entity CreateShootEffect(float x, float y, ECS::Entity) {
     ECS::Entity effect = gCoordinator.CreateEntity();
     RegisterEntity(effect);
     
@@ -657,7 +657,7 @@ int main(int argc, char* argv[])
             });
             
             // Set callback for entity destruction (to create explosions)
-            networkSystem->setEntityDestroyedCallback([&](ECS::Entity entity, uint32_t networkId) {
+            networkSystem->setEntityDestroyedCallback([&](ECS::Entity entity, uint32_t) {
                 // Get entity position before destroying
                 if (gCoordinator.HasComponent<Position>(entity)) {
                     auto& pos = gCoordinator.GetComponent<Position>(entity);
