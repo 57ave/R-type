@@ -5,6 +5,7 @@
 #include <string>
 #include <set>
 #include <functional>
+#include <filesystem>
 
 // Engine includes - Core
 #include <ecs/ECS.hpp>
@@ -680,22 +681,34 @@ int main(int argc, char* argv[])
             
             // Wait for server welcome (with timeout)
             auto startTime = std::chrono::steady_clock::now();
+            auto lastHelloTime = startTime;
             bool connected = false;
             while (!connected) {
                 networkClient->process();
-                if (networkClient->hasReceivedPackets()) {
+                while (networkClient->hasReceivedPackets()) {
                     auto packet = networkClient->getNextReceivedPacket();
+                    std::cout << "[Game] Checking packet type: " << std::hex << packet.header.type << std::dec << std::endl;
                     if (static_cast<GamePacketType>(packet.header.type) == GamePacketType::SERVER_WELCOME) {
                         if (packet.payload.size() >= 1) {
                             uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
                             networkSystem->setLocalPlayerId(playerId);
                             std::cout << "[Game] Connected! Player ID: " << (int)playerId << std::endl;
                             connected = true;
+                            break; // Exit the packet loop 
                         }
                     }
                 }
                 
+                
                 auto now = std::chrono::steady_clock::now();
+                
+                // Resend Hello every 1 second
+                if (std::chrono::duration_cast<std::chrono::seconds>(now - lastHelloTime).count() >= 1) {
+                     std::cout << "[Game] Resending CLIENT_HELLO..." << std::endl;
+                     networkClient->sendHello();
+                     lastHelloTime = now;
+                }
+
                 if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 5) {
                     std::cerr << "[Game] Connection timeout!" << std::endl;
                     return 1;
@@ -818,6 +831,9 @@ int main(int argc, char* argv[])
         // ========================================
         if (networkMode && networkSystem) {
             networkSystem->Update(deltaTime);
+            if (networkClient) {
+                networkClient->update(deltaTime);
+            }
             
             // Add sprites to network entities that don't have them
             for (auto entity : allEntities) {

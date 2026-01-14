@@ -175,6 +175,28 @@ private:
 
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
         std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
+        
+        auto session = server_.getSession(sender);
+        if (session) {
+            uint8_t playerId = session->playerId;
+            std::cout << "[GameServer] Cleaning up player " << (int)playerId << std::endl;
+            
+            // Remove player entity
+            auto it = playerEntities_.find(playerId);
+            if (it != playerEntities_.end()) {
+                uint32_t entityId = it->second;
+                
+                // Remove from entities map
+                if (entities_.erase(entityId)) {
+                    broadcastEntityDestroy(entityId);
+                }
+                
+                playerEntities_.erase(it);
+            }
+            
+            // Remove the session from UDP server immediately
+            server_.removeClient(sender);
+        }
     }
 
     void updateEntities(float deltaTime) {

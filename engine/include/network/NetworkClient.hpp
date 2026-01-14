@@ -24,9 +24,13 @@ public:
     // Send HELLO to server
     void sendHello();
 
+    void sendPacket(const NetworkPacket& packet);
+
     // Check if packets are available
     bool hasReceivedPackets();
     NetworkPacket getNextReceivedPacket();
+
+    void update(float dt);
 
     // Connection status
     bool isConnected() const { return connected_; }
