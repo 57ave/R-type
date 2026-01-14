@@ -490,34 +490,41 @@ ECS::Entity Game::CreateEnemyMissile(float x, float y) {
     float speed = -400.0f;  // Negative = moving left
     gCoordinator.AddComponent(missile, Velocity{speed, 0.0f});
 
-    // Sprite
+    // Sprite - Use enemy_bullets.png with the orange ball (first row)
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
     
-    // Use enemy bullet texture if available, otherwise use missile texture
-    if (enemyBulletTexture && enemyBulletTexture->getSize().x > 0) {
-        sprite->setTexture(enemyBulletTexture.get());
-        IntRect rect(0, 0, 16, 16);  // Adjust based on actual enemy bullet sprite
-        sprite->setTextureRect(rect);
-    } else {
-        // Fallback: use missile texture with a different sprite region
-        sprite->setTexture(missileTexture.get());
-        IntRect rect(245, 85, 20, 20);  // Same as player missile but different color would be ideal
-        sprite->setTextureRect(rect);
-    }
+    // First row orange balls: starts around x=166, y=3, each frame ~12x12 pixels, spacing ~17px
+    IntRect rect(166, 3, 12, 12);  // First frame of orange ball
+    sprite->setTexture(enemyBulletTexture.get());
+    sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
 
     Sprite spriteComp;
     spriteComp.sprite = sprite;
+    spriteComp.textureRect = rect;
     spriteComp.layer = 8;
-    spriteComp.scaleX = 2.0f;
-    spriteComp.scaleY = 2.0f;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
     gCoordinator.AddComponent(missile, spriteComp);
+
+    // Animation - 4 frames looping
+    Animation anim;
+    anim.frameTime = 0.1f;
+    anim.currentFrame = 0;
+    anim.frameCount = 4;
+    anim.loop = true;
+    anim.frameWidth = 12;
+    anim.frameHeight = 12;
+    anim.startX = 166;
+    anim.startY = 3;
+    anim.spacing = 5;  // Spacing between frames (17 - 12 = 5)
+    gCoordinator.AddComponent(missile, anim);
 
     // Collider
     Collider collider;
-    collider.width = 16 * 2.0f;
-    collider.height = 16 * 2.0f;
+    collider.width = 12 * 2.5f;
+    collider.height = 12 * 2.5f;
     collider.tag = "enemy_bullet";
     gCoordinator.AddComponent(missile, collider);
 
@@ -531,11 +538,11 @@ ECS::Entity Game::CreateEnemyMissile(float x, float y) {
     gCoordinator.AddComponent(missile, Tag{"enemy_bullet"});
     ShootEmUp::Components::ProjectileTag projTag;
     projTag.projectileType = "enemy";
-    projTag.ownerId = 0;  // Enemy (not specific owner)
-    projTag.isPlayerProjectile = false;  // IMPORTANT: This is an enemy projectile
+    projTag.ownerId = 0;
+    projTag.isPlayerProjectile = false;
     gCoordinator.AddComponent(missile, projTag);
 
-    // Lifetime (destroy after 5 seconds or when off-screen)
+    // Lifetime
     Lifetime lifetime;
     lifetime.maxLifetime = 5.0f;
     gCoordinator.AddComponent(missile, lifetime);
@@ -755,18 +762,41 @@ int Game::Run(int argc, char* argv[])
         
         if (aMarkedForDestruction || bMarkedForDestruction) return;  // Skip duplicate collisions
 
+        // Check if player is involved and currently invincible
+        bool aIsPlayer = gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(a);
+        bool bIsPlayer = gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(b);
+        
+        if (aIsPlayer && gCoordinator.HasComponent<Health>(a)) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            if (health.invincibilityTimer > 0.0f) return;  // Player is invincible, skip collision
+        }
+        if (bIsPlayer && gCoordinator.HasComponent<Health>(b)) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            if (health.invincibilityTimer > 0.0f) return;  // Player is invincible, skip collision
+        }
+
         std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
 
         // Determine what died (health <= 0 after damage)
         bool aDied = false;
         bool bDied = false;
+        bool playerWasHit = false;
+        ECS::Entity playerEntity = 0;
         
-        // Apply damage and check deaths
+        // Apply damage and check deaths / player hit
         if (gCoordinator.HasComponent<Health>(a)) {
             auto& health = gCoordinator.GetComponent<Health>(a);
             if (health.current <= 0 && health.destroyOnDeath) {
                 aDied = true;
                 DestroyEntityDeferred(a);
+            } else if (aIsPlayer && health.current > 0 && health.current < health.max) {
+                // Player was hit but not dead - activate invincibility
+                playerWasHit = true;
+                playerEntity = a;
+                health.invincibilityTimer = health.invincibilityDuration;
+                health.isFlashing = true;
+                health.flashTimer = 0.0f;
+                std::cout << "[Player] Hit! Health: " << health.current << "/" << health.max << " - Invincible for " << health.invincibilityDuration << "s" << std::endl;
             }
         }
         if (gCoordinator.HasComponent<Health>(b)) {
@@ -774,6 +804,14 @@ int Game::Run(int argc, char* argv[])
             if (health.current <= 0 && health.destroyOnDeath) {
                 bDied = true;
                 DestroyEntityDeferred(b);
+            } else if (bIsPlayer && health.current > 0 && health.current < health.max) {
+                // Player was hit but not dead - activate invincibility
+                playerWasHit = true;
+                playerEntity = b;
+                health.invincibilityTimer = health.invincibilityDuration;
+                health.isFlashing = true;
+                health.flashTimer = 0.0f;
+                std::cout << "[Player] Hit! Health: " << health.current << "/" << health.max << " - Invincible for " << health.invincibilityDuration << "s" << std::endl;
             }
         }
 
@@ -1781,11 +1819,15 @@ int Game::Run(int argc, char* argv[])
             if (enemyShootTimer >= enemyShootInterval) {
                 enemyShootTimer = 0.0f;
                 
+                int enemyCount = 0;
+                int shotsCreated = 0;
+                
                 // Make each enemy shoot
                 for (auto entity : allEntities) {
                     if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) &&
                         gCoordinator.HasComponent<Position>(entity)) {
                         
+                        enemyCount++;
                         auto& pos = gCoordinator.GetComponent<Position>(entity);
                         
                         // Only shoot if enemy is on screen (X < 1920 and X > 0)
@@ -1793,13 +1835,50 @@ int Game::Run(int argc, char* argv[])
                             // 50% chance for each enemy to shoot
                             if (rand() % 2 == 0) {
                                 CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
+                                shotsCreated++;
                             }
                         }
                     }
                 }
                 
+                std::cout << "[Enemy Shoot] Enemies: " << enemyCount << ", Shots: " << shotsCreated << std::endl;
+                
                 // Vary shoot interval
                 enemyShootInterval = 1.0f + static_cast<float>(rand() % 15) / 10.0f; // 1.0 to 2.5 seconds
+            }
+        }
+
+        // ========================================
+        // 4c. PLAYER INVINCIBILITY & FLASH UPDATE
+        // ========================================
+        if (!inMenu && player != 0 && gCoordinator.HasComponent<Health>(player)) {
+            auto& health = gCoordinator.GetComponent<Health>(player);
+            
+            if (health.invincibilityTimer > 0.0f) {
+                health.invincibilityTimer -= deltaTime;
+                health.flashTimer += deltaTime;
+                
+                // Toggle visibility every 0.05 seconds for fast blinking
+                if (gCoordinator.HasComponent<Sprite>(player)) {
+                    auto& sprite = gCoordinator.GetComponent<Sprite>(player);
+                    // Blink by toggling scale (0 = invisible, normal = visible)
+                    bool visible = (static_cast<int>(health.flashTimer / 0.05f) % 2) == 0;
+                    sprite.scaleX = visible ? 3.0f : 0.0f;
+                    sprite.scaleY = visible ? 3.0f : 0.0f;
+                }
+                
+                // End invincibility
+                if (health.invincibilityTimer <= 0.0f) {
+                    health.invincibilityTimer = 0.0f;
+                    health.isFlashing = false;
+                    health.flashTimer = 0.0f;
+                    // Restore normal visibility
+                    if (gCoordinator.HasComponent<Sprite>(player)) {
+                        auto& sprite = gCoordinator.GetComponent<Sprite>(player);
+                        sprite.scaleX = 3.0f;
+                        sprite.scaleY = 3.0f;
+                    }
+                }
             }
         }
 

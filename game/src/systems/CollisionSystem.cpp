@@ -121,9 +121,27 @@ bool CollisionSystem::CheckCollisionAABB(ECS::Entity a, ECS::Entity b) {
 }
 
 void CollisionSystem::HandleCollision(ECS::Entity a, ECS::Entity b) {
-    // Apply damage if applicable
+    // Check if either entity is a player with active invincibility - skip entire collision
     bool aHasHealth = m_Coordinator->HasComponent<Health>(a);
     bool bHasHealth = m_Coordinator->HasComponent<Health>(b);
+    
+    // Check for temporary invincibility (player was recently hit)
+    if (aHasHealth) {
+        auto& health = m_Coordinator->GetComponent<Health>(a);
+        if (health.invincibilityTimer > 0.0f) {
+            // Entity A is invincible - skip this collision entirely
+            return;
+        }
+    }
+    if (bHasHealth) {
+        auto& health = m_Coordinator->GetComponent<Health>(b);
+        if (health.invincibilityTimer > 0.0f) {
+            // Entity B is invincible - skip this collision entirely
+            return;
+        }
+    }
+
+    // Apply damage if applicable
     bool aHasDamage = m_Coordinator->HasComponent<Damage>(a);
     bool bHasDamage = m_Coordinator->HasComponent<Damage>(b);
 
