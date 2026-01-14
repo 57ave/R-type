@@ -202,10 +202,10 @@ private:
         coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_, state.playerLine));
         
         // Add Position
-        coordinator_->AddComponent(entity, Position{state.x, state.y});
+        coordinator_->AddComponent(entity, Position{static_cast<float>(state.x), static_cast<float>(state.y)});
         
         // Add Velocity
-        coordinator_->AddComponent(entity, Velocity{state.vx, state.vy});
+        coordinator_->AddComponent(entity, Velocity{static_cast<float>(state.vx), static_cast<float>(state.vy)});
         
         // Add Health
         coordinator_->AddComponent(entity, Health{state.hp, state.hp});

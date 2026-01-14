@@ -1070,7 +1070,7 @@ int main(int argc, char* argv[])
                     }
                     if (gCoordinator.HasComponent<NetworkId>(entity)) {
                         auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
-                        ss << "  Network ID: " << netId.id << (netId.isLocal ? " (local)" : "") << "\n";
+                        ss << "  Network ID: " << netId.networkId << (netId.isLocalPlayer ? " (local)" : "") << "\n";
                     }
                 }
             }
