@@ -388,138 +388,173 @@ ECS::Entity UISystem::GetEntityAtPosition(float x, float y) const
 
 void UISystem::HandleMouseInput()
 {
-    if (!m_coordinator) return;
-
     ECS::Entity entityUnderMouse = GetEntityAtPosition(static_cast<float>(m_mouseX), static_cast<float>(m_mouseY));
-
-    // Handle unhover of previous entity
-    if (m_hoveredEntity != 0 && m_hoveredEntity != entityUnderMouse) {
-        if (m_coordinator->HasComponent<Components::UIButton>(m_hoveredEntity)) {
-            auto& button = m_coordinator->GetComponent<Components::UIButton>(m_hoveredEntity);
-            button.state = Components::UIButton::State::Normal;
-            if (!button.onUnhoverCallback.empty()) {
-                CallLuaCallback(button.onUnhoverCallback);
-            }
-        }
-    }
-
-    // Handle hover of new entity
-    if (entityUnderMouse != 0 && entityUnderMouse != m_hoveredEntity) {
-        if (m_coordinator->HasComponent<Components::UIButton>(entityUnderMouse)) {
-            auto& button = m_coordinator->GetComponent<Components::UIButton>(entityUnderMouse);
-            if (button.enabled) {
-                button.state = Components::UIButton::State::Hovered;
-                if (!button.onHoverCallback.empty()) {
-                    CallLuaCallback(button.onHoverCallback);
-                }
-            }
-        }
-    }
-
-    m_hoveredEntity = entityUnderMouse;
-
     // Handle click (on mouse down)
     bool clicked = m_mousePressed && !m_mousePreviouslyPressed;
-    
-    if (clicked && entityUnderMouse != 0) {
-        // Handle button click
-        if (m_coordinator->HasComponent<Components::UIButton>(entityUnderMouse)) {
-            auto& button = m_coordinator->GetComponent<Components::UIButton>(entityUnderMouse);
-            if (button.enabled) {
-                button.state = Components::UIButton::State::Pressed;
-                if (!button.onClickCallback.empty()) {
-                    CallLuaCallback(button.onClickCallback);
-                    CallCppCallback(button.onClickCallback);
-                }
-            }
-        }
-        
-        // Handle checkbox click
-        if (m_coordinator->HasComponent<Components::UICheckbox>(entityUnderMouse)) {
-            auto& checkbox = m_coordinator->GetComponent<Components::UICheckbox>(entityUnderMouse);
-            if (checkbox.enabled) {
-                checkbox.checked = !checkbox.checked;
-                if (!checkbox.onChangeCallback.empty()) {
-                    CallLuaValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
-                    CallCppValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
+    if (clicked)
+    {
+        // 1. Dropdown: priorité à la sélection d'option si un dropdown est ouvert
+        if (m_openDropdown != 0)
+        {
+            auto &dropdown = m_coordinator->GetComponent<Components::UIDropdown>(m_openDropdown);
+            if (dropdown.isOpen && m_coordinator->HasComponent<Components::UIElement>(m_openDropdown))
+            {
+                auto &element = m_coordinator->GetComponent<Components::UIElement>(m_openDropdown);
+                float optionY = element.y + element.height;
+                for (size_t i = 0; i < dropdown.options.size(); ++i)
+                {
+                    float optTop = optionY + i * dropdown.optionHeight;
+                    float optBot = optTop + dropdown.optionHeight;
+                    if (m_mouseY >= optTop && m_mouseY < optBot &&
+                        m_mouseX >= element.x && m_mouseX < element.x + element.width)
+                    {
+                        dropdown.selectedIndex = static_cast<int>(i);
+                        dropdown.isOpen = false;
+                        m_openDropdown = 0;
+                        dropdown.hoveredOptionIndex = -1;
+                        if (!dropdown.onChangeCallback.empty())
+                        {
+                            CallLuaCallback(dropdown.onChangeCallback);
+                            CallCppCallback(dropdown.onChangeCallback);
+                        }
+                        return;
+                    }
                 }
             }
         }
 
-        // Handle input field focus
-        if (m_coordinator->HasComponent<Components::UIInputField>(entityUnderMouse)) {
-            // Unfocus previous
-            if (m_focusedInputField != 0 && m_focusedInputField != entityUnderMouse) {
-                auto& prevInput = m_coordinator->GetComponent<Components::UIInputField>(m_focusedInputField);
-                prevInput.isFocused = false;
+        // 2. Handle button click
+        if (entityUnderMouse != 0)
+        {
+            if (m_coordinator->HasComponent<Components::UIButton>(entityUnderMouse))
+            {
+                auto &button = m_coordinator->GetComponent<Components::UIButton>(entityUnderMouse);
+                if (button.enabled)
+                {
+                    button.state = Components::UIButton::State::Pressed;
+                    if (!button.onClickCallback.empty())
+                    {
+                        CallLuaCallback(button.onClickCallback);
+                        CallCppCallback(button.onClickCallback);
+                    }
+                }
             }
-            
-            auto& input = m_coordinator->GetComponent<Components::UIInputField>(entityUnderMouse);
-            input.isFocused = true;
-            m_focusedInputField = entityUnderMouse;
-        } else {
-            // Unfocus input if clicking elsewhere
-            if (m_focusedInputField != 0) {
-                auto& input = m_coordinator->GetComponent<Components::UIInputField>(m_focusedInputField);
-                input.isFocused = false;
-                m_focusedInputField = 0;
+            // Handle checkbox click
+            if (m_coordinator->HasComponent<Components::UICheckbox>(entityUnderMouse))
+            {
+                auto &checkbox = m_coordinator->GetComponent<Components::UICheckbox>(entityUnderMouse);
+                if (checkbox.enabled)
+                {
+                    checkbox.checked = !checkbox.checked;
+                    if (!checkbox.onChangeCallback.empty())
+                    {
+                        CallLuaValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
+                        CallCppValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
+                    }
+                }
+            }
+            // Handle input field focus
+            if (m_coordinator->HasComponent<Components::UIInputField>(entityUnderMouse))
+            {
+                if (m_focusedInputField != 0 && m_focusedInputField != entityUnderMouse)
+                {
+                    auto &prevInput = m_coordinator->GetComponent<Components::UIInputField>(m_focusedInputField);
+                    prevInput.isFocused = false;
+                }
+                auto &input = m_coordinator->GetComponent<Components::UIInputField>(entityUnderMouse);
+                input.isFocused = true;
+                m_focusedInputField = entityUnderMouse;
+            }
+            // Handle dropdown (ouvrir si fermé)
+            if (m_coordinator->HasComponent<Components::UIDropdown>(entityUnderMouse))
+            {
+                auto &dropdown = m_coordinator->GetComponent<Components::UIDropdown>(entityUnderMouse);
+                if (!dropdown.isOpen)
+                {
+                    dropdown.isOpen = true;
+                    m_openDropdown = entityUnderMouse;
+                }
             }
         }
-
-        // Handle dropdown
-        if (m_coordinator->HasComponent<Components::UIDropdown>(entityUnderMouse)) {
-            auto& dropdown = m_coordinator->GetComponent<Components::UIDropdown>(entityUnderMouse);
-            dropdown.isOpen = !dropdown.isOpen;
-            m_openDropdown = dropdown.isOpen ? entityUnderMouse : 0;
-        } else if (m_openDropdown != 0) {
-            // Close open dropdown if clicking elsewhere
-            auto& dropdown = m_coordinator->GetComponent<Components::UIDropdown>(m_openDropdown);
+        else if (m_openDropdown != 0)
+        {
+            // Fermer dropdown si clic ailleurs
+            auto &dropdown = m_coordinator->GetComponent<Components::UIDropdown>(m_openDropdown);
             dropdown.isOpen = false;
             m_openDropdown = 0;
         }
-
         // Update selected entity
         m_selectedEntity = entityUnderMouse;
     }
-
-    // Handle slider dragging
-    if (m_mousePressed && entityUnderMouse != 0) {
-        if (m_coordinator->HasComponent<Components::UISlider>(entityUnderMouse)) {
-            auto& slider = m_coordinator->GetComponent<Components::UISlider>(entityUnderMouse);
-            auto& element = m_coordinator->GetComponent<Components::UIElement>(entityUnderMouse);
-            
-            slider.isDragging = true;
-            
-            // Calculate new value based on mouse position
-            float relativeX = static_cast<float>(m_mouseX) - element.x;
-            float normalized = relativeX / element.width;
-            normalized = std::max(0.0f, std::min(1.0f, normalized));
-            slider.setFromNormalized(normalized);
-
-            if (!slider.onChangeCallback.empty()) {
-                CallLuaValueCallback(slider.onChangeCallback, slider.currentValue);
-                CallCppValueCallback(slider.onChangeCallback, slider.currentValue);
-            }
-        }
-    }
-
-    // Handle button release
-    if (!m_mousePressed && m_mousePreviouslyPressed) {
-        for (auto entity : mEntities) {
-            if (m_coordinator->HasComponent<Components::UIButton>(entity)) {
-                auto& button = m_coordinator->GetComponent<Components::UIButton>(entity);
-                if (button.state == Components::UIButton::State::Pressed) {
-                    button.state = (entity == m_hoveredEntity) ? 
-                        Components::UIButton::State::Hovered : 
-                        Components::UIButton::State::Normal;
+    // Gestion du survol d'option pour dropdown ouvert
+    if (m_openDropdown != 0)
+    {
+        auto &dropdown = m_coordinator->GetComponent<Components::UIDropdown>(m_openDropdown);
+        if (dropdown.isOpen && m_coordinator->HasComponent<Components::UIElement>(m_openDropdown))
+        {
+            auto &element = m_coordinator->GetComponent<Components::UIElement>(m_openDropdown);
+            float optionY = element.y + element.height;
+            dropdown.hoveredOptionIndex = -1;
+            for (size_t i = 0; i < dropdown.options.size(); ++i)
+            {
+                float optTop = optionY + i * dropdown.optionHeight;
+                float optBot = optTop + dropdown.optionHeight;
+                if (m_mouseY >= optTop && m_mouseY < optBot &&
+                    m_mouseX >= element.x && m_mouseX < element.x + element.width)
+                {
+                    dropdown.hoveredOptionIndex = static_cast<int>(i);
+                    break;
                 }
             }
-            if (m_coordinator->HasComponent<Components::UISlider>(entity)) {
-                auto& slider = m_coordinator->GetComponent<Components::UISlider>(entity);
-                if (slider.isDragging) {
-                    slider.isDragging = false;
-                    if (!slider.onReleaseCallback.empty()) {
-                        CallLuaValueCallback(slider.onReleaseCallback, slider.currentValue);
+        }
+
+        // Handle slider dragging
+        if (m_mousePressed && entityUnderMouse != 0)
+        {
+            if (m_coordinator->HasComponent<Components::UISlider>(entityUnderMouse))
+            {
+                auto &slider = m_coordinator->GetComponent<Components::UISlider>(entityUnderMouse);
+                auto &element = m_coordinator->GetComponent<Components::UIElement>(entityUnderMouse);
+
+                slider.isDragging = true;
+
+                // Calculate new value based on mouse position
+                float relativeX = static_cast<float>(m_mouseX) - element.x;
+                float normalized = relativeX / element.width;
+                normalized = std::max(0.0f, std::min(1.0f, normalized));
+                slider.setFromNormalized(normalized);
+
+                if (!slider.onChangeCallback.empty())
+                {
+                    CallLuaValueCallback(slider.onChangeCallback, slider.currentValue);
+                    CallCppValueCallback(slider.onChangeCallback, slider.currentValue);
+                }
+            }
+        }
+
+        // Handle button release
+        if (!m_mousePressed && m_mousePreviouslyPressed)
+        {
+            for (auto entity : mEntities)
+            {
+                if (m_coordinator->HasComponent<Components::UIButton>(entity))
+                {
+                    auto &button = m_coordinator->GetComponent<Components::UIButton>(entity);
+                    if (button.state == Components::UIButton::State::Pressed)
+                    {
+                        button.state = (entity == m_hoveredEntity) ? Components::UIButton::State::Hovered : Components::UIButton::State::Normal;
+                    }
+                }
+                if (m_coordinator->HasComponent<Components::UISlider>(entity))
+                {
+                    auto &slider = m_coordinator->GetComponent<Components::UISlider>(entity);
+                    if (slider.isDragging)
+                    {
+                        slider.isDragging = false;
+                        if (!slider.onReleaseCallback.empty())
+                        {
+                            CallLuaValueCallback(slider.onReleaseCallback, slider.currentValue);
+                        }
                     }
                 }
             }

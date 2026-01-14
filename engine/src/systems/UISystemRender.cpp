@@ -104,9 +104,19 @@ void UISystem::RenderElements(float dt)
     std::sort(sortedEntities.begin(), sortedEntities.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    // Render in order
+    // First pass: render all elements except open dropdowns
+    std::vector<ECS::Entity> openDropdowns;
     for (const auto& [layer, entity] : sortedEntities) {
-        // Render based on component type
+        bool isDropdown = m_coordinator->HasComponent<Components::UIDropdown>(entity);
+        bool isOpen = false;
+        if (isDropdown) {
+            const auto& dropdown = m_coordinator->GetComponent<Components::UIDropdown>(entity);
+            isOpen = dropdown.isOpen;
+        }
+        if (isDropdown && isOpen) {
+            openDropdowns.push_back(entity);
+            continue; // skip rendering open dropdowns for now
+        }
         if (m_coordinator->HasComponent<Components::UIPanel>(entity)) {
             RenderPanel(entity);
         }
@@ -124,9 +134,14 @@ void UISystem::RenderElements(float dt)
         if (m_coordinator->HasComponent<Components::UICheckbox>(entity)) {
             RenderCheckbox(entity);
         }
-        if (m_coordinator->HasComponent<Components::UIDropdown>(entity)) {
+        if (isDropdown && !isOpen) {
             RenderDropdown(entity);
         }
+    }
+
+    // Second pass: render all open dropdowns last (above everything else)
+    for (ECS::Entity entity : openDropdowns) {
+        RenderDropdown(entity);
     }
 }
 
