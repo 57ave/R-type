@@ -32,6 +32,9 @@ public:
 
     // Check for timeouts and remove inactive clients
     void checkTimeouts();
+    
+    std::shared_ptr<ClientSession> getSession(const udp::endpoint& endpoint);
+    bool removeSession(const udp::endpoint& endpoint);
 
 private:
     void startReceive();
