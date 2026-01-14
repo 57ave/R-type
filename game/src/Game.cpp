@@ -650,7 +650,7 @@ int Game::Run(int argc, char* argv[])
     std::shared_ptr<MovementPatternSystem> movementPatternSystem = nullptr;
     std::shared_ptr<ScrollingBackgroundSystem> scrollingBgSystem = nullptr;
     std::shared_ptr<BoundarySystem> boundarySystem = nullptr;
-    std::shared_ptr<CollisionSystem> collisionSystem = nullptr;
+    std::shared_ptr<CollisionSystem> collisionSystem = nullptr;  // Generic engine CollisionSystem
     std::shared_ptr<HealthSystem> healthSystem = nullptr;
     std::shared_ptr<RenderSystem> renderSystem = nullptr;
 
@@ -775,7 +775,40 @@ int Game::Run(int argc, char* argv[])
             if (health.invincibilityTimer > 0.0f) return;  // Player is invincible, skip collision
         }
 
+        // Check if both entities are projectiles - ignore projectile vs projectile collisions
+        bool aIsProjectile = gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(a);
+        bool bIsProjectile = gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(b);
+        if (aIsProjectile && bIsProjectile) {
+            return;  // Projectiles don't collide with each other
+        }
+
         std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+
+        // Check for damage components
+        bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
+        bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
+        bool aHasHealth = gCoordinator.HasComponent<Health>(a);
+        bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+
+        // Apply damage: B damages A
+        if (aHasHealth && bHasDamage) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            auto& damage = gCoordinator.GetComponent<Damage>(b);
+            if (!health.invulnerable) {
+                health.current -= damage.amount;
+                std::cout << "[Damage] Entity " << a << " took " << damage.amount << " damage, health: " << health.current << std::endl;
+            }
+        }
+        
+        // Apply damage: A damages B
+        if (bHasHealth && aHasDamage) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            auto& damage = gCoordinator.GetComponent<Damage>(a);
+            if (!health.invulnerable) {
+                health.current -= damage.amount;
+                std::cout << "[Damage] Entity " << b << " took " << damage.amount << " damage, health: " << health.current << std::endl;
+            }
+        }
 
         // Determine what died (health <= 0 after damage)
         bool aDied = false;
@@ -783,8 +816,8 @@ int Game::Run(int argc, char* argv[])
         bool playerWasHit = false;
         ECS::Entity playerEntity = 0;
         
-        // Apply damage and check deaths / player hit
-        if (gCoordinator.HasComponent<Health>(a)) {
+        // Check deaths and player hit
+        if (aHasHealth) {
             auto& health = gCoordinator.GetComponent<Health>(a);
             if (health.current <= 0 && health.destroyOnDeath) {
                 aDied = true;
@@ -799,7 +832,7 @@ int Game::Run(int argc, char* argv[])
                 std::cout << "[Player] Hit! Health: " << health.current << "/" << health.max << " - Invincible for " << health.invincibilityDuration << "s" << std::endl;
             }
         }
-        if (gCoordinator.HasComponent<Health>(b)) {
+        if (bHasHealth) {
             auto& health = gCoordinator.GetComponent<Health>(b);
             if (health.current <= 0 && health.destroyOnDeath) {
                 bDied = true;

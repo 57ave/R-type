@@ -72,7 +72,7 @@
     #include <systems/RenderSystem.hpp>
     #include <systems/ScrollingBackgroundSystem.hpp>
     #include <systems/BoundarySystem.hpp>
-    #include <systems/CollisionSystem.hpp>
+    #include <systems/CollisionSystem.hpp>  // Generic engine CollisionSystem
     #include <systems/HealthSystem.hpp>
 
     // Generic Engine Components

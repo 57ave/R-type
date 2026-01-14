@@ -7,8 +7,8 @@
 
 #ifndef _RESSOURCEMANAGER_CACHE_SYSTEME_
     #define _RESSOURCEMANAGER_CACHE_SYSTEME_
-    #include "ITexture.hpp"
-    #include "ISprite.hpp"
+    #include <rendering/ITexture.hpp>
+    #include <rendering/ISprite.hpp>
     #include <string>
     #include <unordered_map>
     #include <memory>
