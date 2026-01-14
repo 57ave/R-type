@@ -75,17 +75,17 @@ case $choice in
         
         # Lancer le serveur
         echo -e "${GREEN}Starting server...${NC}"
-        $TERM_CMD bash -c "cd $(pwd) && echo '🚀 SERVER' && $BUILD_DIR/server/r-type_server; read -p 'Press Enter to close...'" &
+        $TERM_CMD bash -c "cd $(pwd) && echo '🚀 SERVER' && $BUILD_DIR/server/r-type_server 2>&1 | tee server.log; read -p 'Press Enter to close...'" &
         sleep 2
         
         # Lancer le premier client
         echo -e "${GREEN}Starting Player 1...${NC}"
-        $TERM_CMD bash -c "cd $(pwd) && echo '🎮 PLAYER 1' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; read -p 'Press Enter to close...'" &
+        $TERM_CMD bash -c "cd $(pwd) && echo '🎮 PLAYER 1' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345 2>&1 | tee client1.log; read -p 'Press Enter to close...'" &
         sleep 1
         
         # Lancer le deuxième client
         echo -e "${GREEN}Starting Player 2...${NC}"
-        $TERM_CMD bash -c "cd $(pwd) && echo '🎮 PLAYER 2' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345; read -p 'Press Enter to close...'" &
+        $TERM_CMD bash -c "cd $(pwd) && echo '🎮 PLAYER 2' && $BUILD_DIR/game/r-type_game --network 127.0.0.1 12345 2>&1 | tee client2.log; read -p 'Press Enter to close...'" &
         
         echo ""
         echo -e "${GREEN}✅ All terminals launched!${NC}"
