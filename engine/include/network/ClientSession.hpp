@@ -12,15 +12,13 @@ public:
     uint32_t lastSequenceNumber;
     uint8_t playerId;
     bool isConnected;
-    uint32_t roomId;
 
     ClientSession(udp::endpoint ep, uint8_t id) 
         : endpoint(ep), 
           lastPacketTime(std::chrono::steady_clock::now()), 
           lastSequenceNumber(0), 
           playerId(id), 
-          isConnected(true),
-          roomId(0) {}
+          isConnected(true) {}
 
     void updateLastPacketTime() {
         lastPacketTime = std::chrono::steady_clock::now();
