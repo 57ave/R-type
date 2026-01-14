@@ -1614,6 +1614,12 @@ int Game::Run(int argc, char* argv[])
 
             // Pass events to UI system when in menu states
             if (currentGameState != GameState::Playing) {
+                if (event.type == eng::engine::EventType::TextEntered) {
+                    // UTF-32 vers char (ASCII seulement, sinon ignorer ou adapter)
+                    if (event.text.unicode < 128 && event.text.unicode >= 32) {
+                        uiSystem->HandleTextInput(static_cast<char>(event.text.unicode));
+                    }
+                }
                 uiSystem->HandleEvent(event);
             }
 
