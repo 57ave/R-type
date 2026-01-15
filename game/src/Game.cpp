@@ -10,7 +10,25 @@ static std::string g_basePath = "";
 std::string ResolveAssetPath(const std::string& relativePath) {
     // If we already found the base path, use it
     if (!g_basePath.empty()) {
-        return g_basePath + relativePath;
+        std::string candidate = g_basePath + relativePath;
+        std::ifstream f(candidate);
+        if (f.good()) return candidate;
+
+        // Try with/without a leading "game/" segment to be tolerant
+        if (relativePath.rfind("game/", 0) == 0) {
+            // relativePath starts with "game/" -> try without it
+            std::string alt = g_basePath + relativePath.substr(5);
+            std::ifstream f2(alt);
+            if (f2.good()) return alt;
+        } else {
+            // try prepending "game/"
+            std::string alt = g_basePath + std::string("game/") + relativePath;
+            std::ifstream f2(alt);
+            if (f2.good()) return alt;
+        }
+
+        // fallback to original candidate
+        return candidate;
     }
 
     // List of possible base paths to check
