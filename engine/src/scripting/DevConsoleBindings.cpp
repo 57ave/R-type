@@ -199,7 +199,7 @@ void DevConsoleBindings::Register(sol::state& lua, rtype::core::DevConsole* cons
         return s_Console ? s_Console->isOpen() : false;
     });
     
-    LOG_SUCCESS("SCRIPTING", "DevConsole bindings registered");
+    LOG_INFO("SCRIPTING", "DevConsole bindings registered");
 }
 
 bool DevConsoleBindings::LoadCommandsFile(sol::state& lua, rtype::core::DevConsole* console, const std::string& path) {
@@ -224,7 +224,7 @@ bool DevConsoleBindings::LoadCommandsFile(sol::state& lua, rtype::core::DevConso
             return false;
         }
         
-        LOG_SUCCESS("SCRIPTING", "Loaded commands from: " + path);
+        LOG_INFO("SCRIPTING", "Loaded commands from: " + path);
         return true;
         
     } catch (const std::exception& e) {

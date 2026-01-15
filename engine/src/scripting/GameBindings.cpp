@@ -149,7 +149,7 @@ void GameBindings::Register(sol::state& lua) {
         }
     });
     
-    LOG_SUCCESS("SCRIPTING", "Game bindings registered");
+    LOG_INFO("SCRIPTING", "Game bindings registered");
 }
 
 void GameBindings::UpdateGameState(sol::state& lua) {

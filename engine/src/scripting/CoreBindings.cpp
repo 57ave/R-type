@@ -15,7 +15,7 @@ void CoreBindings::Register(sol::state& lua) {
     RegisterLogger(lua);
     RegisterProfiler(lua);
     
-    LOG_SUCCESS("SCRIPTING", "Core bindings (Logger + Profiler) registered");
+    LOG_INFO("SCRIPTING", "Core bindings (Logger + Profiler) registered");
 }
 
 void CoreBindings::RegisterLogger(sol::state& lua) {
@@ -37,7 +37,8 @@ void CoreBindings::RegisterLogger(sol::state& lua) {
     });
     
     logTable.set_function("success", [](const std::string& category, const std::string& message) {
-        LOG_SUCCESS(category, message);
+        // Use INFO level for success (no LOG_SUCCESS macro exists)
+        LOG_INFO(category, "[SUCCESS] " + message);
     });
     
     logTable.set_function("warning", [](const std::string& category, const std::string& message) {
@@ -104,21 +105,12 @@ void CoreBindings::RegisterLogger(sol::state& lua) {
         Logger::getInstance().setColorEnabled(enable);
     });
     
-    logTable.set_function("enableTimestamps", [](bool enable) {
-        Logger::getInstance().setTimestampEnabled(enable);
+    logTable.set_function("enableConsole", [](bool enable) {
+        Logger::getInstance().setConsoleEnabled(enable);
     });
     
-    logTable.set_function("setLogFile", [](const std::string& path) {
-        Logger::getInstance().setLogFile(path);
-        LOG_INFO("LUA", "Log file set to: " + path);
-    });
-    
-    // ========================================
-    // Utility
-    // ========================================
-    
-    logTable.set_function("flush", []() {
-        Logger::getInstance().flush();
+    logTable.set_function("enableFile", [](bool enable) {
+        Logger::getInstance().setFileEnabled(enable);
     });
 }
 
@@ -145,23 +137,23 @@ void CoreBindings::RegisterProfiler(sol::state& lua) {
     // ========================================
     
     profilerTable.set_function("getFPS", []() -> float {
-        return Profiler::getInstance().getCurrentFPS();
+        return static_cast<float>(Profiler::getInstance().getCurrentFPS());
     });
     
     profilerTable.set_function("getAverageFPS", []() -> float {
-        return Profiler::getInstance().getAverageFPS();
+        return static_cast<float>(Profiler::getInstance().getAverageFPS());
     });
     
     profilerTable.set_function("getFrameTime", []() -> float {
-        return Profiler::getInstance().getFrameTimeMs();
+        return static_cast<float>(Profiler::getInstance().getFrameTimeMs());
     });
     
-    profilerTable.set_function("getMinFPS", []() -> float {
-        return Profiler::getInstance().getMinFPS();
+    profilerTable.set_function("getMinFrameTime", []() -> float {
+        return static_cast<float>(Profiler::getInstance().getMinFrameTimeMs());
     });
     
-    profilerTable.set_function("getMaxFPS", []() -> float {
-        return Profiler::getInstance().getMaxFPS();
+    profilerTable.set_function("getMaxFrameTime", []() -> float {
+        return static_cast<float>(Profiler::getInstance().getMaxFrameTimeMs());
     });
     
     // ========================================
@@ -169,15 +161,15 @@ void CoreBindings::RegisterProfiler(sol::state& lua) {
     // ========================================
     
     profilerTable.set_function("getMemoryUsage", []() -> float {
-        return Profiler::getInstance().getMemoryUsageMB();
+        return static_cast<float>(Profiler::getInstance().getMemoryUsageMB());
     });
     
     profilerTable.set_function("getEntityCount", []() -> size_t {
-        return Profiler::getInstance().getEntityCount();
+        return static_cast<size_t>(Profiler::getInstance().getEntityCount());
     });
     
     profilerTable.set_function("getDrawCalls", []() -> size_t {
-        return Profiler::getInstance().getDrawCalls();
+        return static_cast<size_t>(Profiler::getInstance().getDrawCalls());
     });
     
     // ========================================
@@ -185,11 +177,13 @@ void CoreBindings::RegisterProfiler(sol::state& lua) {
     // ========================================
     
     profilerTable.set_function("getSectionTime", [](const std::string& name) -> float {
-        return Profiler::getInstance().getSectionTimeMs(name);
+        const ProfileSection* section = Profiler::getInstance().getSection(name);
+        return section ? static_cast<float>(section->lastTimeMs) : 0.0f;
     });
     
     profilerTable.set_function("getSectionAverage", [](const std::string& name) -> float {
-        return Profiler::getInstance().getSectionAverageMs(name);
+        const ProfileSection* section = Profiler::getInstance().getSection(name);
+        return section ? static_cast<float>(section->avgTimeMs) : 0.0f;
     });
     
     // ========================================
@@ -229,23 +223,18 @@ void CoreBindings::RegisterProfiler(sol::state& lua) {
     });
     
     // ========================================
-    // Network stats (if available)
+    // Network stats
     // ========================================
     
-    profilerTable.set_function("getBytesSent", []() -> size_t {
-        return Profiler::getInstance().getBytesSent();
-    });
-    
-    profilerTable.set_function("getBytesReceived", []() -> size_t {
-        return Profiler::getInstance().getBytesReceived();
-    });
-    
-    profilerTable.set_function("getPacketsSent", []() -> size_t {
-        return Profiler::getInstance().getPacketsSent();
-    });
-    
-    profilerTable.set_function("getPacketsReceived", []() -> size_t {
-        return Profiler::getInstance().getPacketsReceived();
+    profilerTable.set_function("getNetworkStats", [&lua]() -> sol::table {
+        const auto& stats = Profiler::getInstance().getNetworkStats();
+        sol::table netStats = lua.create_table();
+        netStats["bytesSent"] = stats.bytesSent;
+        netStats["bytesReceived"] = stats.bytesReceived;
+        netStats["packetsSent"] = stats.packetsSent;
+        netStats["packetsReceived"] = stats.packetsReceived;
+        netStats["latency"] = stats.latencyMs;
+        return netStats;
     });
     
     // ========================================
@@ -254,18 +243,19 @@ void CoreBindings::RegisterProfiler(sol::state& lua) {
     
     profilerTable.set_function("getStats", [&lua]() -> sol::table {
         auto& profiler = Profiler::getInstance();
+        const auto& netStats = profiler.getNetworkStats();
         
         sol::table stats = lua.create_table();
         stats["fps"] = profiler.getCurrentFPS();
         stats["avgFps"] = profiler.getAverageFPS();
-        stats["minFps"] = profiler.getMinFPS();
-        stats["maxFps"] = profiler.getMaxFPS();
         stats["frameTime"] = profiler.getFrameTimeMs();
+        stats["minFrameTime"] = profiler.getMinFrameTimeMs();
+        stats["maxFrameTime"] = profiler.getMaxFrameTimeMs();
         stats["memory"] = profiler.getMemoryUsageMB();
         stats["entities"] = profiler.getEntityCount();
         stats["drawCalls"] = profiler.getDrawCalls();
-        stats["bytesSent"] = profiler.getBytesSent();
-        stats["bytesReceived"] = profiler.getBytesReceived();
+        stats["bytesSent"] = netStats.bytesSent;
+        stats["bytesReceived"] = netStats.bytesReceived;
         
         return stats;
     });

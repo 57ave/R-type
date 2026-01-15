@@ -64,7 +64,7 @@ bool ScriptingManager::init(ECS::Coordinator* coordinator, rtype::core::DevConso
     LuaState::Instance().EnableHotReload(true);
     
     m_initialized = true;
-    LOG_SUCCESS("SCRIPTING", "ScriptingManager initialized");
+    LOG_INFO("SCRIPTING", "ScriptingManager initialized");
     
     return true;
 }
