@@ -1297,6 +1297,12 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "Game initialized successfully!" << std::endl;
 
+    // In network mode, start directly in Playing state (server handles game logic)
+    if (networkMode) {
+        GameStateManager::Instance().SetState(GameState::Playing);
+        std::cout << "[Game] Network mode: Starting directly in Playing state" << std::endl;
+    }
+
     // Input mask for network
     uint8_t inputMask = 0;
 
@@ -1751,12 +1757,21 @@ int Game::Run(int argc, char* argv[])
         bool movingUp = false, movingDown = false, movingLeft = false, movingRight = false;
         bool firing = false;
         
-        if (!inMenu) {
+        // In network mode, always capture inputs (server handles game state)
+        // In local mode, only capture when not in menu
+        if (networkMode || !inMenu) {
             movingUp = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Up);
             movingDown = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Down);
             movingLeft = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Left);
             movingRight = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Right);
             firing = spacePressed;
+            
+            // Debug: Log inputs in network mode
+            if (networkMode && (movingUp || movingDown || movingLeft || movingRight || firing)) {
+                std::cout << "[Input] Up:" << movingUp << " Down:" << movingDown 
+                          << " Left:" << movingLeft << " Right:" << movingRight 
+                          << " Fire:" << firing << std::endl;
+            }
         }
 
         // Build input mask for network (bit flags from Protocol.md)
@@ -1790,6 +1805,11 @@ int Game::Run(int argc, char* argv[])
 
         // Send input to server if in network mode
         if (networkMode && networkSystem) {
+            // Only log when there's actual input to reduce spam
+            if (inputMask != 0) {
+                std::cout << "[Network] Sending inputMask=" << (int)inputMask 
+                          << " chargeLevel=" << (int)chargeLevel << std::endl;
+            }
             networkSystem->sendInput(inputMask, chargeLevel);
         }
 
