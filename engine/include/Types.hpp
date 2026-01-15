@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

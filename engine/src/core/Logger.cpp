@@ -1,6 +1,6 @@
 /*
 ** EPITECH PROJECT, 2025
-** rtype
+** engine
 ** File description:
 ** Enhanced logging system implementation
 */

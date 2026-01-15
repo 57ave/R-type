@@ -8,7 +8,7 @@
 #include "engine/Keyboard.hpp"
 #include <SFML/Window/Keyboard.hpp>
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         bool Keyboard::isKeyPressed(Key key) {
@@ -20,4 +20,4 @@ namespace rtype {
         }
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng

@@ -1,10 +1,10 @@
-#ifndef RTYPE_ENGINE_RENDERING_ITEXTURE_HPP
-#define RTYPE_ENGINE_RENDERING_ITEXTURE_HPP
+#ifndef ENG_ENGINE_RENDERING_ITEXTURE_HPP
+#define ENG_ENGINE_RENDERING_ITEXTURE_HPP
 
 #include <string>
 #include "rendering/Types.hpp"
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -22,4 +22,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_ITEXTURE_HPP
+#endif // ENG_ENGINE_RENDERING_ITEXTURE_HPP

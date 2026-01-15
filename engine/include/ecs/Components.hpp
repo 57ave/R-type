@@ -5,17 +5,26 @@
 #include <memory>
 
 // Forward declarations for rendering types
-namespace rtype { namespace engine { namespace rendering {
+namespace eng { namespace engine { namespace rendering {
     class ISprite;
 }}}
 
+/**
+ * @file Components.hpp
+ * @brief Generic ECS components for the game engine
+ * 
+ * This file contains ONLY generic, reusable components that could be used
+ * in ANY game. Game-specific components (Player, Enemy, etc.) should be
+ * defined in the game project, not here.
+ */
 
-namespace rtype {
+namespace eng {
     namespace engine {
         namespace ECS {
         
             /**
              * @brief Transform component - Entity position and rotation
+             * Generic: Used in any 2D/3D game
              */
             struct Transform {
                 float x, y, rotation;
@@ -26,6 +35,7 @@ namespace rtype {
         
             /**
              * @brief Velocity component - Movement speed
+             * Generic: Used in any game with physics/movement
              */
             struct Velocity {
                 float dx, dy;
@@ -38,10 +48,11 @@ namespace rtype {
         
             /**
              * @brief Sprite component - Visual representation
+             * Generic: Used in any 2D game with sprites
              */
             struct Sprite {
                 std::string texturePath;
-                std::shared_ptr<rtype::engine::rendering::ISprite> sprite;  // Real sprite instance for rendering
+                std::shared_ptr<eng::engine::rendering::ISprite> sprite;  // Real sprite instance for rendering
                 int width, height;
                 int layer = 0;          // Z-order for layered rendering (higher = front)
                 bool visible = true;    // Visibility flag
@@ -53,6 +64,7 @@ namespace rtype {
         
             /**
              * @brief Health component - Hit points
+             * Generic: Used in any game with health/damage system
              */
             struct Health {
                 int current, maximum;
@@ -67,6 +79,7 @@ namespace rtype {
         
             /**
              * @brief Damage component - Attack power
+             * Generic: Used in any game with combat
              */
             struct Damage {
                 int value;
@@ -76,26 +89,8 @@ namespace rtype {
             };
         
             /**
-             * @brief AIController component - Enemy behavior patterns
-             */
-            struct AIController {
-                std::string pattern;  // "straight", "zigzag", "circle", "dive"
-                float timer;
-                float shootTimer;
-                float shootInterval;
-
-                // Pattern-specific data
-                float centerX, centerY, circleRadius;
-                float targetY;
-
-                AIController() 
-                    : pattern("straight"), timer(0), shootTimer(0), shootInterval(2.0f),
-                      centerX(0), centerY(0), circleRadius(100),
-                      targetY(300) {}
-            };
-        
-            /**
              * @brief Collider component - Physics collision
+             * Generic: Used in any game with collision detection
              */
             struct Collider {
                 float radius;
@@ -104,71 +99,36 @@ namespace rtype {
                 Collider() : radius(16.0f), isTrigger(false) {}
                 Collider(float r, bool trigger = false) : radius(r), isTrigger(trigger) {}
             };
-        
+            
             /**
-             * @brief Player component - Marks player entity
+             * @brief Tag component - Generic string identifier
+             * Generic: Used to mark/categorize entities in any game
+             * 
+             * Examples:
+             *   Tag{"Player"}, Tag{"Enemy"}, Tag{"Projectile"}, Tag{"Collectible"}
+             *   Tag{"Boss"}, Tag{"NPC"}, Tag{"Obstacle"}, etc.
+             * 
+             * This replaces game-specific marker components like Player, Enemy, etc.
              */
-            struct Player {
-                int playerID;
-                int score;
+            struct Tag {
+                std::string value;
 
-                Player() : playerID(0), score(0) {}
-                Player(int id) : playerID(id), score(0) {}
+                Tag() : value("") {}
+                Tag(const std::string& tag) : value(tag) {}
+                
+                bool operator==(const std::string& other) const { return value == other; }
+                bool operator!=(const std::string& other) const { return value != other; }
             };
-        
-            /**
-             * @brief Enemy component - Marks enemy entity
-             */
-            struct Enemy {
-                int scoreValue;
 
-                Enemy() : scoreValue(100) {}
-                Enemy(int value) : scoreValue(value) {}
-            };
-        
-            /**
-             * @brief Projectile component - Bullets/missiles
-             */
-            struct Projectile {
-                int ownerID;
-                float lifetime;
-
-                Projectile() : ownerID(0), lifetime(5.0f) {}
-                Projectile(int owner, float life = 5.0f) : ownerID(owner), lifetime(life) {}
-            };
-        
-            /**
-             * @brief PowerUp component - Collectibles
-             */
-            struct PowerUp {
-                enum Type {
-                    SPEED_BOOST,
-                    DAMAGE_BOOST,
-                    HEALTH_RESTORE,
-                    SHIELD,
-                    WEAPON_UPGRADE
-                };
-
-                Type type;
-                float duration;
-                int value;
-
-                PowerUp() : type(HEALTH_RESTORE), duration(0), value(25) {}
-                PowerUp(Type t, float dur = 0, int val = 25) : type(t), duration(dur), value(val) {}
-            };
         } // namespace ECS
     }
 }
 
 // Alias pour compatibilité et clarté
-using TransformComponent = rtype::engine::ECS::Transform;
-using VelocityComponent = rtype::engine::ECS::Velocity;
-using SpriteComponent = rtype::engine::ECS::Sprite;
-using HealthComponent = rtype::engine::ECS::Health;
-using DamageComponent = rtype::engine::ECS::Damage;
-using AIComponent = rtype::engine::ECS::AIController;
-using CollisionComponent = rtype::engine::ECS::Collider;
-using PlayerComponent = rtype::engine::ECS::Player;
-using EnemyComponent = rtype::engine::ECS::Enemy;
-using ProjectileComponent = rtype::engine::ECS::Projectile;
-using PowerUpComponent = rtype::engine::ECS::PowerUp;
+using TransformComponent = eng::engine::ECS::Transform;
+using VelocityComponent = eng::engine::ECS::Velocity;
+using SpriteComponent = eng::engine::ECS::Sprite;
+using HealthComponent = eng::engine::ECS::Health;
+using DamageComponent = eng::engine::ECS::Damage;
+using CollisionComponent = eng::engine::ECS::Collider;
+using TagComponent = eng::engine::ECS::Tag;

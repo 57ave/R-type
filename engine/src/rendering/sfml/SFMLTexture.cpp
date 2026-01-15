@@ -1,6 +1,6 @@
 #include <rendering/sfml/SFMLTexture.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

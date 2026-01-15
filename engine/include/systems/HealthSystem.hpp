@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP
+#ifndef ENG_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP
+#define ENG_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP
 
 #include <ecs/System.hpp>
 
@@ -24,4 +24,4 @@ class HealthSystem : public ECS::System {
         void HandleDeath(ECS::Entity entity);
 };
 
-#endif // RTYPE_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP
+#endif // ENG_ENGINE_SYSTEMS_HEALTHSYSTEM_HPP

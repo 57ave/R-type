@@ -5,6 +5,9 @@ out/
 bin/
 lib/
 
+# External dependencies (downloaded by CMake)
+engine/external/
+
 # CMake generated files
 .cache/
 CMakeCache.txt

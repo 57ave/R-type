@@ -30,8 +30,15 @@ void AnimationSystem::Update(float dt)
         auto& anim = coordinator_->GetComponent<Animation>(entity);
         auto& sprite = coordinator_->GetComponent<Sprite>(entity);
 
-        if (anim.finished && !anim.loop)
+        // If animation finished and not looping, hide the sprite immediately
+        if (anim.finished && !anim.loop) {
+            if (sprite.sprite) {
+                // Hide sprite by setting scale to 0
+                sprite.scaleX = 0.0f;
+                sprite.scaleY = 0.0f;
+            }
             continue;
+        }
 
         anim.currentTime += dt;
 
@@ -43,8 +50,14 @@ void AnimationSystem::Update(float dt)
                 if (anim.loop) {
                     anim.currentFrame = 0;
                 } else {
+                    // Animation finished - hide sprite IMMEDIATELY
                     anim.currentFrame = anim.frameCount - 1;
                     anim.finished = true;
+                    if (sprite.sprite) {
+                        sprite.scaleX = 0.0f;
+                        sprite.scaleY = 0.0f;
+                    }
+                    continue;  // Don't update texture rect, sprite is hidden
                 }
             }
 

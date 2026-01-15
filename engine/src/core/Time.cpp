@@ -1,22 +1,22 @@
 /*
 ** EPITECH PROJECT, 2025
-** rtype
+** engine
 ** File description:
 ** time
 */
 
 #include "core/Time.hpp"
 
-long long rtype::core::Time::getElapsedTime() {
+long long eng::core::Time::getElapsedTime() {
     auto currentTime = std::chrono::high_resolution_clock::now();
     return std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - _startTime).count();
 }
 
-void rtype::core::Time::reset() {
+void eng::core::Time::reset() {
     _startTime = std::chrono::high_resolution_clock::now();
 }
 
-void rtype::core::Time::update() {
+void eng::core::Time::update() {
     auto currentTime = std::chrono::high_resolution_clock::now();
     float deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - _startTime).count();
     _deltaTime = deltaTime * _timeScale;

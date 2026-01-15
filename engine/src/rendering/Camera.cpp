@@ -1,6 +1,6 @@
 #include <rendering/Camera.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
