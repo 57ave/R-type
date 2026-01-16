@@ -1169,9 +1169,30 @@ int Game::Run(int argc, char* argv[])
     // Load Lua scripts
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
-    // Load configuration
-    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
-        std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    // Load main initialization script (which loads all configs)
+    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/init.lua"))) {
+        std::cerr << "Warning: Could not load init.lua, trying fallback..." << std::endl;
+        // Fallback to old config if init.lua doesn't exist
+        if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
+            std::cerr << "Warning: Could not load game_config.lua either" << std::endl;
+        }
+    } else {
+        std::cout << "[Game] ✓ init.lua loaded - All configurations initialized" << std::endl;
+        
+        // Initialize mode based on network setting
+        sol::state& lua = luaState.GetState();
+        if (networkMode) {
+            sol::protected_function initNetwork = lua["InitNetworkMode"];
+            if (initNetwork.valid()) {
+                initNetwork();
+            }
+        } else {
+            sol::protected_function initSolo = lua["InitSoloMode"];
+            if (initSolo.valid()) {
+                initSolo();
+                std::cout << "[Game] Solo mode initialized - Enemy showcase may be active" << std::endl;
+            }
+        }
     }
 
     // Set up game state callbacks for the engine (keeps engine abstract)
@@ -1352,6 +1373,21 @@ int Game::Run(int argc, char* argv[])
                         std::cout << "[Game] Found local player entity: " << player << " (networkId: " << netId.networkId << ")" << std::endl;
                         break;
                     }
+                }
+            }
+        }
+
+        // ========================================
+        // UPDATE GAME LOGIC (Lua callbacks, showcase, etc.)
+        // ========================================
+        if (!inMenu) {
+            sol::state& lua = luaState.GetState();
+            sol::protected_function updateGame = lua["UpdateGame"];
+            if (updateGame.valid()) {
+                sol::protected_function_result result = updateGame(deltaTime);
+                if (!result.valid()) {
+                    sol::error err = result;
+                    // Silently fail - don't spam console with errors
                 }
             }
         }
