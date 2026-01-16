@@ -782,6 +782,27 @@ int Game::Run(int argc, char* argv[])
             return;  // Projectiles don't collide with each other
         }
 
+        // Check if both entities are enemies - ignore enemy vs enemy collisions
+        bool aIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(a);
+        bool bIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(b);
+        if (aIsEnemy && bIsEnemy) {
+            return;  // Enemies don't collide with each other
+        }
+
+        // Check if enemy projectile hits another enemy - ignore
+        if (aIsProjectile && bIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(a);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+        if (bIsProjectile && aIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(b);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+
         // Check for damage/health components. Only log collisions that are gameplay-relevant:
         // - a has Damage and b has Health
         // - b has Damage and a has Health
@@ -1948,6 +1969,8 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         if (!inMenu && !networkMode) {
             enemySpawnTimer += deltaTime;
+            // Local Lua state reference for config/factory access
+            sol::state& lua = luaState.GetState();
             
             if (enemySpawnTimer >= enemySpawnInterval) {
                 enemySpawnTimer = 0.0f;
@@ -1955,15 +1978,27 @@ int Game::Run(int argc, char* argv[])
                 // Random Y position
                 float randomY = 100.0f + static_cast<float>(rand() % 800);
                 
-                // Random pattern type
-                std::vector<std::string> patterns = {"straight", "zigzag", "sinewave"};
-                std::string pattern = patterns[rand() % patterns.size()];
+                // Random enemy type - use proper Lua configs
+                std::vector<std::string> enemyTypes = {"basic", "zigzag", "sinewave", "kamikaze"};
+                std::string enemyType = enemyTypes[rand() % enemyTypes.size()];
                 
-                // Create enemy using the Game::CreateEnemy method (which has proper sprites & animations)
-                ECS::Entity enemy = CreateEnemy(1920.0f, randomY, pattern);
-                
-                if (enemy != 0) {
-                    std::cout << "[Game] Spawned " << pattern << " enemy at Y=" << randomY << std::endl;
+                // Create enemy using Lua factory
+                sol::table enemiesConfig = lua["EnemiesConfig"];
+                if (enemiesConfig.valid()) {
+                    sol::table enemyConfig = enemiesConfig[enemyType];
+                    if (enemyConfig.valid()) {
+                        sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
+                        if (createEnemy.valid()) {
+                            auto result = createEnemy(1920.0f, randomY, enemyConfig);
+                            if (result.valid()) {
+                                ECS::Entity enemy = result;
+                                if (enemy != 0) {
+                                    std::string enemyName = enemyConfig.get_or("name", enemyType);
+                                    std::cout << "[Game] Spawned " << enemyName << " at Y=" << randomY << std::endl;
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 // Vary spawn interval for unpredictability
@@ -1973,43 +2008,118 @@ int Game::Run(int argc, char* argv[])
             // ========================================
             // 4b. ENEMY SHOOTING
             // ========================================
-            enemyShootTimer += deltaTime;
+            // Each enemy manages its own fire timer independently
+            int shotsCreated = 0;
             
-            if (enemyShootTimer >= enemyShootInterval) {
-                enemyShootTimer = 0.0f;
+            for (auto entity : allEntities) {
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) ||
+                    !gCoordinator.HasComponent<Position>(entity)) {
+                    continue;
+                }
+
+                // Only consider enemies that actually have a Weapon component
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::Weapon>(entity)) {
+                    continue;
+                }
+
+                auto& weapon = gCoordinator.GetComponent<ShootEmUp::Components::Weapon>(entity);
+                auto& pos = gCoordinator.GetComponent<Position>(entity);
                 
-                int enemyCount = 0;
-                int shotsCreated = 0;
-                
-                // Make each enemy shoot — only enemies that have a Weapon component (configured from Lua)
-                for (auto entity : allEntities) {
-                    if (!gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) ||
-                        !gCoordinator.HasComponent<Position>(entity)) {
-                        continue;
-                    }
+                // Update fire timer every frame
+                weapon.lastFireTime += deltaTime;
 
-                    // Only consider enemies that actually have a Weapon component
-                    if (!gCoordinator.HasComponent<ShootEmUp::Components::Weapon>(entity)) {
-                        continue;
-                    }
-
-                    enemyCount++;
-                    auto& pos = gCoordinator.GetComponent<Position>(entity);
-
-                    // Only shoot if enemy is on screen (X < 1920 and X > 0)
-                    if (pos.x > 50.0f && pos.x < 1800.0f) {
-                        // 50% chance for each eligible enemy to shoot (keeps previous behaviour)
-                        if (rand() % 2 == 0) {
-                            CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
+                // Only shoot if enemy is on screen and fire timer is ready
+                if (pos.x > 50.0f && pos.x < 1800.0f && weapon.lastFireTime >= weapon.fireRate) {
+                    weapon.lastFireTime = 0.0f;
+                    
+                    // Get weapon config from Lua
+                    sol::table weaponsConfig = lua["WeaponsConfig"];
+                    if (weaponsConfig.valid()) {
+                        sol::table weaponTable = weaponsConfig[weapon.weaponType];
+                        if (weaponTable.valid()) {
+                            // Check if weapon is aimed at player
+                            bool isAimed = weaponTable.get_or("aimed", false);
+                            int projCount = weapon.projectileCount;
+                            float spreadAngle = weapon.spreadAngle;
+                            
+                            if (isAimed) {
+                                // Aimed shot - calculate direction towards player
+                                float targetX = 100.0f;
+                                float targetY = static_cast<float>(window.getSize().y) / 2.0f;
+                                
+                                // Find player position
+                                if (player != 0 && gCoordinator.HasComponent<Position>(player)) {
+                                    auto& playerPos = gCoordinator.GetComponent<Position>(player);
+                                    targetX = playerPos.x;
+                                    targetY = playerPos.y;
+                                }
+                                
+                                // Calculate angle to player
+                                float dx = targetX - pos.x;
+                                float dy = targetY - pos.y;
+                                float angleRad = std::atan2(dy, dx);
+                                
+                                // Call Lua factory to create aimed projectile
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        ECS::Entity proj = result;
+                                        if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                            auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                            float speed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                            vel.dx = std::cos(angleRad) * speed;
+                                            vel.dy = std::sin(angleRad) * speed;
+                                        }
+                                        shotsCreated++;
+                                    }
+                                }
+                            } else if (projCount > 1 || spreadAngle > 0.0f) {
+                                // Spread shot
+                                float startAngle = -spreadAngle / 2.0f;
+                                float angleStep = (projCount > 1) ? (spreadAngle / (projCount - 1)) : 0.0f;
+                                
+                                for (int i = 0; i < projCount; i++) {
+                                    float angle = startAngle + (angleStep * i);
+                                    float angleRad = angle * 3.14159f / 180.0f;
+                                    
+                                    // Call Lua factory
+                                    sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                    if (createProj.valid()) {
+                                        auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                        if (result.valid()) {
+                                            ECS::Entity proj = result;
+                                            if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                                auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                                float baseSpeed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                                vel.dx = std::cos(angleRad) * baseSpeed;
+                                                vel.dy = std::sin(angleRad) * baseSpeed;
+                                            }
+                                            shotsCreated++;
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Normal straight shot
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        shotsCreated++;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Fallback to simple bullet if weapon config not found
+                            CreateEnemyMissile(pos.x - 30.0f, pos.y);
                             shotsCreated++;
                         }
+                    } else {
+                        // Fallback if WeaponsConfig not loaded
+                        CreateEnemyMissile(pos.x - 30.0f, pos.y);
+                        shotsCreated++;
                     }
                 }
-                
-                std::cout << "[Enemy Shoot] Enemies: " << enemyCount << ", Shots: " << shotsCreated << std::endl;
-                
-                // Vary shoot interval
-                enemyShootInterval = 1.0f + static_cast<float>(rand() % 15) / 10.0f; // 1.0 to 2.5 seconds
             }
         }
 
@@ -2063,6 +2173,7 @@ int Game::Run(int argc, char* argv[])
                 lifetimeSystem->Update(deltaTime);
             } else {
                 // Local mode: Full simulation
+                movementPatternSystem->SetPlayerEntity(player);  // Update player reference for chase patterns
                 movementPatternSystem->Update(deltaTime);
                 movementSystem->Update(deltaTime);
                 boundarySystem->Update(deltaTime);

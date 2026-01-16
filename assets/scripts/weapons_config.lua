@@ -286,7 +286,8 @@ WeaponsConfig = {
             scale = 2.5,
             animated = true,
             frameCount = 4,
-            frameTime = 0.1
+            frameTime = 0.1,
+            spacing = 5  -- Espace entre les frames
         }
     },
     
@@ -306,7 +307,8 @@ WeaponsConfig = {
             scale = 2.0,
             animated = true,
             frameCount = 4,
-            frameTime = 0.1
+            frameTime = 0.1,
+            spacing = 5
         }
     },
     
@@ -324,11 +326,12 @@ WeaponsConfig = {
         
         projectile = {
             texture = "enemies/enemy_bullets.png",
-            normalRect = { x = 230, y = 3, w = 12, h = 12 },
-            scale = 3.0,
+            normalRect = { x = 166, y = 3, w = 12, h = 12 },  -- Même sprite
+            scale = 2.5,
             animated = true,
             frameCount = 4,
-            frameTime = 0.08
+            frameTime = 0.08,
+            spacing = 5
         }
     },
     
@@ -369,7 +372,8 @@ WeaponsConfig = {
             scale = 3.0,
             animated = true,
             frameCount = 4,
-            frameTime = 0.1
+            frameTime = 0.1,
+            spacing = 5
         }
     },
     
