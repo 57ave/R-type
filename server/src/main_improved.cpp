@@ -18,6 +18,11 @@ struct ServerEntity {
     uint8_t playerId; // For player entities
     uint8_t playerLine; // For player ship color (spritesheet line)
     float fireTimer = 0.0f; // For rate limiting
+    
+    // Extended fields for variety
+    uint8_t chargeLevel = 0;    // For missiles (0 = normal, 1-5 = charge levels)
+    uint8_t enemyType = 0;      // For enemies (0 = basic, 1 = zigzag, 2 = sine, etc.)
+    uint8_t projectileType = 0; // For projectiles (0 = normal, 1 = charged, etc.)
 };
 
 class GameServer {
@@ -34,8 +39,8 @@ public:
     }
 
     void run() {
-        rtype::engine::Clock updateClock;
-        rtype::engine::Clock snapshotClock;
+        eng::engine::Clock updateClock;
+        eng::engine::Clock snapshotClock;
         
         const float fixedDeltaTime = 1.0f / 60.0f; // 60 FPS simulation
         float enemySpawnTimer = 0.0f;
@@ -168,7 +173,7 @@ private:
         
         // Fire (with rate limiting)
         if ((input.inputMask & (1 << 4)) && player.fireTimer <= 0.0f) {
-            spawnPlayerMissile(player);
+            spawnPlayerMissile(player, input.chargeLevel);
             player.fireTimer = 0.2f; // 0.2 second cooldown
         }
     }
@@ -243,6 +248,8 @@ private:
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
                             std::cout << "[GameServer] Missile " << id << " hit enemy " << enemyId << "!" << std::endl;
+                            // Create explosion at enemy position
+                            spawnExplosion(enemy.x, enemy.y);
                             toRemove.push_back(id);
                             toRemove.push_back(enemyId);
                             break;
@@ -256,6 +263,8 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
+                            // Create small explosion at missile hit
+                            spawnExplosion(entity.x, entity.y);
                             toRemove.push_back(id);
                             player.hp -= 10; // Damage player
                             if (player.hp <= 0) {
@@ -272,6 +281,8 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
+                            // Create explosion at collision point
+                            spawnExplosion(entity.x, entity.y);
                             toRemove.push_back(id); // Destroy enemy
                             player.hp -= 20; // Heavy damage to player
                             if (player.hp <= 0) {
@@ -307,9 +318,39 @@ private:
         enemy.type = EntityType::ENTITY_MONSTER;
         enemy.x = 1920.0f;
         enemy.y = 100.0f + (dist_(rng_) % 880);
-        enemy.vx = -200.0f;
+        
+        // Random enemy type (0-5 for different enemy types)
+        enemy.enemyType = dist_(rng_) % 6;
+        
+        // Adjust speed and HP based on enemy type
+        switch (enemy.enemyType) {
+            case 0: // Basic
+                enemy.vx = -200.0f;
+                enemy.hp = 10;
+                break;
+            case 1: // ZigZag (faster)
+                enemy.vx = -250.0f;
+                enemy.hp = 8;
+                break;
+            case 2: // Sine Wave
+                enemy.vx = -180.0f;
+                enemy.hp = 12;
+                break;
+            case 3: // Kamikaze (very fast, low HP)
+                enemy.vx = -400.0f;
+                enemy.hp = 5;
+                break;
+            case 4: // Turret (slow, high HP)
+                enemy.vx = -100.0f;
+                enemy.hp = 20;
+                break;
+            case 5: // Boss (rare, slow, very high HP)
+                enemy.vx = -150.0f;
+                enemy.hp = 50;
+                break;
+        }
+        
         enemy.vy = 0.0f;
-        enemy.hp = 10;
         enemy.playerId = 0;
         enemy.playerLine = 0; // Enemies don't use playerLine
         enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f; // Initial fire delay 1-3s
@@ -317,25 +358,29 @@ private:
         entities_[enemy.id] = enemy;
         broadcastEntitySpawn(enemy);
         
-        std::cout << "[GameServer] 👾 Spawned enemy " << enemy.id << " at (" << enemy.x << ", " << enemy.y << ")" << std::endl;
+        std::cout << "[GameServer] 👾 Spawned enemy " << enemy.id << " (type " << (int)enemy.enemyType 
+                  << ") at (" << enemy.x << ", " << enemy.y << ")" << std::endl;
     }
 
-    void spawnPlayerMissile(const ServerEntity& player) {
+    void spawnPlayerMissile(const ServerEntity& player, uint8_t chargeLevel = 0) {
         ServerEntity missile;
         missile.id = nextEntityId_++;
         missile.type = EntityType::ENTITY_PLAYER_MISSILE;
         missile.x = player.x + 50.0f;
         missile.y = player.y + 10.0f;
-        missile.vx = 800.0f;
+        missile.vx = chargeLevel > 0 ? 1500.0f : 800.0f; // Charged missiles are faster
         missile.vy = 0.0f;
-        missile.hp = 1;
+        missile.hp = chargeLevel > 0 ? chargeLevel : 1; // Charged missiles have more HP/damage
         missile.playerId = player.playerId;
         missile.playerLine = 0; // Missiles don't use playerLine
+        missile.chargeLevel = chargeLevel;
+        missile.projectileType = chargeLevel > 0 ? 1 : 0; // 0 = normal, 1 = charged
         
         entities_[missile.id] = missile;
         broadcastEntitySpawn(missile);  // Broadcast to all clients
         
-        std::cout << "[GameServer] Player " << (int)player.playerId << " fired missile " << missile.id << std::endl;
+        std::cout << "[GameServer] Player " << (int)player.playerId << " fired missile " << missile.id 
+                  << (chargeLevel > 0 ? " (CHARGED level " + std::to_string(chargeLevel) + ")" : "") << std::endl;
     }
     
     void spawnEnemyMissile(const ServerEntity& enemy) {
@@ -354,6 +399,24 @@ private:
         broadcastEntitySpawn(missile);
         
         std::cout << "[GameServer] Enemy " << enemy.id << " fired missile " << missile.id << " at (" << missile.x << ", " << missile.y << ")" << std::endl;
+    }
+
+    void spawnExplosion(float x, float y) {
+        ServerEntity explosion;
+        explosion.id = nextEntityId_++;
+        explosion.type = EntityType::ENTITY_EXPLOSION;
+        explosion.x = x;
+        explosion.y = y;
+        explosion.vx = 0.0f;
+        explosion.vy = 0.0f;
+        explosion.hp = 1;
+        explosion.playerId = 0;
+        explosion.playerLine = 0;
+        
+        entities_[explosion.id] = explosion;
+        broadcastEntitySpawn(explosion);
+        
+        std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ")" << std::endl;
     }
 
     void sendWorldSnapshot() {
@@ -397,6 +460,9 @@ private:
         state.vy = entity.vy;
         state.hp = entity.hp;
         state.playerLine = entity.playerLine;
+        state.chargeLevel = entity.chargeLevel;
+        state.enemyType = entity.enemyType;
+        state.projectileType = entity.projectileType;
         
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_SPAWN));
         packet.header.timestamp = getCurrentTimestamp();

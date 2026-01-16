@@ -2,7 +2,7 @@
 ** EPITECH PROJECT, 2025
 ** InputManager
 ** File description:
-** rtype
+** engine
 */
 
 #ifndef _INPUTE_MANAGER_CORE_
@@ -11,7 +11,7 @@
     #include <unordered_map>
     #include <string>
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             class InputManager {
@@ -40,6 +40,6 @@
             };
 
         } // namespace core
-    } // namespace rtype
+    } // namespace eng
 
 #endif /* !_INPUTE_MANAGER_CORE_ */

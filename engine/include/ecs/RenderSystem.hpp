@@ -35,12 +35,12 @@ namespace ECS {
         /**
          * @brief Set the renderer to use for drawing
          */
-        void SetRenderer(rtype::engine::rendering::IRenderer* renderer);
+        void SetRenderer(eng::engine::rendering::IRenderer* renderer);
         
         /**
          * @brief Set the resource manager for loading sprites
          */
-        void SetResourceManager(rtype::core::ResourceManager* resourceManager);
+        void SetResourceManager(eng::core::ResourceManager* resourceManager);
         
         /**
          * @brief Set the coordinator for accessing components
@@ -48,19 +48,19 @@ namespace ECS {
         void SetCoordinator(Coordinator* coordinator);
         
     private:
-        rtype::engine::rendering::IRenderer* m_Renderer = nullptr;
-        rtype::core::ResourceManager* m_ResourceManager = nullptr;
+        eng::engine::rendering::IRenderer* m_Renderer = nullptr;
+        eng::core::ResourceManager* m_ResourceManager = nullptr;
         Coordinator* m_Coordinator = nullptr;
         
         /**
          * @brief Convert ECS Transform to rendering Transform
          */
-        rtype::engine::rendering::Transform ToRenderingTransform(const rtype::engine::ECS::Transform& ecsTransform);
+        eng::engine::rendering::Transform ToRenderingTransform(const eng::engine::ECS::Transform& ecsTransform);
         
         /**
          * @brief Load sprite from resource manager if not already loaded
          */
-        void EnsureSpriteLoaded(rtype::engine::ECS::Sprite& sprite);
+        void EnsureSpriteLoaded(eng::engine::ECS::Sprite& sprite);
         
         /**
          * @brief Sort entities by layer for proper rendering order

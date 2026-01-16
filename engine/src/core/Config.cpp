@@ -2,7 +2,7 @@
 ** EPITECH PROJECT, 2025
 ** Config
 ** File description:
-** rtype
+** engine
 */
 
 #include "core/Config.hpp"
@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 
-namespace rtype {
+namespace eng {
 namespace core {
 
 Config::Config()
@@ -86,7 +86,7 @@ void Config::save(const std::string& filepath) const
         return;
     }
     
-    file << "# R-Type Asset Configuration" << std::endl;
+    file << "# Game Asset Configuration" << std::endl;
     file << "# Auto-generated file" << std::endl;
     file << std::endl;
     
@@ -99,4 +99,4 @@ void Config::save(const std::string& filepath) const
 }
 
 } // namespace core
-} // namespace rtype
+} // namespace eng

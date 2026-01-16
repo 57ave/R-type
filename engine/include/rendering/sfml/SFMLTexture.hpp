@@ -1,10 +1,10 @@
-#ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
-#define RTYPE_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
+#ifndef ENG_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
+#define ENG_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
 
 #include <rendering/ITexture.hpp>
 #include <SFML/Graphics/Texture.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -32,4 +32,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP
+#endif // ENG_ENGINE_RENDERING_SFML_SFMLTEXTURE_HPP

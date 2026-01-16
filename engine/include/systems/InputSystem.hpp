@@ -4,17 +4,22 @@
 #include <ecs/Coordinator.hpp>
 #include <ecs/Components.hpp>
 #include <map>
+#include <string>
 #include <functional>
 
-enum class InputKey {
-    UP, DOWN, LEFT, RIGHT,
-    SHOOT, BOMB,
-    PAUSE, QUIT
-};
-
+/**
+ * @brief Generic input system using string-based action mapping
+ * 
+ * Instead of hardcoded enums, use configurable action names:
+ * - "move_up", "move_down", "move_left", "move_right"
+ * - "action1", "action2", "action3" (game defines what these mean)
+ * - "pause", "menu", etc.
+ * 
+ * This makes the engine reusable for ANY game genre.
+ */
 class InputSystem : public ECS::System {
     public:
-        using InputHandler = std::function<void(ECS::Entity, InputKey, float)>;
+        using InputHandler = std::function<void(ECS::Entity, const std::string&, float)>;
 
         explicit InputSystem(ECS::Coordinator* coordinator);
         ~InputSystem() override = default;
@@ -23,7 +28,8 @@ class InputSystem : public ECS::System {
         void Update(float dt) override;
         void Shutdown() override;
 
-        void SetKeyState(InputKey key, bool pressed);
+        // Set state for a named action
+        void SetActionState(const std::string& action, bool pressed);
         void SetInputHandler(InputHandler handler);
 
         const char* GetName() const { return "InputSystem"; }
@@ -31,7 +37,7 @@ class InputSystem : public ECS::System {
 
     private:
         ECS::Coordinator* m_Coordinator;
-        std::map<InputKey, bool> m_KeyStates;
+        std::map<std::string, bool> m_ActionStates;  // action name -> pressed state
         InputHandler m_InputHandler;
 };
 

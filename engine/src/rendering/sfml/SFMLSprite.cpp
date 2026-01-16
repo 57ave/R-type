@@ -1,6 +1,6 @@
 #include <rendering/sfml/SFMLSprite.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {

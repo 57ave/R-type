@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_AUDIOSOURCE_HPP
-#define RTYPE_ENGINE_COMPONENTS_AUDIOSOURCE_HPP
+#ifndef ENG_ENGINE_COMPONENTS_AUDIOSOURCE_HPP
+#define ENG_ENGINE_COMPONENTS_AUDIOSOURCE_HPP
 
 #include <string>
 
@@ -19,4 +19,4 @@ struct SoundEffect {
     bool autoDestroy = true;       // Destroy entity when sound finishes
 };
 
-#endif // RTYPE_ENGINE_COMPONENTS_AUDIOSOURCE_HPP
+#endif // ENG_ENGINE_COMPONENTS_AUDIOSOURCE_HPP

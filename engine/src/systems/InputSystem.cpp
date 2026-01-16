@@ -1,4 +1,5 @@
 #include "systems/InputSystem.hpp"
+#include <components/Velocity.hpp>
 #include <iostream>
 
 InputSystem::InputSystem(ECS::Coordinator* coordinator)
@@ -11,12 +12,12 @@ void InputSystem::Init() {
 
 void InputSystem::Update(float dt) {
     for (auto entity : mEntities) {
-        // Only process player entities
-        if (!m_Coordinator->HasComponent<rtype::engine::ECS::Player>(entity)) {
+        // Process entities with velocity component
+        if (!m_Coordinator->HasComponent<Velocity>(entity)) {
             continue;
         }
         
-        auto& velocity = m_Coordinator->GetComponent<rtype::engine::ECS::Velocity>(entity);
+        auto& velocity = m_Coordinator->GetComponent<Velocity>(entity);
         
         // Apply input to velocity
         velocity.dx = 0;
@@ -24,18 +25,18 @@ void InputSystem::Update(float dt) {
         
         float speed = 300.0f;
         
-        if (m_KeyStates[InputKey::LEFT]) velocity.dx = -speed;
-        if (m_KeyStates[InputKey::RIGHT]) velocity.dx = speed;
-        if (m_KeyStates[InputKey::UP]) velocity.dy = -speed;
-        if (m_KeyStates[InputKey::DOWN]) velocity.dy = speed;
+        // Generic directional actions
+        if (m_ActionStates["move_left"]) velocity.dx = -speed;
+        if (m_ActionStates["move_right"]) velocity.dx = speed;
+        if (m_ActionStates["move_up"]) velocity.dy = -speed;
+        if (m_ActionStates["move_down"]) velocity.dy = speed;
         
-        // Call custom handler for special keys
+        // Call custom handler for any active actions
         if (m_InputHandler) {
-            if (m_KeyStates[InputKey::SHOOT]) {
-                m_InputHandler(entity, InputKey::SHOOT, dt);
-            }
-            if (m_KeyStates[InputKey::BOMB]) {
-                m_InputHandler(entity, InputKey::BOMB, dt);
+            for (const auto& [action, pressed] : m_ActionStates) {
+                if (pressed) {
+                    m_InputHandler(entity, action, dt);
+                }
             }
         }
     }
@@ -45,8 +46,8 @@ void InputSystem::Shutdown() {
     std::cout << "[InputSystem] Shutdown" << std::endl;
 }
 
-void InputSystem::SetKeyState(InputKey key, bool pressed) {
-    m_KeyStates[key] = pressed;
+void InputSystem::SetActionState(const std::string& action, bool pressed) {
+    m_ActionStates[action] = pressed;
 }
 
 void InputSystem::SetInputHandler(InputHandler handler) {

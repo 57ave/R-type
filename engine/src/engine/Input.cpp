@@ -8,7 +8,7 @@
 #include "engine/Input.hpp"
 #include <SFML/Window/Keyboard.hpp>
 
-namespace rtype {
+namespace eng {
     namespace engine {
         namespace internal {
 
@@ -230,4 +230,4 @@ namespace rtype {
 
         } // namespace internal
     } // namespace engine
-} // namespace rtype
+} // namespace eng
