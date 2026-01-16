@@ -186,39 +186,39 @@ LuaEnemyConfig GameplayBindings::GetEnemyConfig(sol::state& lua, const std::stri
     }
     
     // Extract values from Lua table
-    config.name = enemyTable.get_or("name", enemyType);
-    config.health = enemyTable.get_or("health", 10);
-    config.damage = enemyTable.get_or("damage", 10);
-    config.speed = enemyTable.get_or("speed", 200.0f);
-    config.scoreValue = enemyTable.get_or("scoreValue", 100);
-    config.dropChance = enemyTable.get_or("dropChance", 0.0f);
+    config.name = enemyTable.get_or<std::string>("name", enemyType);
+    config.health = enemyTable.get_or<int>("health", 10);
+    config.damage = enemyTable.get_or<int>("damage", 10);
+    config.speed = enemyTable.get_or<float>("speed", 200.0f);
+    config.scoreValue = enemyTable.get_or<int>("scoreValue", 100);
+    config.dropChance = enemyTable.get_or<float>("dropChance", 0.0f);
     
     // Movement
     sol::table movement = enemyTable["movement"];
     if (movement.valid()) {
-    config.movementPattern = movement.get_or("pattern", std::string("straight"));
-    config.amplitude = movement.get_or("amplitude", 0.0f);
-    config.frequency = movement.get_or("frequency", 0.0f);
+        config.movementPattern = movement.get_or<std::string>("pattern", "straight");
+        config.amplitude = movement.get_or<float>("amplitude", 0.0f);
+        config.frequency = movement.get_or<float>("frequency", 0.0f);
     }
     
     // Weapon
-    config.weaponType = enemyTable.get_or("weapon", std::string(""));
-    config.shootInterval = enemyTable.get_or("shootInterval", 0.0f);
+    config.weaponType = enemyTable.get_or<std::string>("weapon", "");
+    config.shootInterval = enemyTable.get_or<float>("shootInterval", 0.0f);
     
     // Sprite
     sol::table sprite = enemyTable["sprite"];
     if (sprite.valid()) {
-    config.texture = sprite.get_or("texture", std::string(""));
-    config.frameWidth = sprite.get_or("frameWidth", 32);
-    config.frameHeight = sprite.get_or("frameHeight", 32);
-    config.scale = sprite.get_or("scale", 2.0f);
+        config.texture = sprite.get_or<std::string>("texture", "");
+        config.frameWidth = sprite.get_or<int>("frameWidth", 32);
+        config.frameHeight = sprite.get_or<int>("frameHeight", 32);
+        config.scale = sprite.get_or<float>("scale", 2.0f);
     }
     
     // Animation
     sol::table anim = enemyTable["animation"];
     if (anim.valid()) {
-    config.frameCount = anim.get_or("frameCount", 1);
-    config.frameTime = anim.get_or("frameTime", 0.1f);
+        config.frameCount = anim.get_or<int>("frameCount", 1);
+        config.frameTime = anim.get_or<float>("frameTime", 0.1f);
     }
     
     // Drop table
@@ -251,34 +251,34 @@ LuaBossConfig GameplayBindings::GetBossConfig(sol::state& lua, const std::string
     }
     
     // Extract values
-    config.name = bossTable.get_or("name", bossType);
-    config.health = bossTable.get_or("health", 500);
-    config.maxHealth = bossTable.get_or("maxHealth", 500);
-    config.scoreValue = bossTable.get_or("scoreValue", 10000);
+    config.name = bossTable.get_or<std::string>("name", bossType);
+    config.health = bossTable.get_or<int>("health", 500);
+    config.maxHealth = bossTable.get_or<int>("maxHealth", 500);
+    config.scoreValue = bossTable.get_or<int>("scoreValue", 10000);
     
     // Entry
     sol::table entry = bossTable["entry"];
     if (entry.valid()) {
-    config.entryStartX = entry.get_or("startX", 2200.0f);
-    config.entryTargetX = entry.get_or("targetX", 1450.0f);
-    config.entryDuration = entry.get_or("duration", 4.0f);
+        config.entryStartX = entry.get_or<float>("startX", 2200.0f);
+        config.entryTargetX = entry.get_or<float>("targetX", 1450.0f);
+        config.entryDuration = entry.get_or<float>("duration", 4.0f);
     }
     
     // Movement
     sol::table movement = bossTable["movement"];
     if (movement.valid()) {
-    config.movementPattern = movement.get_or("pattern", std::string("hover"));
-    config.amplitude = movement.get_or("amplitude", 80.0f);
-    config.frequency = movement.get_or("frequency", 0.5f);
+        config.movementPattern = movement.get_or<std::string>("pattern", "hover");
+        config.amplitude = movement.get_or<float>("amplitude", 80.0f);
+        config.frequency = movement.get_or<float>("frequency", 0.5f);
     }
     
     // Sprite
     sol::table sprite = bossTable["sprite"];
     if (sprite.valid()) {
-    config.texture = sprite.get_or("texture", std::string(""));
-    config.frameWidth = sprite.get_or("frameWidth", 160);
-    config.frameHeight = sprite.get_or("frameHeight", 128);
-    config.scale = sprite.get_or("scale", 2.0f);
+        config.texture = sprite.get_or<std::string>("texture", "");
+        config.frameWidth = sprite.get_or<int>("frameWidth", 160);
+        config.frameHeight = sprite.get_or<int>("frameHeight", 128);
+        config.scale = sprite.get_or<float>("scale", 2.0f);
     }
     
     // Phases
@@ -288,7 +288,7 @@ LuaBossConfig GameplayBindings::GetBossConfig(sol::state& lua, const std::string
         for (auto& pair : phases) {
             sol::table phase = pair.second;
             if (phase.valid()) {
-                config.phaseThresholds.push_back(phase.get_or("healthThreshold", 1.0f));
+                config.phaseThresholds.push_back(phase.get_or<float>("healthThreshold", 1.0f));
             }
         }
     }
@@ -312,16 +312,16 @@ LuaWeaponConfig GameplayBindings::GetWeaponConfig(sol::state& lua, const std::st
         return config;
     }
     
-    config.fireRate = weaponTable.get_or("fireRate", 0.2f);
-    config.projectileSpeed = weaponTable.get_or("projectileSpeed", 1000.0f);
-    config.damage = weaponTable.get_or("damage", 10);
-    config.projectileCount = weaponTable.get_or("projectileCount", 1);
-    config.spreadAngle = weaponTable.get_or("spreadAngle", 0.0f);
-    config.canCharge = weaponTable.get_or("canCharge", false);
-    config.maxChargeTime = weaponTable.get_or("maxChargeTime", 1.0f);
-    config.piercing = weaponTable.get_or("piercing", false);
-    config.homing = weaponTable.get_or("homing", false);
-    config.homingStrength = weaponTable.get_or("homingStrength", 0.0f);
+    config.fireRate = weaponTable.get_or<float>("fireRate", 0.2f);
+    config.projectileSpeed = weaponTable.get_or<float>("projectileSpeed", 1000.0f);
+    config.damage = weaponTable.get_or<int>("damage", 10);
+    config.projectileCount = weaponTable.get_or<int>("projectileCount", 1);
+    config.spreadAngle = weaponTable.get_or<float>("spreadAngle", 0.0f);
+    config.canCharge = weaponTable.get_or<bool>("canCharge", false);
+    config.maxChargeTime = weaponTable.get_or<float>("maxChargeTime", 1.0f);
+    config.piercing = weaponTable.get_or<bool>("piercing", false);
+    config.homing = weaponTable.get_or<bool>("homing", false);
+    config.homingStrength = weaponTable.get_or<float>("homingStrength", 0.0f);
     
     return config;
 }
@@ -339,12 +339,12 @@ LuaWaveInfo GameplayBindings::GetActiveWave(sol::state& lua, int stageNumber, fl
         return info;
     }
     
-    info.name = waveTable.get_or("name", std::string("Unknown"));
-    info.index = waveTable.get_or("index", 0);
-    info.isBossWave = waveTable.get_or("isBossWave", false);
-    info.bossType = waveTable.get_or("boss", std::string(""));
-    info.startTime = waveTable.get_or("startTime", 0.0f);
-    info.duration = waveTable.get_or("duration", 30.0f);
+    info.name = waveTable.get_or<std::string>("name", "Unknown");
+    info.index = waveTable.get_or<int>("index", 0);
+    info.isBossWave = waveTable.get_or<bool>("isBossWave", false);
+    info.bossType = waveTable.get_or<std::string>("boss", "");
+    info.startTime = waveTable.get_or<float>("startTime", 0.0f);
+    info.duration = waveTable.get_or<float>("duration", 30.0f);
     
     return info;
 }
@@ -384,10 +384,10 @@ std::vector<LuaSpawnRequest> GameplayBindings::UpdateSpawns(sol::state& lua, flo
         if (spawn.valid()) {
             LuaSpawnRequest req;
             req.entityType = "enemy";
-            req.subType = spawn.get_or("enemy", std::string("basic"));
-            req.x = spawn.get_or("x", 1920.0f);
-            req.y = spawn.get_or("y", 540.0f);
-            req.pattern = spawn.get_or("pattern", std::string("straight"));
+            req.subType = spawn.get_or<std::string>("enemy", "basic");
+            req.x = spawn.get_or<float>("x", 1920.0f);
+            req.y = spawn.get_or<float>("y", 540.0f);
+            req.pattern = spawn.get_or<std::string>("pattern", "straight");
             requests.push_back(req);
         }
     }
@@ -419,7 +419,7 @@ void GameplayBindings::SetDifficulty(sol::state& lua, const std::string& difficu
 std::string GameplayBindings::GetDifficulty(sol::state& lua) {
     sol::table config = lua["GameplayConfig"];
     if (config.valid()) {
-    return config.get_or("currentDifficulty", std::string("normal"));
+        return config.get_or<std::string>("currentDifficulty", "normal");
     }
     return "normal";
 }

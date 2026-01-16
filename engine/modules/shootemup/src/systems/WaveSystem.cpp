@@ -1,6 +1,5 @@
 #include <systems/WaveSystem.hpp>
 #include <iostream>
-#include <algorithm>
 
 namespace ShootEmUp {
 namespace Systems {

@@ -43,9 +43,9 @@ namespace Scripting {
             float y = config.get_or("y", 0.0f);
             float width = config.get_or("width", 200.0f);
             float height = config.get_or("height", 50.0f);
-            std::string text = config.get_or("text", std::string("Button"));
-            std::string onClick = config.get_or("onClick", std::string(""));
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string text = config.get_or<std::string>("text", "Button");
+            std::string onClick = config.get_or<std::string>("onClick", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateButton(x, y, width, height, text, onClick, menuGroup);
         };
@@ -56,10 +56,10 @@ namespace Scripting {
 
             float x = config.get_or("x", 0.0f);
             float y = config.get_or("y", 0.0f);
-            std::string text = config.get_or("text", std::string(""));
+            std::string text = config.get_or<std::string>("text", "");
             unsigned int fontSize = config.get_or("fontSize", 24u);
             uint32_t color = config.get_or("color", 0xFFFFFFFFu);
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateText(x, y, text, fontSize, color, menuGroup);
         };
@@ -74,8 +74,8 @@ namespace Scripting {
             float minVal = config.get_or("min", 0.0f);
             float maxVal = config.get_or("max", 100.0f);
             float value = config.get_or("value", 50.0f);
-            std::string onChange = config.get_or("onChange", std::string(""));
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string onChange = config.get_or<std::string>("onChange", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateSlider(x, y, width, minVal, maxVal, value, onChange, menuGroup);
         };
@@ -90,7 +90,7 @@ namespace Scripting {
             float height = config.get_or("height", 400.0f);
             uint32_t bgColor = config.get_or("backgroundColor", 0x000000AAu);
             bool modal = config.get_or("modal", false);
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreatePanel(x, y, width, height, bgColor, modal, menuGroup);
         };
@@ -103,8 +103,8 @@ namespace Scripting {
             float y = config.get_or("y", 0.0f);
             float width = config.get_or("width", 200.0f);
             float height = config.get_or("height", 40.0f);
-            std::string placeholder = config.get_or("placeholder", std::string("Enter text..."));
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string placeholder = config.get_or<std::string>("placeholder", "Enter text...");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateInputField(x, y, width, height, placeholder, menuGroup);
         };
@@ -115,10 +115,10 @@ namespace Scripting {
 
             float x = config.get_or("x", 0.0f);
             float y = config.get_or("y", 0.0f);
-            std::string label = config.get_or("label", std::string(""));
+            std::string label = config.get_or<std::string>("label", "");
             bool checked = config.get_or("checked", false);
-            std::string onChange = config.get_or("onChange", std::string(""));
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string onChange = config.get_or<std::string>("onChange", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateCheckbox(x, y, label, checked, onChange, menuGroup);
         };
@@ -140,8 +140,8 @@ namespace Scripting {
             }
             
             int selectedIndex = config.get_or("selectedIndex", 0);
-            std::string onChange = config.get_or("onChange", std::string(""));
-            std::string menuGroup = config.get_or("menuGroup", std::string(""));
+            std::string onChange = config.get_or<std::string>("onChange", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
             return s_uiSystem->CreateDropdown(x, y, width, options, selectedIndex, onChange, menuGroup);
         };
@@ -265,7 +265,7 @@ namespace Scripting {
 
         // Helper function to resolve a relative path
         ui["ResolvePath"] = [&lua](const std::string& relativePath) -> std::string {
-                std::string basePath = lua.get_or("ASSET_BASE_PATH", std::string(""));
+            std::string basePath = lua.get_or<std::string>("ASSET_BASE_PATH", "");
             return basePath + relativePath;
         };
 

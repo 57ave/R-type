@@ -84,11 +84,6 @@ target_include_directories(shootemup PUBLIC
     ${CMAKE_SOURCE_DIR}/engine/include
 )
 
-# Make sure sol3 headers are available to this module (used for Lua-driven factories)
-target_include_directories(shootemup PUBLIC
-    ${CMAKE_SOURCE_DIR}/engine/external/sol3/include
-)
-
 # ========================================
 # DEPENDENCIES
 # ========================================
