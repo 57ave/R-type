@@ -82,15 +82,16 @@ EnemiesConfig = {
 
         sprite = {
             texture = "enemies/r-typesheet3.png",
-            frameWidth = 33,
-            frameHeight = 32,
+            frameWidth = 17,
+            frameHeight = 18,
             scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 8,
+            frameCount = 12,
             frameTime = 0.08,
             loop = true
         },
@@ -114,30 +115,30 @@ EnemiesConfig = {
         description = "Smooth sine wave movement",
         category = "common",
 
-    health = 1,
+    health = 100,
         damage = 12,
         speed = 180,
         scoreValue = 200,
 
         movement = {
-            pattern = "sinewave",
+            pattern = "sine_wave",
             direction = "left",
             amplitude = 120,
             frequency = 1.5
         },
 
         sprite = {
-            texture = "enemies/r-typesheet7.png",
-            frameWidth = 34,
-            frameHeight = 34,
+            texture = "enemies/r-typesheet3.png",
+            frameWidth = 17,
+            frameHeight = 18,
             scale = 2.0,
             startX = 0,
             startY = 0
         },
 
         animation = {
-            frameCount = 4,
-            frameTime = 0.12,
+            frameCount = 12,
+            frameTime = 0.08,
             loop = true
         },
 
