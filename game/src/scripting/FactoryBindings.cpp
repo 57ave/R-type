@@ -96,69 +96,136 @@ void FactoryBindings::RegisterFactories(
     // PROJECTILE FACTORY BINDINGS
     // ========================================
 
-    std::function<ECS::Entity(float, float, bool, int)> createNormalProj = [ctx](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreateNormalProjectile(
-            *ctx->coordinator, x, y, missileTexture, *ctx->spriteList, isPlayer, ownerId
+    // Helper lambda pour créer des projectiles depuis WeaponsConfig
+    auto CreateProjectileFromWeaponConfig = [ctx](
+        std::string weaponName,
+        float x, float y,
+        bool isPlayer,
+        int ownerId,
+        int level = 1,
+        bool charged = false
+    ) -> ECS::Entity {
+        sol::state_view lua(*ctx->lua);
+        sol::table weapons = lua["WeaponsConfig"];
+        
+        if (!weapons.valid()) {
+            std::cerr << "[Factory] WeaponsConfig not found!" << std::endl;
+            return 0;
+        }
+        
+        sol::table weaponConfig = weapons[weaponName];
+        if (!weaponConfig.valid()) {
+            std::cerr << "[Factory] Weapon '" << weaponName << "' not found!" << std::endl;
+            return 0;
+        }
+        
+        sol::table projConfig = weaponConfig["projectile"];
+        if (!projConfig.valid()) {
+            std::cerr << "[Factory] No projectile config for: " << weaponName << std::endl;
+            return 0;
+        }
+        
+        // Build spec from config
+        ProjectileFactory::ProjectileVisualSpec spec;
+        
+    // Choose rect (charged or normal)
+    sol::table rect;
+    if (charged)
+        rect = projConfig["chargedRect"];
+    else
+        rect = projConfig["normalRect"];
+    if (!rect.valid())
+        rect = projConfig["normalRect"];
+        
+        if (rect.valid()) {
+            spec.x = rect.get_or("x", 0);
+            spec.y = rect.get_or("y", 0);
+            spec.w = rect.get_or("w", 16);
+            spec.h = rect.get_or("h", 16);
+        } else {
+            spec.x = 0; spec.y = 0; spec.w = 16; spec.h = 16;
+        }
+        
+        spec.scale = projConfig.get_or("scale", 1.0f);
+        spec.animated = projConfig.get_or("animated", false);
+        spec.frameCount = projConfig.get_or("frameCount", 1);
+        spec.frameTime = projConfig.get_or("frameTime", 0.1f);
+        spec.spacing = projConfig.get_or("spacing", spec.w);
+        
+        // Get texture
+        std::string texPath;
+        try {
+            sol::object texObj = projConfig["texture"];
+            if (texObj.valid() && texObj.is<std::string>()) {
+                texPath = texObj.as<std::string>();
+            }
+        } catch (...) {
+            texPath = "";
+        }
+        
+        eng::engine::rendering::sfml::SFMLTexture* tex = nullptr;
+        if (!texPath.empty()) {
+            auto it = ctx->textures.find(texPath);
+            if (it != ctx->textures.end()) tex = it->second;
+        }
+        if (!tex) tex = ctx->textures["missile"];
+        if (!tex) return 0;
+        
+        // Create projectile
+        ECS::Entity e = ProjectileFactory::CreateProjectileFromSpec(
+            *ctx->coordinator, x, y, tex, spec, *ctx->spriteList, isPlayer, ownerId, level
         );
+        
         if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
         return e;
+    };
+
+    // CreateNormalProjectile - Utilise single_shot ou enemy_bullet
+    std::function<ECS::Entity(float, float, bool, int)> createNormalProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
+        std::string weaponName = isPlayer ? "single_shot" : "enemy_bullet";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, 1, false);
     };
     lua["Factory"]["CreateNormalProjectile"] = createNormalProj;
 
-    std::function<ECS::Entity(float, float, int, bool, int)> createChargedProj = [ctx](float x, float y, int chargeLevel, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreateChargedProjectile(
-            *ctx->coordinator, x, y, chargeLevel, missileTexture, *ctx->spriteList, isPlayer, ownerId
-        );
-        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
-        return e;
+    // CreateChargedProjectile
+    std::function<ECS::Entity(float, float, int, bool, int)> createChargedProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, int chargeLevel, bool isPlayer, int ownerId) -> ECS::Entity {
+        std::string weaponName = isPlayer ? "single_shot" : "enemy_bullet";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, chargeLevel, true);
     };
     lua["Factory"]["CreateChargedProjectile"] = createChargedProj;
 
-    std::function<ECS::Entity(float, float, bool, int)> createExplosiveProj = [ctx](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreateExplosiveProjectile(
-            *ctx->coordinator, x, y, missileTexture, *ctx->spriteList, isPlayer, ownerId
-        );
-        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
-        return e;
+    // CreateExplosiveProjectile
+    std::function<ECS::Entity(float, float, bool, int)> createExplosiveProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
+        std::string weaponName = "single_shot";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, 1, false);
     };
     lua["Factory"]["CreateExplosiveProjectile"] = createExplosiveProj;
 
-    std::function<ECS::Entity(float, float, int, bool, int)> createPiercingProj = [ctx](float x, float y, int maxPierce, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreatePiercingProjectile(
-            *ctx->coordinator, x, y, maxPierce, missileTexture, *ctx->spriteList, isPlayer, ownerId
-        );
-        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
-        return e;
+    // CreatePiercingProjectile
+    std::function<ECS::Entity(float, float, int, bool, int)> createPiercingProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, int maxPierce, bool isPlayer, int ownerId) -> ECS::Entity {
+        (void)maxPierce; // parameter intentionally unused in this wrapper
+        std::string weaponName = isPlayer ? "laser" : "enemy_laser";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, 1, false);
     };
     lua["Factory"]["CreatePiercingProjectile"] = createPiercingProj;
 
-    std::function<ECS::Entity(float, float, bool, int)> createHomingProj = [ctx](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreateHomingProjectile(
-            *ctx->coordinator, x, y, missileTexture, *ctx->spriteList, isPlayer, ownerId
-        );
-        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
-        return e;
+    // CreateHomingProjectile
+    std::function<ECS::Entity(float, float, bool, int)> createHomingProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
+        std::string weaponName = isPlayer ? "homing_missile" : "boss_homing";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, 1, false);
     };
     lua["Factory"]["CreateHomingProjectile"] = createHomingProj;
 
-    std::function<ECS::Entity(float, float, bool, int)> createLaserProj = [ctx](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
-        auto* missileTexture = ctx->textures["missile"];
-        if (!missileTexture) return 0;
-        ECS::Entity e = ProjectileFactory::CreateLaserProjectile(
-            *ctx->coordinator, x, y, missileTexture, *ctx->spriteList, isPlayer, ownerId
-        );
-        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
-        return e;
+    // CreateLaserProjectile
+    std::function<ECS::Entity(float, float, bool, int)> createLaserProj = 
+        [ctx, CreateProjectileFromWeaponConfig](float x, float y, bool isPlayer, int ownerId) -> ECS::Entity {
+        std::string weaponName = isPlayer ? "laser" : "enemy_laser";
+        return CreateProjectileFromWeaponConfig(weaponName, x, y, isPlayer, ownerId, 1, false);
     };
     lua["Factory"]["CreateLaserProjectile"] = createLaserProj;
 
