@@ -41,6 +41,10 @@ namespace eng
 
                     // Convert SFML event to engine event
                     switch (sfEvent.type) {
+                        case sf::Event::TextEntered:
+                            event.type = eng::engine::EventType::TextEntered;
+                            event.text.unicode = sfEvent.text.unicode;
+                            break;
                         case sf::Event::Closed:
                             event.type = eng::engine::EventType::Closed;
                             break;
