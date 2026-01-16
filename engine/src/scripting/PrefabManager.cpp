@@ -4,18 +4,17 @@
 
 namespace Scripting {
 
-// Use ECS namespace for components
-using ECS::Transform;
-using ECS::Velocity;
-using ECS::Sprite;
-using ECS::Health;
-using ECS::Damage;
-using ECS::AIController;
-using ECS::Collider;
-using ECS::Player;
-using ECS::Enemy;
-using ECS::Projectile;
-using ECS::PowerUp;
+// Use ECS namespace for GENERIC components only
+using rtype::engine::ECS::Transform;
+using rtype::engine::ECS::Velocity;
+using rtype::engine::ECS::Sprite;
+using rtype::engine::ECS::Health;
+using rtype::engine::ECS::Damage;
+using rtype::engine::ECS::Collider;
+using rtype::engine::ECS::Tag;
+
+// NOTE: PrefabManager currently only supports generic engine components.
+// Game-specific components (Player, Enemy, etc.) should be handled in game code.
 
 bool PrefabManager::LoadPrefab(const std::string& name, const std::string& scriptPath) {
     auto& lua = LuaState::Instance().GetState();
@@ -117,14 +116,12 @@ void PrefabManager::ApplyComponentsFromTable(ECS::Entity entity, sol::table comp
         mCoordinator->AddComponent(entity, d);
     }
 
-    // AIController
-    sol::optional<sol::table> aiTable = components["AIController"];
-    if (aiTable) {
-        AIController ai;
-        ai.pattern = aiTable.value()["pattern"].get_or(std::string("straight"));
-        ai.shootInterval = aiTable.value()["shootInterval"].get_or(2.0f);
-        ai.circleRadius = aiTable.value()["circleRadius"].get_or(100.0f);
-        mCoordinator->AddComponent(entity, ai);
+    // Tag (generic string tag)
+    sol::optional<sol::table> tagTable = components["Tag"];
+    if (tagTable) {
+        Tag t;
+        t.value = tagTable.value()["value"].get_or(std::string(""));
+        mCoordinator->AddComponent(entity, t);
     }
 
     // Collider
@@ -135,6 +132,9 @@ void PrefabManager::ApplyComponentsFromTable(ECS::Entity entity, sol::table comp
         c.isTrigger = colliderTable.value()["isTrigger"].get_or(false);
         mCoordinator->AddComponent(entity, c);
     }
+
+    // NOTE: Game-specific components (AIController, Player, Enemy, etc.)
+    // are not handled here. Extend this in your game code if needed.
 }
 
 } // namespace Scripting

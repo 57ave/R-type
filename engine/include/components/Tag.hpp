@@ -3,25 +3,25 @@
 
 #include <string>
 
+/**
+ * @brief Generic Tag component for categorizing entities
+ * 
+ * This is a GENERIC component that can be used in any game.
+ * Use it to mark entities with string identifiers.
+ * 
+ * Examples for ANY game:
+ *   Tag{"player"}, Tag{"enemy"}, Tag{"projectile"}
+ *   Tag{"npc"}, Tag{"obstacle"}, Tag{"collectible"}
+ *   Tag{"boss"}, Tag{"vehicle"}, Tag{"door"}
+ */
 struct Tag {
     std::string name = "entity";
 
-    // Common tags:
-    // "player", "enemy", "bullet", "charged_bullet",
-    // "effect", "background", "obstacle"
-};
-
-struct PlayerTag {
-    int playerId = 0;
-};
-
-struct EnemyTag {
-    std::string enemyType = "basic";
-};
-
-struct ProjectileTag {
-    int ownerId = 0;               // Entity that shot the projectile
-    bool isPlayerProjectile = true;
+    Tag() = default;
+    Tag(const std::string& n) : name(n) {}
+    
+    bool operator==(const std::string& other) const { return name == other; }
+    bool operator!=(const std::string& other) const { return name != other; }
 };
 
 #endif // RTYPE_ENGINE_COMPONENTS_TAG_HPP

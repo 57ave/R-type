@@ -26,7 +26,8 @@ enum class EntityType : uint8_t {
     ENTITY_MONSTER = 1,
     ENTITY_PLAYER_MISSILE = 2,
     ENTITY_MONSTER_MISSILE = 3,
-    ENTITY_OBSTACLE = 4
+    ENTITY_OBSTACLE = 4,
+    ENTITY_EXPLOSION = 5
 };
 
 #pragma pack(push, 1)
@@ -35,8 +36,9 @@ enum class EntityType : uint8_t {
 struct ClientInput {
     uint8_t playerId;
     uint8_t inputMask;
+    uint8_t chargeLevel; // 0 = normal shot, 1-5 = charge levels
 
-    ClientInput() : playerId(0), inputMask(0) {}
+    ClientInput() : playerId(0), inputMask(0), chargeLevel(0) {}
 
     std::vector<char> serialize() const {
         std::vector<char> buffer(sizeof(*this));
@@ -80,8 +82,14 @@ struct EntityState {
     float vy;
     uint8_t hp;
     uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
+    
+    // Extended fields for variety
+    uint8_t chargeLevel;    // For missiles (0 = normal, 1-5 = charge levels)
+    uint8_t enemyType;      // For enemies (0 = basic, 1 = zigzag, etc.)
+    uint8_t projectileType; // For projectiles (0 = normal, 1 = charged, etc.)
 
-    EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), hp(0), playerLine(0) {}
+    EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0.0f), y(0.0f), vx(0.0f), vy(0.0f), hp(0), playerLine(0), 
+                    chargeLevel(0), enemyType(0), projectileType(0) {}
 
     std::vector<char> serialize() const {
         std::vector<char> buffer(sizeof(*this));

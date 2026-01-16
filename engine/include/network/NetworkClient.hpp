@@ -7,7 +7,8 @@
 #include <chrono>
 #include "UdpClient.hpp"
 #include "Packet.hpp"
-#include "RTypeProtocol.hpp"
+// Removed: "RTypeProtocol.hpp" - Engine should not depend on game-specific protocol
+// Game-specific methods (sendInput, etc.) should be in a game wrapper class
 
 class NetworkClient {
 public:
@@ -18,10 +19,10 @@ public:
     void process();
     void disconnect();
 
-    // Send input to server
-    void sendInput(uint8_t playerId, uint8_t inputMask);
+    // Generic packet send - game wraps this with their protocol
+    void sendPacket(const NetworkPacket& packet);
 
-    // Send HELLO to server
+    // Send HELLO to server (can be made generic with packet type parameter)
     void sendHello();
 
     // Check if packets are available

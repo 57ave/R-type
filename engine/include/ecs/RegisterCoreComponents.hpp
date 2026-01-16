@@ -2,70 +2,74 @@
 #define RTYPE_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
 
 #include <ecs/Coordinator.hpp>
-// Core components
+// GENERIC ENGINE components ONLY
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
 #include <components/Sprite.hpp>
-// Game components
 #include <components/Animation.hpp>
 #include <components/Collider.hpp>
-#include <components/Weapon.hpp>
 #include <components/Health.hpp>
-#include <components/MovementPattern.hpp>
 #include <components/Lifetime.hpp>
 #include <components/ScrollingBackground.hpp>
 #include <components/AudioSource.hpp>
 #include <components/Tag.hpp>
 #include <components/Boundary.hpp>
 
+/**
+ * @file RegisterCoreComponents.hpp
+ * @brief Register GENERIC engine components only
+ * 
+ * WARNING: This file should ONLY contain generic, reusable components.
+ * Game-specific components (Weapon, MovementPattern, PlayerTag, etc.) 
+ * should be registered in the game project, NOT here.
+ */
+
 namespace ECS {
     /**
-     * @brief Register all core engine components
+     * @brief Register all GENERIC engine components
      * Call this after Coordinator::Init()
+     * 
+     * Game projects should register their own game-specific components separately.
      */
     inline void RegisterCoreComponents(Coordinator &coordinator)
     {
-        // Core components (Position, Velocity, Sprite)
+        // Core transform components
         coordinator.RegisterComponent<Position>();
         coordinator.RegisterComponent<Velocity>();
         coordinator.RegisterComponent<Sprite>();
         
         // Animation components
         coordinator.RegisterComponent<Animation>();
-        coordinator.RegisterComponent<StateMachineAnimation>();
-        coordinator.RegisterComponent<ChargeAnimation>();
+        // NOTE: StateMachineAnimation, ChargeAnimation may be game-specific
         
         // Collision components
         coordinator.RegisterComponent<Collider>();
-        coordinator.RegisterComponent<Hitbox>();
+        // NOTE: Hitbox may be game-specific
         
-        // Combat components
-        coordinator.RegisterComponent<Weapon>();
-        coordinator.RegisterComponent<Damage>();
+        // Combat components (generic)
         coordinator.RegisterComponent<Health>();
-        
-        // Movement components
-        coordinator.RegisterComponent<MovementPattern>();
-        coordinator.RegisterComponent<EnemyAI>();
+        // NOTE: Weapon, Damage are R-Type specific - moved to game/
         
         // Lifetime components
         coordinator.RegisterComponent<Lifetime>();
-        coordinator.RegisterComponent<Effect>();
         coordinator.RegisterComponent<Boundary>();
+        // NOTE: Effect may be game-specific
         
         // Environment components
         coordinator.RegisterComponent<ScrollingBackground>();
-        coordinator.RegisterComponent<BackgroundTag>();
+        // NOTE: BackgroundTag may be game-specific
         
         // Audio components
         coordinator.RegisterComponent<AudioSource>();
-        coordinator.RegisterComponent<SoundEffect>();
+        // NOTE: SoundEffect may be game-specific
         
-        // Tag components
+        // Tag component (generic string-based tagging)
         coordinator.RegisterComponent<Tag>();
-        coordinator.RegisterComponent<PlayerTag>();
-        coordinator.RegisterComponent<EnemyTag>();
-        coordinator.RegisterComponent<ProjectileTag>();
+        
+        // NOTE: The following are R-TYPE SPECIFIC and should be registered in game/:
+        // - Weapon, Damage, MovementPattern, EnemyAI
+        // - PlayerTag, EnemyTag, ProjectileTag
+        // - ChargeAnimation, Hitbox, etc.
     }
 }
 

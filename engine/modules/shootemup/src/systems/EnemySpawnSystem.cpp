@@ -2,11 +2,14 @@
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
 #include <components/MovementPattern.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <components/Tag.hpp>
 #include <components/Health.hpp>
 #include <ecs/Coordinator.hpp>
 #include <cstdlib>
 #include <ctime>
+
+using namespace ShootEmUp::Components;
 
 EnemySpawnSystem::EnemySpawnSystem()
     : coordinator_(nullptr)
@@ -50,10 +53,11 @@ void EnemySpawnSystem::SpawnEnemy()
     pos.y = spawnY;
     coordinator_->AddComponent<Position>(enemy, pos);
 
-    // Random movement pattern
+    // Random movement pattern (string-based, configured in Lua)
     MovementPattern pattern;
+    const char* patterns[] = {"straight", "sine_wave", "zigzag", "circular", "diagonal_down", "diagonal_up"};
     int patternIndex = std::rand() % 6;
-    pattern.pattern = static_cast<MovementPattern::Type>(patternIndex);
+    pattern.patternType = patterns[patternIndex];
     pattern.speed = 200.0f + (std::rand() % 200);
     pattern.amplitude = 50.0f + (std::rand() % 100);
     pattern.frequency = 1.0f + (std::rand() % 3);

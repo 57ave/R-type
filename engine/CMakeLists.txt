@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -130,6 +130,9 @@ endif()
 if(LUA_FOUND)
     add_library(scripting STATIC
         src/scripting/LuaState.cpp
+        src/scripting/ComponentBindings.cpp
+        src/scripting/PrefabManager.cpp
+        src/scripting/ScriptSystem.cpp
     )
 
     target_include_directories(scripting PUBLIC
@@ -140,6 +143,7 @@ if(LUA_FOUND)
 
     target_link_libraries(scripting PUBLIC
         ecs
+        rendering
         ${LUA_LIBRARIES}
     )
 else()
@@ -160,16 +164,16 @@ target_include_directories(MovementSystem PUBLIC
 
 target_link_libraries(MovementSystem PUBLIC ecs)
 
-# Collision System
-add_library(CollisionSystem SHARED
-    src/systems/CollisionSystem.cpp
-)
-
-target_include_directories(CollisionSystem PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(CollisionSystem PUBLIC ecs)
+# Collision System - MOVED TO GAME (R-Type specific)
+# add_library(CollisionSystem SHARED
+#     src/systems/CollisionSystem.cpp
+# )
+# 
+# target_include_directories(CollisionSystem PUBLIC
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+# )
+# 
+# target_link_libraries(CollisionSystem PUBLIC ecs)
 
 # Input System
 add_library(InputSystem SHARED
@@ -215,38 +219,8 @@ target_include_directories(StateMachineAnimationSystem PUBLIC
 
 target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering)
 
-# Weapon System
-add_library(WeaponSystem SHARED
-    src/systems/WeaponSystem.cpp
-)
-
-target_include_directories(WeaponSystem PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(WeaponSystem PUBLIC ecs)
-
-# Enemy Spawn System
-add_library(EnemySpawnSystem SHARED
-    src/systems/EnemySpawnSystem.cpp
-)
-
-target_include_directories(EnemySpawnSystem PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(EnemySpawnSystem PUBLIC ecs)
-
-# Movement Pattern System
-add_library(MovementPatternSystem SHARED
-    src/systems/MovementPatternSystem.cpp
-)
-
-target_include_directories(MovementPatternSystem PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(MovementPatternSystem PUBLIC ecs)
+# NOTE: Weapon, Enemy Spawn, and Movement Pattern systems moved to shootemup module
+# See engine/modules/shootemup/
 
 # Scrolling Background System
 add_library(ScrollingBackgroundSystem SHARED
@@ -292,3 +266,15 @@ install(DIRECTORY include/
     DESTINATION include
     FILES_MATCHING PATTERN "*.hpp"
 )
+
+# ========================================
+# OPTIONAL MODULES
+# ========================================
+
+# Shoot'em Up Module (optional, can be disabled)
+option(BUILD_SHOOTEMUP_MODULE "Build the Shoot'em Up game module" ON)
+
+if(BUILD_SHOOTEMUP_MODULE)
+    message(STATUS "🎮 Building Shoot'em Up module")
+    add_subdirectory(modules/shootemup)
+endif()

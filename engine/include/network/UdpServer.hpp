@@ -8,7 +8,7 @@
 #include <queue>
 #include "Packet.hpp"
 #include "ClientSession.hpp"
-#include "RTypeProtocol.hpp" // For GamePacketType
+// Removed: "RTypeProtocol.hpp" - Engine should not depend on game-specific protocol
 
 using asio::ip::udp;
 
