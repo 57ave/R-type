@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_ECS_ECS_HPP
-#define RTYPE_ENGINE_ECS_ECS_HPP
+#ifndef ENG_ENGINE_ECS_ECS_HPP
+#define ENG_ENGINE_ECS_ECS_HPP
 
 #include "Types.hpp"
 #include "EntityManager.hpp"
@@ -9,4 +9,4 @@
 #include "SystemManager.hpp"
 #include "Coordinator.hpp"
 
-#endif // RTYPE_ENGINE_ECS_ECS_HPP
+#endif // ENG_ENGINE_ECS_ECS_HPP

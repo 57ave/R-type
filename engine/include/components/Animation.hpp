@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_ANIMATION_HPP
-#define RTYPE_ENGINE_COMPONENTS_ANIMATION_HPP
+#ifndef ENG_ENGINE_COMPONENTS_ANIMATION_HPP
+#define ENG_ENGINE_COMPONENTS_ANIMATION_HPP
 
 #include <rendering/Types.hpp>
 #include <vector>
@@ -51,4 +51,4 @@ struct ChargeAnimation {
     std::vector<ChargeLevelData> chargeLevels;
 };
 
-#endif // RTYPE_ENGINE_COMPONENTS_ANIMATION_HPP
+#endif // ENG_ENGINE_COMPONENTS_ANIMATION_HPP

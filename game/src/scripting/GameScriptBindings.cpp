@@ -21,7 +21,7 @@ void GameScriptBindings::RegisterAll(sol::state& lua) {
 void GameScriptBindings::RegisterPlayer(sol::state& lua) {
     lua.new_usertype<PlayerTag>("PlayerTag",
         sol::constructors<PlayerTag(), PlayerTag(int)>(),
-        "playerId", &PlayerTag::playerId
+        "playerId", sol::property([](PlayerTag& p) { return p.playerId; }, [](PlayerTag& p, int v) { p.playerId = v; })
     );
 }
 
@@ -29,9 +29,9 @@ void GameScriptBindings::RegisterEnemy(sol::state& lua) {
     // EnemyTag now uses strings for types (no enum needed)
     lua.new_usertype<EnemyTag>("EnemyTag",
         sol::constructors<EnemyTag()>(),
-        "enemyType", &EnemyTag::enemyType,  // string-based type
-        "scoreValue", &EnemyTag::scoreValue,
-        "aiAggressiveness", &EnemyTag::aiAggressiveness
+        "enemyType", sol::property([](EnemyTag& e) { return e.enemyType; }, [](EnemyTag& e, const std::string& v) { e.enemyType = v; }),
+        "scoreValue", sol::property([](EnemyTag& e) { return e.scoreValue; }, [](EnemyTag& e, int v) { e.scoreValue = v; }),
+        "aiAggressiveness", sol::property([](EnemyTag& e) { return e.aiAggressiveness; }, [](EnemyTag& e, float v) { e.aiAggressiveness = v; })
     );
 }
 
@@ -39,14 +39,14 @@ void GameScriptBindings::RegisterProjectile(sol::state& lua) {
     // ProjectileTag now uses strings for types (no enum needed)
     lua.new_usertype<ProjectileTag>("ProjectileTag",
         sol::constructors<ProjectileTag()>(),
-        "projectileType", &ProjectileTag::projectileType,  // string-based type
-        "ownerId", &ProjectileTag::ownerId,
-        "isPlayerProjectile", &ProjectileTag::isPlayerProjectile,
-        "spriteRow", &ProjectileTag::spriteRow,
-        "spriteCol", &ProjectileTag::spriteCol,
-        "pierceCount", &ProjectileTag::pierceCount,
-        "maxPierceCount", &ProjectileTag::maxPierceCount,
-        "chargeLevel", &ProjectileTag::chargeLevel
+        "projectileType", sol::property([](ProjectileTag& p) { return p.projectileType; }, [](ProjectileTag& p, const std::string& v) { p.projectileType = v; }),
+        "ownerId", sol::property([](ProjectileTag& p) { return p.ownerId; }, [](ProjectileTag& p, int v) { p.ownerId = v; }),
+        "isPlayerProjectile", sol::property([](ProjectileTag& p) { return p.isPlayerProjectile; }, [](ProjectileTag& p, bool v) { p.isPlayerProjectile = v; }),
+        "spriteRow", sol::property([](ProjectileTag& p) { return p.spriteRow; }, [](ProjectileTag& p, int v) { p.spriteRow = v; }),
+        "spriteCol", sol::property([](ProjectileTag& p) { return p.spriteCol; }, [](ProjectileTag& p, int v) { p.spriteCol = v; }),
+        "pierceCount", sol::property([](ProjectileTag& p) { return p.pierceCount; }, [](ProjectileTag& p, int v) { p.pierceCount = v; }),
+        "maxPierceCount", sol::property([](ProjectileTag& p) { return p.maxPierceCount; }, [](ProjectileTag& p, int v) { p.maxPierceCount = v; }),
+        "chargeLevel", sol::property([](ProjectileTag& p) { return p.chargeLevel; }, [](ProjectileTag& p, int v) { p.chargeLevel = v; })
     );
 }
 
@@ -66,25 +66,25 @@ void GameScriptBindings::RegisterPowerUp(sol::state& lua) {
     
     lua.new_usertype<PowerUp>("PowerUp",
         sol::constructors<PowerUp(), PowerUp(PowerUp::Type, float, int)>(),
-        "type", &PowerUp::type,
-        "duration", &PowerUp::duration,
-        "value", &PowerUp::value
+        "type", sol::property([](PowerUp& p) { return p.type; }, [](PowerUp& p, PowerUp::Type v) { p.type = v; }),
+        "duration", sol::property([](PowerUp& p) { return p.duration; }, [](PowerUp& p, float v) { p.duration = v; }),
+        "value", sol::property([](PowerUp& p) { return p.value; }, [](PowerUp& p, int v) { p.value = v; })
     );
 }
 
 void GameScriptBindings::RegisterAIController(sol::state& lua) {
     lua.new_usertype<AIController>("AIController",
         sol::constructors<AIController()>(),
-        "pattern", &AIController::pattern,
-        "timer", &AIController::timer,
-        "shootTimer", &AIController::shootTimer,
-        "shootInterval", &AIController::shootInterval,
-        "centerX", &AIController::centerX,
-        "centerY", &AIController::centerY,
-        "circleRadius", &AIController::circleRadius,
-        "targetY", &AIController::targetY,
-        "amplitude", &AIController::amplitude,
-        "frequency", &AIController::frequency
+        "pattern", sol::property([](AIController& a) { return a.pattern; }, [](AIController& a, const std::string& v) { a.pattern = v; }),
+        "timer", sol::property([](AIController& a) { return a.timer; }, [](AIController& a, float v) { a.timer = v; }),
+        "shootTimer", sol::property([](AIController& a) { return a.shootTimer; }, [](AIController& a, float v) { a.shootTimer = v; }),
+        "shootInterval", sol::property([](AIController& a) { return a.shootInterval; }, [](AIController& a, float v) { a.shootInterval = v; }),
+        "centerX", sol::property([](AIController& a) { return a.centerX; }, [](AIController& a, float v) { a.centerX = v; }),
+        "centerY", sol::property([](AIController& a) { return a.centerY; }, [](AIController& a, float v) { a.centerY = v; }),
+        "circleRadius", sol::property([](AIController& a) { return a.circleRadius; }, [](AIController& a, float v) { a.circleRadius = v; }),
+        "targetY", sol::property([](AIController& a) { return a.targetY; }, [](AIController& a, float v) { a.targetY = v; }),
+        "amplitude", sol::property([](AIController& a) { return a.amplitude; }, [](AIController& a, float v) { a.amplitude = v; }),
+        "frequency", sol::property([](AIController& a) { return a.frequency; }, [](AIController& a, float v) { a.frequency = v; })
     );
 }
 

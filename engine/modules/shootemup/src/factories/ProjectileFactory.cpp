@@ -2,7 +2,7 @@
 #include "components/ShootEmUpTags.hpp"
 #include <rendering/Types.hpp>
 
-using namespace rtype::engine::rendering;
+using namespace eng::engine::rendering;
 using namespace ShootEmUp::Components;
 
 // Helper pour créer le sprite de base

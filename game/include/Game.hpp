@@ -56,6 +56,13 @@
     // Scripting - R-Type specific
     #include <scripting/GameScriptBindings.hpp>
     #include <scripting/FactoryBindings.hpp>
+    #include <scripting/UIBindings.hpp>
+
+    // UI System
+    #include <systems/UISystem.hpp>
+
+    // Game State Management
+    #include "GameStateManager.hpp"
 
     // Generic Engine Systems
     #include <systems/MovementSystem.hpp>
@@ -65,7 +72,7 @@
     #include <systems/RenderSystem.hpp>
     #include <systems/ScrollingBackgroundSystem.hpp>
     #include <systems/BoundarySystem.hpp>
-    #include <systems/CollisionSystem.hpp>
+    #include <systems/CollisionSystem.hpp>  // Generic engine CollisionSystem
     #include <systems/HealthSystem.hpp>
 
     // Generic Engine Components
@@ -81,8 +88,21 @@
     #include <components/NetworkId.hpp>
     #include <components/Boundary.hpp>
 
-    using namespace rtype::engine::rendering;
-    using namespace rtype::engine::rendering::sfml;
+    // UI Components
+    #include <components/UIElement.hpp>
+    #include <components/UIText.hpp>
+    #include <components/UIButton.hpp>
+    #include <components/UISlider.hpp>
+    #include <components/UIInputField.hpp>
+    #include <components/UIPanel.hpp>
+    #include <components/UICheckbox.hpp>
+    #include <components/UIDropdown.hpp>
+
+    using namespace eng::engine::rendering;
+    using namespace eng::engine::rendering::sfml;
+
+    // Helper function to resolve asset paths from different working directories
+    std::string ResolveAssetPath(const std::string& relativePath);
 
     class Game {
         public:
@@ -92,6 +112,7 @@
             ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst);
             ECS::Entity CreateEnemy(float x, float y, std::string patternType = "straight");
             ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel);
+            ECS::Entity CreateEnemyMissile(float x, float y);  // Enemy projectile
             ECS::Entity CreateExplosion(float x, float y);
             ECS::Entity CreateShootEffect(float x, float y, ECS::Entity parent);
             void RegisterEntity(ECS::Entity entity);
@@ -114,8 +135,11 @@
 
             std::vector<SFMLSprite*> allSprites;
 
-            rtype::engine::SoundBuffer shootBuffer;
-            rtype::engine::Sound shootSound;
+            eng::engine::SoundBuffer shootBuffer;
+            eng::engine::Sound shootSound;
+
+            // UI System
+            std::shared_ptr<UISystem> uiSystem;
 
             // Scripting systems
             std::shared_ptr<Scripting::ScriptSystem> spawnScriptSystem;

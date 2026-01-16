@@ -5,7 +5,7 @@
 #include <memory>
 
 // Forward declarations for rendering types
-namespace rtype { namespace engine { namespace rendering {
+namespace eng { namespace engine { namespace rendering {
     class ISprite;
 }}}
 
@@ -18,7 +18,7 @@ namespace rtype { namespace engine { namespace rendering {
  * defined in the game project, not here.
  */
 
-namespace rtype {
+namespace eng {
     namespace engine {
         namespace ECS {
         
@@ -52,7 +52,7 @@ namespace rtype {
              */
             struct Sprite {
                 std::string texturePath;
-                std::shared_ptr<rtype::engine::rendering::ISprite> sprite;  // Real sprite instance for rendering
+                std::shared_ptr<eng::engine::rendering::ISprite> sprite;  // Real sprite instance for rendering
                 int width, height;
                 int layer = 0;          // Z-order for layered rendering (higher = front)
                 bool visible = true;    // Visibility flag
@@ -125,10 +125,10 @@ namespace rtype {
 }
 
 // Alias pour compatibilité et clarté
-using TransformComponent = rtype::engine::ECS::Transform;
-using VelocityComponent = rtype::engine::ECS::Velocity;
-using SpriteComponent = rtype::engine::ECS::Sprite;
-using HealthComponent = rtype::engine::ECS::Health;
-using DamageComponent = rtype::engine::ECS::Damage;
-using CollisionComponent = rtype::engine::ECS::Collider;
-using TagComponent = rtype::engine::ECS::Tag;
+using TransformComponent = eng::engine::ECS::Transform;
+using VelocityComponent = eng::engine::ECS::Velocity;
+using SpriteComponent = eng::engine::ECS::Sprite;
+using HealthComponent = eng::engine::ECS::Health;
+using DamageComponent = eng::engine::ECS::Damage;
+using CollisionComponent = eng::engine::ECS::Collider;
+using TagComponent = eng::engine::ECS::Tag;

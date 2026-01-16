@@ -39,8 +39,8 @@ public:
     }
 
     void run() {
-        rtype::engine::Clock updateClock;
-        rtype::engine::Clock snapshotClock;
+        eng::engine::Clock updateClock;
+        eng::engine::Clock snapshotClock;
         
         const float fixedDeltaTime = 1.0f / 60.0f; // 60 FPS simulation
         float enemySpawnTimer = 0.0f;

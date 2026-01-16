@@ -53,8 +53,8 @@
 #include <components/Lifetime.hpp>
 #include <components/NetworkId.hpp>
 
-using namespace rtype::engine::rendering;
-using namespace rtype::engine::rendering::sfml;
+using namespace eng::engine::rendering;
+using namespace eng::engine::rendering::sfml;
 
 // Global coordinator
 ECS::Coordinator gCoordinator;
@@ -74,8 +74,8 @@ std::unique_ptr<SFMLTexture> explosionTexture;
 std::vector<SFMLSprite*> allSprites;
 
 // Audio using engine abstractions
-rtype::engine::SoundBuffer shootBuffer;
-rtype::engine::Sound shootSound;
+eng::engine::SoundBuffer shootBuffer;
+eng::engine::Sound shootSound;
 
 void RegisterEntity(ECS::Entity entity) {
     allEntities.push_back(entity);
@@ -642,12 +642,12 @@ int main(int argc, char* argv[])
 
     // Network setup
     std::shared_ptr<NetworkClient> networkClient;
-    std::shared_ptr<rtype::engine::systems::NetworkSystem> networkSystem;
+    std::shared_ptr<eng::engine::systems::NetworkSystem> networkSystem;
 
     if (networkMode) {
         try {
             networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
-            networkSystem = std::make_shared<rtype::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+            networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
 
             // Set callback to register new entities
             networkSystem->setEntityCreatedCallback([&](ECS::Entity entity) {
@@ -782,7 +782,7 @@ int main(int argc, char* argv[])
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
 
     // Game variables using engine abstractions
-    rtype::engine::Clock clock;
+    eng::engine::Clock clock;
     float enemySpawnTimer = 0.0f;
     float enemySpawnInterval = 2.0f;
 
@@ -913,14 +913,14 @@ int main(int argc, char* argv[])
         inputMask = 0;
 
         // Event handling using engine abstractions
-        rtype::engine::InputEvent event;
+        eng::engine::InputEvent event;
         while (window.pollEvent(event)) {
-            if (event.type == rtype::engine::EventType::Closed) {
+            if (event.type == eng::engine::EventType::Closed) {
                 window.close();
             }
 
             // Handle space key release for shooting
-            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
+            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::Space) {
                 if (spacePressed && gCoordinator.HasComponent<Position>(player)) {
                     auto& playerPos = gCoordinator.GetComponent<Position>(player);
 
@@ -964,7 +964,7 @@ int main(int argc, char* argv[])
         }
 
         // Handle continuous input
-        if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
+        if (eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Space)) {
             if (!spacePressed) {
                 spacePressed = true;
             }
@@ -1034,10 +1034,10 @@ int main(int argc, char* argv[])
         // ========================================
         // 2. INPUT CAPTURE & NETWORK SEND
         // ========================================
-        bool movingUp = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Up);
-        bool movingDown = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Down);
-        bool movingLeft = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left);
-        bool movingRight = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right);
+        bool movingUp = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Up);
+        bool movingDown = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Down);
+        bool movingLeft = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Left);
+        bool movingRight = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Right);
         bool firing = spacePressed;
 
         // Build input mask for network (bit flags from Protocol.md)

@@ -38,7 +38,7 @@ void StateMachineAnimationSystem::Update(float dt) {
             }
 
             // Update sprite texture rect
-            rtype::engine::rendering::IntRect rect;
+            eng::engine::rendering::IntRect rect;
             rect.left = anim.spriteWidth * anim.currentColumn;
             rect.top = anim.spriteHeight * anim.currentRow;
             rect.width = anim.spriteWidth;

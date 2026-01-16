@@ -1,9 +1,9 @@
-#ifndef RTYPE_ENGINE_INPUT_HPP
-#define RTYPE_ENGINE_INPUT_HPP
+#ifndef ENG_ENGINE_INPUT_HPP
+#define ENG_ENGINE_INPUT_HPP
 
 #include <cstdint>
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         // Key codes (mapped to common keyboard keys)
@@ -88,6 +88,6 @@ namespace rtype {
         }
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng
 
-#endif // RTYPE_ENGINE_INPUT_HPP
+#endif // ENG_ENGINE_INPUT_HPP

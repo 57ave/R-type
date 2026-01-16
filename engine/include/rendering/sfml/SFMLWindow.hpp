@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP
-#define RTYPE_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP
+#ifndef ENG_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP
+#define ENG_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP
 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/Event.hpp>
@@ -7,7 +7,7 @@
 #include <engine/Input.hpp>
 #include <string>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -27,7 +27,7 @@ namespace rtype
                         bool isOpen() const;
 
                         // Event handling (abstracted)
-                        bool pollEvent(rtype::engine::InputEvent &event);
+                        bool pollEvent(eng::engine::InputEvent &event);
                         
                         // Event handling (SFML direct - for compatibility)
                         bool pollEventSFML(sf::Event &event);
@@ -37,14 +37,14 @@ namespace rtype
                         void display();
 
                         // Input
-                        rtype::engine::rendering::Vector2i getMousePosition() const;
+                        eng::engine::rendering::Vector2i getMousePosition() const;
 
                         // Access
                         sf::RenderWindow &getSFMLWindow();
                         const sf::RenderWindow &getSFMLWindow() const;
 
                         // Window info
-                        rtype::engine::rendering::Vector2u getSize() const;
+                        eng::engine::rendering::Vector2u getSize() const;
 
                     private:
                         sf::RenderWindow m_window;
@@ -58,4 +58,4 @@ namespace rtype
     }
 }
 
-#endif // RTYPE_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP
+#endif // ENG_ENGINE_RENDERING_SFML_SFMLWINDOW_HPP

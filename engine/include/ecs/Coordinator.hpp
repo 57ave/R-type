@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_ECS_COORDINATOR_HPP
-#define RTYPE_ENGINE_ECS_COORDINATOR_HPP
+#ifndef ENG_ENGINE_ECS_COORDINATOR_HPP
+#define ENG_ENGINE_ECS_COORDINATOR_HPP
 
 #include "Types.hpp"
 #include "EntityManager.hpp"
@@ -96,4 +96,4 @@ namespace ECS
 
 }
 
-#endif // RTYPE_ENGINE_ECS_COORDINATOR_HPP
+#endif // ENG_ENGINE_ECS_COORDINATOR_HPP

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Packet.hpp"
+#include <network/Packet.hpp>
 #include <array>
 
 

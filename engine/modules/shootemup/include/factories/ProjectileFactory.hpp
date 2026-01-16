@@ -16,7 +16,7 @@
 #include <components/ShootEmUpTags.hpp>
 #include <vector>
 
-using namespace rtype::engine::rendering::sfml;
+using namespace eng::engine::rendering::sfml;
 
 /**
  * @brief Factory pour créer différents types de projectiles

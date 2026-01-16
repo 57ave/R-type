@@ -2,7 +2,7 @@
 ** EPITECH PROJECT, 2025
 ** Event
 ** File description:
-** rtype
+** engine
 */
 
 #ifndef _EVENT_CORE_
@@ -11,7 +11,7 @@
     #include <cstdint>
     #include "Types.hpp"
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             // Base event class
@@ -70,7 +70,7 @@
             // Entity spawned event
             struct EntitySpawnedEvent : public Event {
                 uint32_t entityId;
-                rtype::engine::Vector2i spawnPosition;
+                eng::engine::Vector2i spawnPosition;
             };
 
             // Health changed event
@@ -81,6 +81,6 @@
             };
 
         } // namespace core
-    } // namespace rtype
+    } // namespace eng
 
 #endif /* !_EVENT_CORE_ */

@@ -1,9 +1,9 @@
-#ifndef RTYPE_ENGINE_KEYBOARD_HPP
-#define RTYPE_ENGINE_KEYBOARD_HPP
+#ifndef ENG_ENGINE_KEYBOARD_HPP
+#define ENG_ENGINE_KEYBOARD_HPP
 
 #include "engine/Input.hpp"
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         // Keyboard input helper class
@@ -14,6 +14,6 @@ namespace rtype {
         };
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng
 
-#endif // RTYPE_ENGINE_KEYBOARD_HPP
+#endif // ENG_ENGINE_KEYBOARD_HPP

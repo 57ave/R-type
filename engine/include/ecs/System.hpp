@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_ECS_SYSTEM_HPP
-#define RTYPE_ENGINE_ECS_SYSTEM_HPP
+#ifndef ENG_ENGINE_ECS_SYSTEM_HPP
+#define ENG_ENGINE_ECS_SYSTEM_HPP
 
 #include "Types.hpp"
 #include <set>
@@ -25,4 +25,4 @@ namespace ECS {
 
 } // namespace ECS
 
-#endif // RTYPE_ENGINE_ECS_SYSTEM_HPP
+#endif // ENG_ENGINE_ECS_SYSTEM_HPP

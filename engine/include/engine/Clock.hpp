@@ -1,9 +1,9 @@
-#ifndef RTYPE_ENGINE_CLOCK_HPP
-#define RTYPE_ENGINE_CLOCK_HPP
+#ifndef ENG_ENGINE_CLOCK_HPP
+#define ENG_ENGINE_CLOCK_HPP
 
 #include <memory>
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         // Forward declaration
@@ -28,6 +28,6 @@ namespace rtype {
         };
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng
 
-#endif // RTYPE_ENGINE_CLOCK_HPP
+#endif // ENG_ENGINE_CLOCK_HPP

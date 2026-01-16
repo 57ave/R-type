@@ -1,9 +1,13 @@
 # ==================== Game Logic Library ====================
 # Logique métier spécifique au R-Type
 
-# Trouver Lua et Sol3
-set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/external/sol3/include" CACHE PATH "Path to Sol3")
-find_package(Lua REQUIRED)
+# Scripting is always enabled - Lua/Sol3 required
+set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/external/sol3" CACHE PATH "Path to Sol3")
+
+# Use LUA_FOUND from parent if available, otherwise find Lua
+if(NOT DEFINED LUA_FOUND OR NOT LUA_FOUND)
+    find_package(Lua REQUIRED)
+endif()
 
 file(GLOB_RECURSE GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -63,6 +67,7 @@ target_link_libraries(r-type_game PRIVATE
     ScrollingBackgroundSystem
     BoundarySystem
     HealthSystem
+    UISystem
     
     # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
     shootemup

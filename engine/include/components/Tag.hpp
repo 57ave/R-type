@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_TAG_HPP
-#define RTYPE_ENGINE_COMPONENTS_TAG_HPP
+#ifndef ENG_ENGINE_COMPONENTS_TAG_HPP
+#define ENG_ENGINE_COMPONENTS_TAG_HPP
 
 #include <string>
 
@@ -24,4 +24,4 @@ struct Tag {
     bool operator!=(const std::string& other) const { return name != other; }
 };
 
-#endif // RTYPE_ENGINE_COMPONENTS_TAG_HPP
+#endif // ENG_ENGINE_COMPONENTS_TAG_HPP

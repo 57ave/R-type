@@ -1,4 +1,42 @@
 #include "Game.hpp"
+#include <filesystem>
+#include <fstream>
+#include <core/GameStateCallbacks.hpp>
+
+// Cache for the resolved base path
+static std::string g_basePath = "";
+
+// Helper function to resolve asset paths from different working directories
+std::string ResolveAssetPath(const std::string& relativePath) {
+    // If we already found the base path, use it
+    if (!g_basePath.empty()) {
+        return g_basePath + relativePath;
+    }
+
+    // List of possible base paths to check
+    std::vector<std::string> basePaths = {
+        "",                    // Current directory (running from project root)
+        "../../",              // Running from build/game/
+        "../../../",           // Running from deeper build directories
+    };
+
+    // Test file to check if we're in the right directory
+    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
+
+    for (const auto& base : basePaths) {
+        std::string fullPath = base + testFile;
+        std::ifstream file(fullPath);
+        if (file.good()) {
+            g_basePath = base;
+            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
+            return g_basePath + relativePath;
+        }
+    }
+
+    // Fallback: return the path as-is
+    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
+    return relativePath;
+}
 
 void Game::RegisterEntity(ECS::Entity entity) {
     allEntities.push_back(entity);
@@ -79,6 +117,12 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     health.current = 100;
     health.max = 100;
     gCoordinator.AddComponent(player, health);
+
+    // Damage (player deals damage on contact - destroys enemies)
+    Damage damage;
+    damage.amount = 100;  // High damage to kill enemies on contact
+    damage.damageType = "contact";
+    gCoordinator.AddComponent(player, damage);
 
     // Weapon
     ShootEmUp::Components::Weapon weapon;
@@ -208,6 +252,12 @@ ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     health.deathEffect = "explosion";
     gCoordinator.AddComponent(enemy, health);
 
+    // Damage (enemies deal damage on contact)
+    Damage damage;
+    damage.amount = 1;
+    damage.damageType = "contact";
+    gCoordinator.AddComponent(enemy, damage);
+
     // Tags
     gCoordinator.AddComponent(enemy, Tag{"enemy"});
     ShootEmUp::Components::EnemyTag enemyTag;
@@ -336,7 +386,7 @@ ECS::Entity Game::CreateExplosion(float x, float y) {
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
     sprite->setTexture(explosionTexture.get());
-    IntRect rect(130, 1, 33, 32);  // Match animation parameters
+    IntRect rect(129, 0, 34, 35);
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
 
@@ -352,21 +402,21 @@ ECS::Entity Game::CreateExplosion(float x, float y) {
     // Animation
     std::cout << "[CreateExplosion] Adding Animation component..." << std::endl;
     Animation anim;
-    anim.frameTime = 0.08f; // Faster animation for smoother effect
+    anim.frameTime = 0.1f; // Slower animation for visible effect
     anim.currentFrame = 0;
-    anim.frameCount = 6;   // Try 5 frames instead of 6
+    anim.frameCount = 6;
     anim.loop = false;
-    anim.frameWidth = 32;  // Adjusted frame width
-    anim.frameHeight = 32; // Adjusted frame height
-    anim.startX = 130;     // Adjusted start position
-    anim.startY = 1;       // Slight Y offset
-    anim.spacing = 1.5;     // Spacing between explosion frames
+    anim.frameWidth = 34;
+    anim.frameHeight = 35;
+    anim.startX = 124;
+    anim.startY = 0;
+    anim.spacing = 0;  // Spacing between explosion frames
     gCoordinator.AddComponent(explosion, anim);
 
     // Lifetime (destroy after animation finishes)
     std::cout << "[CreateExplosion] Adding Lifetime component..." << std::endl;
     Lifetime lifetime;
-    lifetime.maxLifetime = 0.05f; // Very short lifetime
+    lifetime.maxLifetime = 1.0f; // 1 second before disappearing
     gCoordinator.AddComponent(explosion, lifetime);
 
     // Tag for identification
@@ -428,6 +478,78 @@ ECS::Entity Game::CreateShootEffect(float x, float y, ECS::Entity parent) {
     return effect;
 }
 
+// Helper function to create enemy missile entity
+ECS::Entity Game::CreateEnemyMissile(float x, float y) {
+    ECS::Entity missile = gCoordinator.CreateEntity();
+    RegisterEntity(missile);
+
+    // Position
+    gCoordinator.AddComponent(missile, Position{x, y});
+
+    // Velocity (moves left towards player)
+    float speed = -400.0f;  // Negative = moving left
+    gCoordinator.AddComponent(missile, Velocity{speed, 0.0f});
+
+    // Sprite - Use enemy_bullets.png with the orange ball (first row)
+    auto* sprite = new SFMLSprite();
+    allSprites.push_back(sprite);
+    
+    // First row orange balls: starts around x=166, y=3, each frame ~12x12 pixels, spacing ~17px
+    IntRect rect(166, 3, 12, 12);  // First frame of orange ball
+    sprite->setTexture(enemyBulletTexture.get());
+    sprite->setTextureRect(rect);
+    sprite->setPosition(Vector2f(x, y));
+
+    Sprite spriteComp;
+    spriteComp.sprite = sprite;
+    spriteComp.textureRect = rect;
+    spriteComp.layer = 8;
+    spriteComp.scaleX = 2.5f;
+    spriteComp.scaleY = 2.5f;
+    gCoordinator.AddComponent(missile, spriteComp);
+
+    // Animation - 4 frames looping
+    Animation anim;
+    anim.frameTime = 0.1f;
+    anim.currentFrame = 0;
+    anim.frameCount = 4;
+    anim.loop = true;
+    anim.frameWidth = 12;
+    anim.frameHeight = 12;
+    anim.startX = 166;
+    anim.startY = 3;
+    anim.spacing = 5;  // Spacing between frames (17 - 12 = 5)
+    gCoordinator.AddComponent(missile, anim);
+
+    // Collider
+    Collider collider;
+    collider.width = 12 * 2.5f;
+    collider.height = 12 * 2.5f;
+    collider.tag = "enemy_bullet";
+    gCoordinator.AddComponent(missile, collider);
+
+    // Damage
+    Damage damage;
+    damage.amount = 1;
+    damage.damageType = "enemy";
+    gCoordinator.AddComponent(missile, damage);
+
+    // Tags
+    gCoordinator.AddComponent(missile, Tag{"enemy_bullet"});
+    ShootEmUp::Components::ProjectileTag projTag;
+    projTag.projectileType = "enemy";
+    projTag.ownerId = 0;
+    projTag.isPlayerProjectile = false;
+    gCoordinator.AddComponent(missile, projTag);
+
+    // Lifetime
+    Lifetime lifetime;
+    lifetime.maxLifetime = 5.0f;
+    gCoordinator.AddComponent(missile, lifetime);
+
+    return missile;
+}
+
 int Game::Run(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
@@ -464,6 +586,7 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<StateMachineAnimation>();
     gCoordinator.RegisterComponent<Collider>();
     gCoordinator.RegisterComponent<Health>();
+    gCoordinator.RegisterComponent<Boundary>();
     gCoordinator.RegisterComponent<ShootEmUp::Components::Weapon>();
     gCoordinator.RegisterComponent<Tag>();
     gCoordinator.RegisterComponent<ShootEmUp::Components::PlayerTag>();
@@ -476,6 +599,16 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
+
+    // Register UI components
+    gCoordinator.RegisterComponent<Components::UIElement>();
+    gCoordinator.RegisterComponent<Components::UIText>();
+    gCoordinator.RegisterComponent<Components::UIButton>();
+    gCoordinator.RegisterComponent<Components::UISlider>();
+    gCoordinator.RegisterComponent<Components::UIInputField>();
+    gCoordinator.RegisterComponent<Components::UIPanel>();
+    gCoordinator.RegisterComponent<Components::UICheckbox>();
+    gCoordinator.RegisterComponent<Components::UIDropdown>();
 
     std::cout << "[Game] Components registered" << std::endl;
 
@@ -495,6 +628,16 @@ int Game::Run(int argc, char* argv[])
     std::cout << "[Game] Lua components registered" << std::endl;
 
     // ========================================
+    // INITIALIZE GAME STATE MANAGER
+    // ========================================
+    std::cout << "🎮 Initializing Game State Manager..." << std::endl;
+
+    auto& gameStateManager = GameStateManager::Instance();
+    gameStateManager.SetState(GameState::MainMenu);  // Start at main menu
+
+    std::cout << "[Game] Game State Manager initialized" << std::endl;
+
+    // ========================================
     // INITIALIZE ALL SYSTEMS
     // ========================================
     std::cout << "🔧 Initializing Systems..." << std::endl;
@@ -507,7 +650,7 @@ int Game::Run(int argc, char* argv[])
     std::shared_ptr<MovementPatternSystem> movementPatternSystem = nullptr;
     std::shared_ptr<ScrollingBackgroundSystem> scrollingBgSystem = nullptr;
     std::shared_ptr<BoundarySystem> boundarySystem = nullptr;
-    std::shared_ptr<CollisionSystem> collisionSystem = nullptr;
+    std::shared_ptr<CollisionSystem> collisionSystem = nullptr;  // Generic engine CollisionSystem
     std::shared_ptr<HealthSystem> healthSystem = nullptr;
     std::shared_ptr<RenderSystem> renderSystem = nullptr;
 
@@ -556,6 +699,7 @@ int Game::Run(int argc, char* argv[])
     boundarySystem->SetWindowSize(1920.0f, 1080.0f);
     ECS::Signature boundarySig;
     boundarySig.set(gCoordinator.GetComponentType<Position>());
+    boundarySig.set(gCoordinator.GetComponentType<Boundary>());
     gCoordinator.SetSystemSignature<BoundarySystem>(boundarySig);
 
     collisionSystem = gCoordinator.RegisterSystem<CollisionSystem>(&gCoordinator);
@@ -577,6 +721,13 @@ int Game::Run(int argc, char* argv[])
     renderSig.set(gCoordinator.GetComponentType<Sprite>());
     gCoordinator.SetSystemSignature<RenderSystem>(renderSig);
 
+    // UI System
+    uiSystem = gCoordinator.RegisterSystem<UISystem>();
+    uiSystem->SetCoordinator(&gCoordinator);
+    ECS::Signature uiSig;
+    uiSig.set(gCoordinator.GetComponentType<Components::UIElement>());
+    gCoordinator.SetSystemSignature<UISystem>(uiSig);
+
     // Initialize all systems
     movementSystem->Init();
     animationSystem->Init();
@@ -588,51 +739,146 @@ int Game::Run(int argc, char* argv[])
     collisionSystem->Init();
     healthSystem->Init();
     renderSystem->Init();
+    uiSystem->Init();
+
+    // Load default font for UI
+    if (!uiSystem->LoadFont("default", ResolveAssetPath("game/assets/fonts/Roboto-Regular.ttf"))) {
+        std::cerr << "Warning: Could not load default UI font" << std::endl;
+    } else {
+        std::cout << "[Game] Default UI font loaded" << std::endl;
+    }
 
     // Setup collision callback after collision system is created
     collisionSystem->SetCollisionCallback([this](ECS::Entity a, ECS::Entity b) {
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b
-                  << " | isNetworkClient=" << (isNetworkClient ? "TRUE" : "FALSE") << std::endl;
+        // Check if entities still exist (might have been destroyed)
+        bool aExists = std::find(allEntities.begin(), allEntities.end(), a) != allEntities.end();
+        bool bExists = std::find(allEntities.begin(), allEntities.end(), b) != allEntities.end();
+        
+        if (!aExists || !bExists) return;  // Skip if either entity is already destroyed
+        
+        // Check if either entity is already marked for destruction
+        bool aMarkedForDestruction = std::find(entitiesToDestroy.begin(), entitiesToDestroy.end(), a) != entitiesToDestroy.end();
+        bool bMarkedForDestruction = std::find(entitiesToDestroy.begin(), entitiesToDestroy.end(), b) != entitiesToDestroy.end();
+        
+        if (aMarkedForDestruction || bMarkedForDestruction) return;  // Skip duplicate collisions
 
-        // Create explosion at collision point (ONLY if not a network client)
-        // Network clients should receive explosion entities from server
-        if (!isNetworkClient) {
-            std::cout << "[Game] Creating explosion (NOT a network client)" << std::endl;
-            if (gCoordinator.HasComponent<Position>(b)) {
-                auto& posB = gCoordinator.GetComponent<Position>(b);
-                float centerX = posB.x;
-                float centerY = posB.y;
-
-                // Adjust for sprite scale if available
-                if (gCoordinator.HasComponent<Collider>(b)) {
-                    auto& colliderB = gCoordinator.GetComponent<Collider>(b);
-                    centerX += colliderB.width / 2.0f;
-                    centerY += colliderB.height / 2.0f;
-                }
-
-                std::cout << "[Game] Creating explosion at (" << centerX << ", " << centerY << ")" << std::endl;
-                CreateExplosion(centerX, centerY);
-                std::cout << "[Game] Explosion created successfully" << std::endl;
-            }
-        } else {
-            std::cout << "[Game] Skipping explosion creation (network client)" << std::endl;
+        // Check if player is involved and currently invincible
+        bool aIsPlayer = gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(a);
+        bool bIsPlayer = gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(b);
+        
+        if (aIsPlayer && gCoordinator.HasComponent<Health>(a)) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            if (health.invincibilityTimer > 0.0f) return;  // Player is invincible, skip collision
+        }
+        if (bIsPlayer && gCoordinator.HasComponent<Health>(b)) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            if (health.invincibilityTimer > 0.0f) return;  // Player is invincible, skip collision
         }
 
-        // Check if entities should be destroyed based on health (damage already applied by CollisionSystem)
-        if (gCoordinator.HasComponent<Health>(a)) {
+        // Check if both entities are projectiles - ignore projectile vs projectile collisions
+        bool aIsProjectile = gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(a);
+        bool bIsProjectile = gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(b);
+        if (aIsProjectile && bIsProjectile) {
+            return;  // Projectiles don't collide with each other
+        }
+
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+
+        // Check for damage components
+        bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
+        bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
+        bool aHasHealth = gCoordinator.HasComponent<Health>(a);
+        bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+
+        // Apply damage: B damages A
+        if (aHasHealth && bHasDamage) {
+            auto& health = gCoordinator.GetComponent<Health>(a);
+            auto& damage = gCoordinator.GetComponent<Damage>(b);
+            if (!health.invulnerable) {
+                health.current -= damage.amount;
+                std::cout << "[Damage] Entity " << a << " took " << damage.amount << " damage, health: " << health.current << std::endl;
+            }
+        }
+        
+        // Apply damage: A damages B
+        if (bHasHealth && aHasDamage) {
+            auto& health = gCoordinator.GetComponent<Health>(b);
+            auto& damage = gCoordinator.GetComponent<Damage>(a);
+            if (!health.invulnerable) {
+                health.current -= damage.amount;
+                std::cout << "[Damage] Entity " << b << " took " << damage.amount << " damage, health: " << health.current << std::endl;
+            }
+        }
+
+        // Determine what died (health <= 0 after damage)
+        bool aDied = false;
+        bool bDied = false;
+        bool playerWasHit = false;
+        ECS::Entity playerEntity = 0;
+        
+        // Check deaths and player hit
+        if (aHasHealth) {
             auto& health = gCoordinator.GetComponent<Health>(a);
             if (health.current <= 0 && health.destroyOnDeath) {
+                aDied = true;
                 DestroyEntityDeferred(a);
+            } else if (aIsPlayer && health.current > 0 && health.current < health.max) {
+                // Player was hit but not dead - activate invincibility
+                playerWasHit = true;
+                playerEntity = a;
+                health.invincibilityTimer = health.invincibilityDuration;
+                health.isFlashing = true;
+                health.flashTimer = 0.0f;
+                std::cout << "[Player] Hit! Health: " << health.current << "/" << health.max << " - Invincible for " << health.invincibilityDuration << "s" << std::endl;
             }
         }
-        if (gCoordinator.HasComponent<Health>(b)) {
+        if (bHasHealth) {
             auto& health = gCoordinator.GetComponent<Health>(b);
             if (health.current <= 0 && health.destroyOnDeath) {
+                bDied = true;
                 DestroyEntityDeferred(b);
+            } else if (bIsPlayer && health.current > 0 && health.current < health.max) {
+                // Player was hit but not dead - activate invincibility
+                playerWasHit = true;
+                playerEntity = b;
+                health.invincibilityTimer = health.invincibilityDuration;
+                health.isFlashing = true;
+                health.flashTimer = 0.0f;
+                std::cout << "[Player] Hit! Health: " << health.current << "/" << health.max << " - Invincible for " << health.invincibilityDuration << "s" << std::endl;
             }
         }
 
-        // Destroy projectiles on collision
+        // Create explosion ONLY when something dies (not on every collision frame)
+        if (!isNetworkClient && (aDied || bDied)) {
+            // Create explosion at the center of the entity that died
+            ECS::Entity deadEntity = bDied ? b : a;
+            
+            if (gCoordinator.HasComponent<Position>(deadEntity)) {
+                auto& pos = gCoordinator.GetComponent<Position>(deadEntity);
+                float centerX = pos.x;
+                float centerY = pos.y;
+
+                // Calculate sprite center (not collider center)
+                if (gCoordinator.HasComponent<Sprite>(deadEntity)) {
+                    auto& sprite = gCoordinator.GetComponent<Sprite>(deadEntity);
+                    // Get actual sprite dimensions with scale
+                    float spriteWidth = sprite.textureRect.width * sprite.scaleX;
+                    float spriteHeight = sprite.textureRect.height * sprite.scaleY;
+                    centerX += spriteWidth / 2.0f;
+                    centerY += spriteHeight / 2.0f;
+                }
+
+                // Offset explosion to be centered (explosion is 34x35 scaled by 2.5)
+                float explosionHalfWidth = (34 * 2.5f) / 2.0f;
+                float explosionHalfHeight = (35 * 2.5f) / 2.0f;
+                centerX -= explosionHalfWidth;
+                centerY -= explosionHalfHeight;
+
+                CreateExplosion(centerX, centerY);
+            }
+        }
+
+        // Destroy projectiles on collision (they always get destroyed)
         if (gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(a)) {
             DestroyEntityDeferred(a);
         }
@@ -645,12 +891,12 @@ int Game::Run(int argc, char* argv[])
 
     // Network setup
     std::shared_ptr<NetworkClient> networkClient;
-    std::shared_ptr<rtype::engine::systems::NetworkSystem> networkSystem;
+    std::shared_ptr<eng::engine::systems::NetworkSystem> networkSystem;
 
     if (networkMode) {
         try {
             networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
-            networkSystem = std::make_shared<rtype::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+            networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
 
             // Set callback to register new entities and add sprites
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
@@ -849,44 +1095,30 @@ int Game::Run(int argc, char* argv[])
     // Set renderer for RenderSystem
     renderSystem->SetRenderer(&renderer);
 
-    // Load textures (try multiple paths for flexibility)
+    // Set window for UISystem
+    uiSystem->SetWindow(&window);
+
+    // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
-    bool bgLoaded = backgroundTexture->loadFromFile("game/assets/background.png") ||
-                    backgroundTexture->loadFromFile("../../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("client/assets/background.png");
-    if (!bgLoaded) {
+    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
-        std::cerr << "Tried paths: ../../client/assets/, ../client/assets/, client/assets/" << std::endl;
         return 1;
     }
 
     playerTexture = std::make_unique<SFMLTexture>();
-    bool playerLoaded = playerTexture->loadFromFile("game/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("cliFent/assets/players/r-typesheet42.png");
-    if (!playerLoaded) {
+    if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
         std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
     }
 
     missileTexture = std::make_unique<SFMLTexture>();
-    bool missileLoaded = missileTexture->loadFromFile("game/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
-    if (!missileLoaded) {
+    if (!missileTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet1.png"))) {
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
 
     enemyTexture = std::make_unique<SFMLTexture>();
-    bool enemyLoaded = enemyTexture->loadFromFile("game/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
-    if (!enemyLoaded) {
+    if (!enemyTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet5.png"))) {
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
     }
@@ -894,32 +1126,20 @@ int Game::Run(int argc, char* argv[])
 
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
-    bool enemyBulletLoaded = enemyBulletTexture->loadFromFile("game/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("../../client/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("../client/assets/enemies/enemy_bullets.png") ||
-                             enemyBulletTexture->loadFromFile("client/assets/enemies/enemy_bullets.png");
-    if (!enemyBulletLoaded) {
+    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
         std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
-    bool explosionLoaded = explosionTexture->loadFromFile("game/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
-    if (!explosionLoaded) {
+    if (!explosionTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet44.png"))) {
         std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;
     }
 
     // Load sound
-    bool soundLoaded = shootBuffer.loadFromFile("game/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("client/assets/vfx/shoot.ogg");
-    if (!soundLoaded) {
+    if (!shootBuffer.loadFromFile(ResolveAssetPath("game/assets/vfx/shoot.ogg"))) {
         std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
     } else {
         shootSound.setBuffer(shootBuffer);
@@ -950,13 +1170,102 @@ int Game::Run(int argc, char* argv[])
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
     // Load configuration
-    if (!luaState.LoadScript("assets/scripts/config/game_config.lua")) {
+    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
         std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    }
+
+    // Set up game state callbacks for the engine (keeps engine abstract)
+    eng::engine::core::GameStateCallbacks gameStateCallbacks;
+    gameStateCallbacks.setState = [](const std::string& state) {
+        auto& gsm = GameStateManager::Instance();
+        if (state == "playing" || state == "Playing") {
+            gsm.SetState(GameState::Playing);
+        } else if (state == "paused" || state == "Paused") {
+            gsm.SetState(GameState::Paused);
+        } else if (state == "menu" || state == "MainMenu") {
+            gsm.SetState(GameState::MainMenu);
+        } else if (state == "options" || state == "Options") {
+            gsm.SetState(GameState::Options);
+        } else if (state == "lobby" || state == "Lobby") {
+            gsm.SetState(GameState::Lobby);
+        } else if (state == "credits" || state == "Credits") {
+            gsm.SetState(GameState::Credits);
+        }
+    };
+    gameStateCallbacks.getState = []() -> std::string {
+        auto state = GameStateManager::Instance().GetState();
+        switch (state) {
+            case GameState::MainMenu: return "MainMenu";
+            case GameState::Playing: return "Playing";
+            case GameState::Paused: return "Paused";
+            case GameState::Options: return "Options";
+            case GameState::Lobby: return "Lobby";
+            case GameState::Credits: return "Credits";
+            default: return "Unknown";
+        }
+    };
+    gameStateCallbacks.isPaused = []() -> bool {
+        return GameStateManager::Instance().GetState() == GameState::Paused;
+    };
+    gameStateCallbacks.isPlaying = []() -> bool {
+        return GameStateManager::Instance().GetState() == GameState::Playing;
+    };
+    gameStateCallbacks.togglePause = []() {
+        auto& gsm = GameStateManager::Instance();
+        if (gsm.GetState() == GameState::Playing) {
+            gsm.SetState(GameState::Paused);
+        } else if (gsm.GetState() == GameState::Paused) {
+            gsm.SetState(GameState::Playing);
+        }
+    };
+    gameStateCallbacks.goBack = []() {
+        auto& gsm = GameStateManager::Instance();
+        auto state = gsm.GetState();
+        if (state == GameState::Paused) {
+            gsm.SetState(GameState::Playing);
+        } else if (state == GameState::Options || state == GameState::Credits || state == GameState::Lobby) {
+            gsm.SetState(GameState::MainMenu);
+        }
+    };
+    Scripting::UIBindings::SetGameStateCallbacks(gameStateCallbacks);
+    std::cout << "[Game] Game state callbacks injected into engine" << std::endl;
+
+    // Register UI bindings to Lua (must be after UISystem is created)
+    Scripting::UIBindings::RegisterAll(luaState.GetState(), uiSystem.get());
+    std::cout << "[Game] UI bindings registered to Lua" << std::endl;
+
+    // Set Lua state for UISystem callbacks
+    uiSystem->SetLuaState(&luaState.GetState());
+    std::cout << "[Game] Lua state set for UISystem" << std::endl;
+
+    // Pass base path to Lua for asset resolution
+    luaState.GetState()["ASSET_BASE_PATH"] = g_basePath;
+    std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
+
+    // Load UI scripts
+    std::cout << "🎨 Loading UI scripts..." << std::endl;
+    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/ui_init.lua"))) {
+        std::cerr << "Warning: Could not load ui_init.lua" << std::endl;
+    } else {
+        // Initialize UI from Lua
+        sol::state& lua = luaState.GetState();
+        sol::protected_function initUI = lua["InitUI"];
+        if (initUI.valid()) {
+            sol::protected_function_result result = initUI(1920, 1080);
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "[Game] InitUI() error: " << err.what() << std::endl;
+            } else {
+                std::cout << "[Game] UI initialized from Lua" << std::endl;
+            }
+        } else {
+            std::cerr << "[Game] InitUI function not found in Lua" << std::endl;
+        }
     }
 
     // Load spawn system
     spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
-        "assets/scripts/systems/spawn_system.lua",
+        ResolveAssetPath("assets/scripts/systems/spawn_system.lua"),
         &gCoordinator
     );
 
@@ -966,18 +1275,19 @@ int Game::Run(int argc, char* argv[])
         std::cerr << "[Game] Warning: Spawn system failed to load" << std::endl;
     }
 
-    // Create game entities
+    // Create game entities - but NOT the player yet (created when game starts)
     ECS::Entity player = 0;
-    if (!networkMode) {
-        // Only create player in local mode - server creates it in network mode
-        player = CreatePlayer(100.0f, 400.0f);
-    }
+    bool playerCreated = false;
+    
+    // Only create background for now - player will be created when game starts
     CreateBackground(0.0f, 0.0f, 1080.0f, true);
 
     // Game variables using engine abstractions
-    rtype::engine::Clock clock;
+    eng::engine::Clock clock;
     float enemySpawnTimer = 0.0f;
     float enemySpawnInterval = 2.0f;
+    float enemyShootTimer = 0.0f;
+    float enemyShootInterval = 1.5f;  // Enemies shoot every 1.5 seconds
 
     bool spacePressed = false;
     float spaceHoldTime = 0.0f;
@@ -1005,6 +1315,25 @@ int Game::Run(int argc, char* argv[])
         if (deltaTime > 0.1f) {
             deltaTime = 0.1f;
         }
+
+        // ========================================
+        // GAME STATE MANAGEMENT
+        // ========================================
+        auto currentState = GameStateManager::Instance().GetState();
+        
+        // Create player when transitioning to Playing state
+        if (currentState == GameState::Playing && !playerCreated && !networkMode) {
+            player = CreatePlayer(100.0f, 400.0f);
+            playerCreated = true;
+            std::cout << "[Game] Player created - game starting!" << std::endl;
+        }
+
+        // Skip game logic updates when in menu states
+        bool inMenu = (currentState == GameState::MainMenu || 
+                       currentState == GameState::Paused ||
+                       currentState == GameState::Options ||
+                       currentState == GameState::Lobby ||
+                       currentState == GameState::Credits);
 
         // Find local player entity in network mode
         if (networkMode && player == 0 && networkSystem) {
@@ -1257,15 +1586,40 @@ int Game::Run(int argc, char* argv[])
         // Reset input mask
         inputMask = 0;
 
+        // Get current game state for input handling
+        auto& gsm = GameStateManager::Instance();
+        auto currentGameState = gsm.GetState();
+
         // Event handling using engine abstractions
-        rtype::engine::InputEvent event;
+        eng::engine::InputEvent event;
         while (window.pollEvent(event)) {
-            if (event.type == rtype::engine::EventType::Closed) {
+            if (event.type == eng::engine::EventType::Closed) {
                 window.close();
             }
 
-            // Handle space key release for shooting
-            if (event.type == rtype::engine::EventType::KeyReleased && event.key.code == rtype::engine::Key::Space) {
+            // Handle Escape key for pause menu toggle
+            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::Escape) {
+                if (currentGameState == GameState::Playing) {
+                    gsm.SetState(GameState::Paused);
+                    std::cout << "[Game] Game paused" << std::endl;
+                } else if (currentGameState == GameState::Paused) {
+                    gsm.SetState(GameState::Playing);
+                    std::cout << "[Game] Game resumed" << std::endl;
+                } else if (currentGameState == GameState::Options || currentGameState == GameState::Credits) {
+                    // Return to main menu from sub-menus
+                    gsm.SetState(GameState::MainMenu);
+                    std::cout << "[Game] Returned to main menu" << std::endl;
+                }
+            }
+
+            // Pass events to UI system when in menu states
+            if (currentGameState != GameState::Playing) {
+                uiSystem->HandleEvent(event);
+            }
+
+            // Handle space key release for shooting (only during gameplay)
+            if (currentGameState == GameState::Playing &&
+                event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::Space) {
                 if (spacePressed && gCoordinator.HasComponent<Position>(player)) {
                     auto& playerPos = gCoordinator.GetComponent<Position>(player);
 
@@ -1317,8 +1671,8 @@ int Game::Run(int argc, char* argv[])
             }
         }
 
-        // Handle continuous input
-        if (rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Space)) {
+        // Handle continuous input (only during gameplay)
+        if (!inMenu && eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Space)) {
             if (!spacePressed) {
                 spacePressed = true;
             }
@@ -1386,13 +1740,18 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
-        // 2. INPUT CAPTURE & NETWORK SEND
+        // 2. INPUT CAPTURE & NETWORK SEND (Only during gameplay)
         // ========================================
-        bool movingUp = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Up);
-        bool movingDown = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Down);
-        bool movingLeft = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Left);
-        bool movingRight = rtype::engine::Keyboard::isKeyPressed(rtype::engine::Key::Right);
-        bool firing = spacePressed;
+        bool movingUp = false, movingDown = false, movingLeft = false, movingRight = false;
+        bool firing = false;
+        
+        if (!inMenu) {
+            movingUp = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Up);
+            movingDown = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Down);
+            movingLeft = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Left);
+            movingRight = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Right);
+            firing = spacePressed;
+        }
 
         // Build input mask for network (bit flags from Protocol.md)
         inputMask = 0;
@@ -1459,46 +1818,148 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
-        // 4. LOCAL ENEMY SPAWNING (Only in local mode - NOW SCRIPTED!)
+        // 4. LOCAL ENEMY SPAWNING (Only in local mode during gameplay)
         // ========================================
-        if (!networkMode && spawnScriptSystem) {
-            // Hot-reload Lua scripts every frame
-            luaState.CheckForChanges();
+        if (!inMenu && !networkMode) {
+            enemySpawnTimer += deltaTime;
+            
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                enemySpawnTimer = 0.0f;
+                
+                // Random Y position
+                float randomY = 100.0f + static_cast<float>(rand() % 800);
+                
+                // Random pattern type
+                std::vector<std::string> patterns = {"straight", "zigzag", "sinewave"};
+                std::string pattern = patterns[rand() % patterns.size()];
+                
+                // Create enemy using the Game::CreateEnemy method (which has proper sprites & animations)
+                ECS::Entity enemy = CreateEnemy(1920.0f, randomY, pattern);
+                
+                if (enemy != 0) {
+                    std::cout << "[Game] Spawned " << pattern << " enemy at Y=" << randomY << std::endl;
+                }
+                
+                // Vary spawn interval for unpredictability
+                enemySpawnInterval = 1.5f + static_cast<float>(rand() % 20) / 10.0f; // 1.5 to 3.5 seconds
+            }
 
-            // Update spawn system from Lua
-            spawnScriptSystem->Update(deltaTime);
+            // ========================================
+            // 4b. ENEMY SHOOTING
+            // ========================================
+            enemyShootTimer += deltaTime;
+            
+            if (enemyShootTimer >= enemyShootInterval) {
+                enemyShootTimer = 0.0f;
+                
+                int enemyCount = 0;
+                int shotsCreated = 0;
+                
+                // Make each enemy shoot
+                for (auto entity : allEntities) {
+                    if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) &&
+                        gCoordinator.HasComponent<Position>(entity)) {
+                        
+                        enemyCount++;
+                        auto& pos = gCoordinator.GetComponent<Position>(entity);
+                        
+                        // Only shoot if enemy is on screen (X < 1920 and X > 0)
+                        if (pos.x > 50.0f && pos.x < 1800.0f) {
+                            // 50% chance for each enemy to shoot
+                            if (rand() % 2 == 0) {
+                                CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
+                                shotsCreated++;
+                            }
+                        }
+                    }
+                }
+                
+                std::cout << "[Enemy Shoot] Enemies: " << enemyCount << ", Shots: " << shotsCreated << std::endl;
+                
+                // Vary shoot interval
+                enemyShootInterval = 1.0f + static_cast<float>(rand() % 15) / 10.0f; // 1.0 to 2.5 seconds
+            }
+        }
+
+        // ========================================
+        // 4c. PLAYER INVINCIBILITY & FLASH UPDATE
+        // ========================================
+        if (!inMenu && player != 0 && gCoordinator.HasComponent<Health>(player)) {
+            auto& health = gCoordinator.GetComponent<Health>(player);
+            
+            if (health.invincibilityTimer > 0.0f) {
+                health.invincibilityTimer -= deltaTime;
+                health.flashTimer += deltaTime;
+                
+                // Toggle visibility every 0.05 seconds for fast blinking
+                if (gCoordinator.HasComponent<Sprite>(player)) {
+                    auto& sprite = gCoordinator.GetComponent<Sprite>(player);
+                    // Blink by toggling scale (0 = invisible, normal = visible)
+                    bool visible = (static_cast<int>(health.flashTimer / 0.05f) % 2) == 0;
+                    sprite.scaleX = visible ? 3.0f : 0.0f;
+                    sprite.scaleY = visible ? 3.0f : 0.0f;
+                }
+                
+                // End invincibility
+                if (health.invincibilityTimer <= 0.0f) {
+                    health.invincibilityTimer = 0.0f;
+                    health.isFlashing = false;
+                    health.flashTimer = 0.0f;
+                    // Restore normal visibility
+                    if (gCoordinator.HasComponent<Sprite>(player)) {
+                        auto& sprite = gCoordinator.GetComponent<Sprite>(player);
+                        sprite.scaleX = 3.0f;
+                        sprite.scaleY = 3.0f;
+                    }
+                }
+            }
         }
 
         // ========================================
         // 5. SYSTEM UPDATES (ECS Architecture!)
         // ========================================
 
-        // Always update scrolling background
+        // Always update scrolling background (for visual effect even in menus)
         scrollingBgSystem->Update(deltaTime);
 
-        // In network mode, server handles physics - only update animations/visuals
-        if (networkMode) {
-            stateMachineAnimSystem->Update(deltaTime);
-            animationSystem->Update(deltaTime);
-            lifetimeSystem->Update(deltaTime);
-        } else {
-            // Local mode: Full simulation
-            movementPatternSystem->Update(deltaTime);
-            movementSystem->Update(deltaTime);
-            boundarySystem->Update(deltaTime);
-            collisionSystem->Update(deltaTime);
-            healthSystem->Update(deltaTime);
-            stateMachineAnimSystem->Update(deltaTime);
-            animationSystem->Update(deltaTime);
-            lifetimeSystem->Update(deltaTime);
+        // Only update game systems during gameplay
+        if (!inMenu) {
+            // In network mode, server handles physics - only update animations/visuals
+            if (networkMode) {
+                stateMachineAnimSystem->Update(deltaTime);
+                animationSystem->Update(deltaTime);
+                lifetimeSystem->Update(deltaTime);
+            } else {
+                // Local mode: Full simulation
+                movementPatternSystem->Update(deltaTime);
+                movementSystem->Update(deltaTime);
+                boundarySystem->Update(deltaTime);
+                collisionSystem->Update(deltaTime);
+                healthSystem->Update(deltaTime);
+                stateMachineAnimSystem->Update(deltaTime);
+                animationSystem->Update(deltaTime);
+                lifetimeSystem->Update(deltaTime);
+            }
         }
 
         // Process destroyed entities
         ProcessDestroyedEntities();
 
+        // ========================================
+        // 6. UI SYSTEM UPDATE
+        // ========================================
+        // Update UI system (handles input when in menu states)
+        if (inMenu) {
+            uiSystem->Update(deltaTime);
+        }
+
         // Render using RenderSystem
         window.clear();
         renderSystem->Update(deltaTime);
+
+        // Render UI on top of game (always, so menus are visible)
+        uiSystem->Render(&window);
+
         window.display();
     }
 

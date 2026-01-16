@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_ECS_TYPES_HPP
-#define RTYPE_ENGINE_ECS_TYPES_HPP
+#ifndef ENG_ENGINE_ECS_TYPES_HPP
+#define ENG_ENGINE_ECS_TYPES_HPP
 
 #include <cstdint>
 #include <bitset>
@@ -32,4 +32,4 @@ using Signature = std::bitset<MAX_COMPONENTS>;
 
 } // namespace ECS
 
-#endif // RTYPE_ENGINE_ECS_TYPES_HPP
+#endif // ENG_ENGINE_ECS_TYPES_HPP

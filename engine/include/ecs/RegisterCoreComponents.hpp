@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
-#define RTYPE_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
+#ifndef ENG_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
+#define ENG_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
 
 #include <ecs/Coordinator.hpp>
 // GENERIC ENGINE components ONLY
@@ -48,7 +48,7 @@ namespace ECS {
         
         // Combat components (generic)
         coordinator.RegisterComponent<Health>();
-        // NOTE: Weapon, Damage are R-Type specific - moved to game/
+        // NOTE: Weapon, Damage are Game specific - moved to game/
         
         // Lifetime components
         coordinator.RegisterComponent<Lifetime>();
@@ -73,4 +73,4 @@ namespace ECS {
     }
 }
 
-#endif // RTYPE_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
+#endif // ENG_ENGINE_ECS_REGISTER_CORE_COMPONENTS_HPP
