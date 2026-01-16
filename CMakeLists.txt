@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
-project(RType VERSION 1.0.0 LANGUAGES CXX)
+
+# On macOS, SFML requires Objective-C/C++ support
+if(APPLE)
+    project(RType VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(RType VERSION 1.0.0 LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

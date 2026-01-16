@@ -74,18 +74,6 @@ void NetworkClient::sendHello() {
     std::cout << "[NetworkClient] Sent CLIENT_HELLO" << std::endl;
 }
 
-void NetworkClient::sendPacket(const NetworkPacket& packet) {
-    if (!connected_) return;
-    
-    NetworkPacket p = packet;
-    p.header.seq = sequenceNumber_++;
-    p.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()
-    ).count();
-    
-    client_.send(p);
-}
-
 bool NetworkClient::hasReceivedPackets() {
     std::lock_guard<std::mutex> lock(packetsMutex_);
     return !receivedPackets_.empty();
@@ -107,8 +95,10 @@ void NetworkClient::update(float) {
     auto now = std::chrono::steady_clock::now();
     auto timeSinceLastInput = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInputSent_).count();
 
+    // Keep-alive: send empty packet if no input for 1 second
     if (timeSinceLastInput > 1000) {
-        sendInput(playerId_, 0);
-        sendInput(playerId_, 0);
+        // Send a ping/keep-alive packet (type 0x03 is CLIENT_PING)
+        NetworkPacket pingPacket(0x03);
+        sendPacket(pingPacket);
     }
 }

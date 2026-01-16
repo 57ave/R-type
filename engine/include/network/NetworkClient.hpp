@@ -25,8 +25,6 @@ public:
     // Send HELLO to server (can be made generic with packet type parameter)
     void sendHello();
 
-    void sendPacket(const NetworkPacket& packet);
-
     // Check if packets are available
     bool hasReceivedPackets();
     NetworkPacket getNextReceivedPacket();

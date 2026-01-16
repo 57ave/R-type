@@ -1,6 +1,10 @@
 #include "network/NetworkServer.hpp"
 #include <iostream>
 
+// R-Type specific protocol - TODO: This should be refactored to make engine protocol-agnostic
+// For now, include the game-specific protocol from the server
+#include "../../../server/include/network/RTypeProtocol.hpp"
+
 NetworkServer::NetworkServer(short port)
     : server_(io_context_, port) {
 }
