@@ -82,6 +82,8 @@ target_include_directories(shootemup PUBLIC
 # Link to engine core components
 target_include_directories(shootemup PUBLIC
     ${CMAKE_SOURCE_DIR}/engine/include
+    ${LUA_INCLUDE_DIR}
+    ${SOL3_INCLUDE_DIR}
 )
 
 # ========================================

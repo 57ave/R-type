@@ -14,8 +14,8 @@ EnemiesConfig = {
         description = "Basic enemy that flies straight",
         category = "common",
         
-        -- Stats (before difficulty scaling)
-        health = 10,
+    -- Stats (before difficulty scaling)
+    health = 1,
         damage = 10,
         speed = 200,
         scoreValue = 100,
@@ -28,9 +28,9 @@ EnemiesConfig = {
         
         -- Sprite configuration
         sprite = {
-            texture = "enemies/r-typesheet3.png",
+            texture = "enemies/r-typesheet5.png",
             frameWidth = 33,
-            frameHeight = 32,
+            frameHeight = 36,
             scale = 2.5,
             startX = 0,
             startY = 0
@@ -67,7 +67,7 @@ EnemiesConfig = {
         description = "Moves in a zigzag pattern",
         category = "common",
         
-        health = 15,
+    health = 1,
         damage = 10,
         speed = 220,
         scoreValue = 150,
@@ -112,7 +112,7 @@ EnemiesConfig = {
         description = "Smooth sine wave movement",
         category = "common",
         
-        health = 20,
+    health = 1,
         damage = 12,
         speed = 180,
         scoreValue = 200,
@@ -157,7 +157,7 @@ EnemiesConfig = {
         description = "Charges directly at player",
         category = "common",
         
-        health = 8,
+    health = 1,
         damage = 25,
         speed = 400,
         scoreValue = 120,
@@ -205,7 +205,7 @@ EnemiesConfig = {
         description = "Shoots at player",
         category = "medium",
         
-        health = 40,
+    health = 1,
         damage = 15,
         speed = 150,
         scoreValue = 300,
@@ -251,7 +251,7 @@ EnemiesConfig = {
         description = "Fires spread shots",
         category = "medium",
         
-        health = 50,
+    health = 1,
         damage = 12,
         speed = 120,
         scoreValue = 400,
@@ -298,7 +298,7 @@ EnemiesConfig = {
         description = "Heavily armored, slow",
         category = "medium",
         
-        health = 100,
+    health = 1,
         damage = 20,
         speed = 80,
         scoreValue = 500,
@@ -351,7 +351,7 @@ EnemiesConfig = {
         description = "Stationary defense turret",
         category = "elite",
         
-        health = 80,
+    health = 1,
         damage = 20,
         speed = 0,  -- Stationary
         scoreValue = 350,
@@ -397,7 +397,7 @@ EnemiesConfig = {
         description = "Elite enemy with evasive maneuvers",
         category = "elite",
         
-        health = 60,
+    health = 1,
         damage = 18,
         speed = 280,
         scoreValue = 600,
@@ -446,7 +446,7 @@ EnemiesConfig = {
         description = "Leads enemy formations",
         category = "elite",
         
-        health = 120,
+    health = 1,
         damage = 15,
         speed = 160,
         scoreValue = 800,
@@ -504,7 +504,7 @@ EnemiesConfig = {
         description = "Carries power-ups",
         category = "special",
         
-        health = 30,
+    health = 1,
         damage = 5,
         speed = 100,
         scoreValue = 50,
@@ -548,7 +548,7 @@ EnemiesConfig = {
         description = "Protected by shield",
         category = "special",
         
-        health = 50,
+    health = 1,
         damage = 15,
         speed = 140,
         scoreValue = 450,

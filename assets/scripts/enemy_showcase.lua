@@ -1,6 +1,6 @@
 -- ============================================================================
--- ENEMY & BOSS SHOWCASE MODE
--- Ce fichier permet de tester visuellement tous les ennemis et boss
+-- ENEMY & BOSS SHOWCASE MODE - VERSION LUA CONFIG
+-- Utilise les configurations enemies_config.lua et bosses_config.lua
 -- ============================================================================
 
 EnemyShowcase = {
@@ -9,7 +9,7 @@ EnemyShowcase = {
     currentIndex = 1,
     lastSpawnTime = 0,
     
-    -- Liste de tous les ennemis à afficher dans l'ordre
+    -- Liste de tous les ennemis à afficher (depuis enemies_config.lua)
     enemyQueue = {
         -- BASIC ENEMIES
         { type = "basic", y = 200, info = "Basic - Patapata" },
@@ -17,7 +17,7 @@ EnemyShowcase = {
         { type = "sinewave", y = 400, info = "Sinewave - Weaver" },
         { type = "kamikaze", y = 500, info = "Kamikaze - Crasher" },
         
-        -- MEDIUM ENEMIES
+        -- MEDIUM ENEMIES  
         { type = "shooter", y = 200, info = "Shooter - Gunner" },
         { type = "spreader", y = 300, info = "Spreader" },
         { type = "armored", y = 400, info = "Armored - Tank" },
@@ -31,10 +31,8 @@ EnemyShowcase = {
         { type = "carrier", y = 300, info = "Carrier - Cargo" },
         { type = "shielded", y = 400, info = "Shielded - Barrier" },
         
-        -- BOSSES
-        { type = "stage1_boss", y = 540, info = "BOSS - Stage 1 Dobkeratops" },
-        { type = "stage2_boss", y = 540, info = "BOSS - Stage 2 Gomander" },
-        { type = "stage3_boss", y = 540, info = "BOSS - Stage 3 Big Core" },
+        -- BOSSES (si disponibles)
+        -- Les boss seront ajoutés dynamiquement si BossesConfig existe
     }
 }
 
@@ -44,7 +42,7 @@ function ToggleShowcaseMode()
     
     if EnemyShowcase.active then
         print("[SHOWCASE] Mode de test des ennemis ACTIVÉ")
-        print("[SHOWCASE] " .. #EnemyShowcase.enemyQueue .. " ennemis et boss seront affichés")
+        print("[SHOWCASE] " .. #EnemyShowcase.enemyQueue .. " ennemis seront affichés")
         EnemyShowcase.currentIndex = 1
         EnemyShowcase.lastSpawnTime = 0
     else
@@ -54,61 +52,58 @@ function ToggleShowcaseMode()
     return EnemyShowcase.active
 end
 
--- Fonction pour spawner un ennemi de test
-function SpawnTestEnemy(enemyType, yPosition)
-    local enemyConfig = nil
-    local isBoss = false
+-- Fonction pour spawner un ennemi depuis les configs Lua
+function SpawnEnemyFromConfig(enemyType, yPosition)
+    -- Position de spawn (hors écran à droite)
+    local spawnX = 1920 + 100
+    local spawnY = yPosition or 540
     
-    -- Chercher dans les configs d'ennemis
-    if EnemiesConfig and EnemiesConfig[enemyType] then
-        enemyConfig = EnemiesConfig[enemyType]
-    -- Chercher dans les configs de boss
-    elseif BossesConfig and BossesConfig[enemyType] then
-        enemyConfig = BossesConfig[enemyType]
-        isBoss = true
-    end
+    print("[SHOWCASE] Spawning Enemy: " .. enemyType .. " at Y=" .. spawnY)
     
-    if not enemyConfig then
-        print("[SHOWCASE] Erreur: Ennemi/Boss '" .. enemyType .. "' non trouvé dans la config!")
+    -- Vérifier que Factory existe
+    if not Factory then
+        print("[SHOWCASE] ✗ ERROR: Factory not found!")
         return nil
     end
     
-    -- Position de spawn (hors écran à droite)
-    local spawnX = 1920 + 100  -- Hors écran
-    local spawnY = yPosition or 540
-    
-    -- Créer l'entité via la factory appropriée
-    local entity = nil
-    
-    if isBoss then
-        print("[SHOWCASE] Spawning BOSS: " .. enemyConfig.name .. " at Y=" .. spawnY)
-        
-        -- Pour les boss, utiliser BossFactory si disponible
-        if BossFactory then
-            entity = BossFactory.CreateBoss(enemyType, spawnX, spawnY)
-        else
-            print("[SHOWCASE] BossFactory non disponible, utilisation EnemyFactory")
-            if EnemyFactory then
-                entity = EnemyFactory.CreateEnemy(enemyType, spawnX, spawnY)
-            end
-        end
-    else
-        print("[SHOWCASE] Spawning Enemy: " .. enemyConfig.name .. " at Y=" .. spawnY)
-        
-        -- Pour les ennemis normaux
-        if EnemyFactory then
-            entity = EnemyFactory.CreateEnemy(enemyType, spawnX, spawnY)
-        end
+    if not Factory.CreateEnemyFromConfig then
+        print("[SHOWCASE] ✗ ERROR: Factory.CreateEnemyFromConfig not found!")
+        print("[SHOWCASE]    Did you add the new C++ code?")
+        return nil
     end
     
-    if entity then
-        print("[SHOWCASE] ✓ " .. enemyConfig.name .. " spawned successfully!")
-        print("[SHOWCASE]   - Texture: " .. enemyConfig.sprite.texture)
-        print("[SHOWCASE]   - Frame size: " .. enemyConfig.sprite.frameWidth .. "x" .. enemyConfig.sprite.frameHeight)
-        print("[SHOWCASE]   - Scale: " .. enemyConfig.sprite.scale)
-        print("[SHOWCASE]   - Animation frames: " .. enemyConfig.animation.frameCount)
+    -- Vérifier que la config existe
+    if not EnemiesConfig then
+        print("[SHOWCASE] ✗ ERROR: EnemiesConfig not loaded!")
+        return nil
+    end
+    
+    if not EnemiesConfig[enemyType] then
+        print("[SHOWCASE] ✗ ERROR: Enemy type '" .. enemyType .. "' not found in EnemiesConfig!")
+        print("[SHOWCASE]    Available types:")
+        for key, _ in pairs(EnemiesConfig) do
+            print("[SHOWCASE]      - " .. key)
+        end
+        return nil
+    end
+    
+    -- Créer l'ennemi via la Factory avec la config Lua
+    local entity = Factory.CreateEnemyFromConfig(enemyType, spawnX, spawnY)
+    
+    if entity and entity ~= 0 then
+        local config = EnemiesConfig[enemyType]
+        local name = config.name or enemyType
+        print("[SHOWCASE] ✓ " .. name .. " spawned successfully! Entity ID: " .. entity)
+        
+        -- Afficher quelques infos
+        local health = config.health or "?"
+        local speed = config.speed or "?"
+        local pattern = (config.movement and config.movement.pattern) or "?"
+        print("[SHOWCASE]   - Health: " .. health .. " HP")
+        print("[SHOWCASE]   - Speed: " .. speed)
+        print("[SHOWCASE]   - Pattern: " .. pattern)
     else
-        print("[SHOWCASE] ✗ Failed to spawn " .. enemyConfig.name)
+        print("[SHOWCASE] ✗ Failed to spawn " .. enemyType)
     end
     
     return entity
@@ -136,7 +131,7 @@ function UpdateShowcase(deltaTime)
             print("[SHOWCASE] " .. enemyData.info)
             print("========================================")
             
-            SpawnTestEnemy(enemyData.type, enemyData.y)
+            SpawnEnemyFromConfig(enemyData.type, enemyData.y)
             
             EnemyShowcase.currentIndex = EnemyShowcase.currentIndex + 1
         else
@@ -151,58 +146,93 @@ function UpdateShowcase(deltaTime)
     end
 end
 
--- Fonction pour afficher tous les ennemis en même temps (mode grille)
+-- Fonction pour afficher tous les ennemis en grille
 function ShowAllEnemiesGrid()
-    print("[SHOWCASE] Affichage de tous les ennemis en grille...")
+    print("[SHOWCASE] Affichage de tous les ennemis disponibles en grille...")
+    
+    if not EnemiesConfig then
+        print("[SHOWCASE] ✗ EnemiesConfig not loaded!")
+        return
+    end
     
     local startX = 400
     local startY = 100
-    local spacingX = 200
-    local spacingY = 150
-    local perRow = 4
+    local spacingY = 120
+    local currentY = startY
+    local count = 0
     
-    for i, enemyData in ipairs(EnemyShowcase.enemyQueue) do
-        local row = math.floor((i - 1) / perRow)
-        local col = (i - 1) % perRow
-        
-        local x = startX + (col * spacingX)
-        local y = startY + (row * spacingY)
-        
-        SpawnTestEnemy(enemyData.type, y)
+    for enemyType, config in pairs(EnemiesConfig) do
+        if type(config) == "table" then
+            SpawnEnemyFromConfig(enemyType, currentY)
+            currentY = currentY + spacingY
+            count = count + 1
+            
+            -- Limiter pour ne pas dépasser l'écran
+            if currentY > 900 then
+                break
+            end
+        end
     end
     
-    print("[SHOWCASE] Grille complète affichée!")
+    print("[SHOWCASE] " .. count .. " ennemis affichés en grille!")
 end
 
 -- Fonction pour tester un ennemi spécifique
 function TestSpecificEnemy(enemyType, yPosition)
     yPosition = yPosition or 540
     print("[SHOWCASE] Test manuel de: " .. enemyType)
-    SpawnTestEnemy(enemyType, yPosition)
+    SpawnEnemyFromConfig(enemyType, yPosition)
 end
 
 -- Fonction pour lister tous les ennemis disponibles
 function ListAllEnemies()
     print("")
     print("========================================")
-    print("ENNEMIS DISPONIBLES:")
+    print("ENNEMIS DISPONIBLES (depuis Lua configs):")
     print("========================================")
     
-    if EnemiesConfig then
-        print("\n--- ENNEMIS NORMAUX ---")
-        for enemyType, config in pairs(EnemiesConfig) do
-            print("  • " .. enemyType .. " : " .. config.name .. " (" .. config.category .. ")")
+    if not EnemiesConfig then
+        print("✗ EnemiesConfig not loaded!")
+        return
+    end
+    
+    -- Grouper par catégorie
+    local categories = {
+        common = {},
+        medium = {},
+        elite = {},
+        special = {}
+    }
+    
+    for enemyType, config in pairs(EnemiesConfig) do
+        if type(config) == "table" then
+            local category = config.category or "common"
+            if not categories[category] then
+                categories[category] = {}
+            end
+            table.insert(categories[category], {
+                type = enemyType,
+                name = config.name or enemyType,
+                health = config.health or "?",
+                score = config.scoreValue or "?"
+            })
         end
     end
     
-    if BossesConfig then
-        print("\n--- BOSS ---")
-        for bossType, config in pairs(BossesConfig) do
-            print("  • " .. bossType .. " : " .. config.name)
+    -- Afficher par catégorie
+    for category, enemies in pairs(categories) do
+        if #enemies > 0 then
+            print("\n--- " .. category:upper() .. " ---")
+            for _, enemy in ipairs(enemies) do
+                print(string.format("  • %-15s (%s) - HP: %d, Score: %d", 
+                    enemy.type, enemy.name, enemy.health, enemy.score))
+            end
         end
     end
     
     print("\n========================================")
+    print("Utilisez: SpawnEnemy('type') pour spawner")
+    print("========================================")
 end
 
 -- ============================================================================
@@ -234,12 +264,25 @@ function ShowMediumEnemies()
     TestSpecificEnemy("armored", 550)
 end
 
--- Afficher tous les boss
-function ShowAllBosses()
-    if BossesConfig then
-        for bossType, _ in pairs(BossesConfig) do
-            TestSpecificEnemy(bossType, 540)
-        end
+-- Afficher tous les ennemis elite
+function ShowEliteEnemies()
+    TestSpecificEnemy("turret", 200)
+    TestSpecificEnemy("elite_fighter", 400)
+    TestSpecificEnemy("formation_leader", 600)
+end
+
+-- Afficher tous les ennemis special
+function ShowSpecialEnemies()
+    TestSpecificEnemy("carrier", 300)
+    TestSpecificEnemy("shielded", 500)
+end
+
+-- Spawner plusieurs ennemis du même type
+function SpawnWave(enemyType, count, spacing)
+    spacing = spacing or 100
+    for i = 1, count do
+        local y = 200 + ((i - 1) * spacing)
+        TestSpecificEnemy(enemyType, y)
     end
 end
 
@@ -249,15 +292,38 @@ end
 
 print("")
 print("========================================")
-print("ENEMY SHOWCASE MODE LOADED")
+print("ENEMY SHOWCASE MODE - LUA CONFIG VERSION")
 print("========================================")
+print("Utilise les configurations depuis enemies_config.lua")
+print("")
 print("Commandes disponibles:")
 print("  • StartShowcase()          - Lance le showcase automatique")
 print("  • SpawnEnemy('type')       - Spawn un ennemi spécifique")
 print("  • ShowBasicEnemies()       - Affiche tous les ennemis basic")
 print("  • ShowMediumEnemies()      - Affiche tous les ennemis medium")
-print("  • ShowAllBosses()          - Affiche tous les boss")
+print("  • ShowEliteEnemies()       - Affiche tous les ennemis elite")
+print("  • ShowSpecialEnemies()     - Affiche tous les ennemis special")
 print("  • ListAllEnemies()         - Liste tous les ennemis disponibles")
 print("  • ShowAllEnemiesGrid()     - Affiche tous en grille")
+print("  • SpawnWave('type', n)     - Spawn n ennemis du même type")
 print("========================================")
+print("")
+
+-- Vérifier que les configs sont chargées
+if EnemiesConfig then
+    print("[SHOWCASE] ✓ EnemiesConfig loaded successfully")
+    local count = 0
+    for _ in pairs(EnemiesConfig) do count = count + 1 end
+    print("[SHOWCASE]   Found " .. count .. " enemy types")
+else
+    print("[SHOWCASE] ✗ WARNING: EnemiesConfig not loaded!")
+end
+
+if Factory and Factory.ListEnemyTypes then
+    print("[SHOWCASE] ✓ Factory.ListEnemyTypes available")
+    print("[SHOWCASE]   Use Factory.ListEnemyTypes() to see all types")
+else
+    print("[SHOWCASE] ⚠ Factory.ListEnemyTypes not available")
+end
+
 print("")

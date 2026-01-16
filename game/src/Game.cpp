@@ -201,7 +201,7 @@ ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     // Sprite
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
-    sprite->setTexture(enemyTexture.get());
+    sprite->setTexture(textureMap["enemy"]);
     IntRect rect(0, 0, 33, 32);
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
@@ -782,13 +782,22 @@ int Game::Run(int argc, char* argv[])
             return;  // Projectiles don't collide with each other
         }
 
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+        // Check for damage/health components. Only log collisions that are gameplay-relevant:
+        // - a has Damage and b has Health
+        // - b has Damage and a has Health
+        // - OR either entity is the player (we want to always surface player hits)
+    bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
+    bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
+    bool aHasHealth = gCoordinator.HasComponent<Health>(a);
+    bool bHasHealth = gCoordinator.HasComponent<Health>(b);
 
-        // Check for damage components
-        bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
-        bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
-        bool aHasHealth = gCoordinator.HasComponent<Health>(a);
-        bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+        bool significant = (aHasDamage && bHasHealth) || (bHasDamage && aHasHealth) || aIsPlayer || bIsPlayer;
+        if (!significant) {
+            // Not relevant for damage flow/logging: skip verbose output
+            return;
+        }
+
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
 
         // Apply damage: B damages A
         if (aHasHealth && bHasDamage) {
@@ -935,7 +944,7 @@ int Game::Run(int argc, char* argv[])
                     // Create enemy sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
-                    sprite->setTexture(enemyTexture.get());
+                    sprite->setTexture(textureMap["enemy"]);
                     IntRect rect(0, 0, 33, 36);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
@@ -1117,13 +1126,7 @@ int Game::Run(int argc, char* argv[])
         return 1;
     }
 
-    enemyTexture = std::make_unique<SFMLTexture>();
-    if (!enemyTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet5.png"))) {
-        std::cerr << "Error: Could not load enemy sprite" << std::endl;
-        return 1;
-    }
-    std::cout << "[Game] ✅ Enemy texture loaded: " << enemyTexture->getSize().x << "x" << enemyTexture->getSize().y << std::endl;
-
+    // Note: enemy textures are loaded per-enemy from Lua config later
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
     if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
@@ -1146,25 +1149,7 @@ int Game::Run(int argc, char* argv[])
         shootSound.setVolume(80.f);
     }
 
-    // ========================================
-    // REGISTER FACTORIES TO LUA
-    // ========================================
-    std::cout << "🏭 Registering Factories to Lua..." << std::endl;
-
-    // Prepare texture map for factories
-    std::unordered_map<std::string, SFMLTexture*> textureMap;
-    textureMap["enemy"] = enemyTexture.get();
-    textureMap["missile"] = missileTexture.get();
-    textureMap["player"] = playerTexture.get();
-    textureMap["background"] = backgroundTexture.get();
-    textureMap["explosion"] = explosionTexture.get();
-
-    RType::Scripting::FactoryBindings::RegisterFactories(
-        luaState.GetState(),
-        &gCoordinator,
-        textureMap,
-        &allSprites
-    );
+    // NOTE: Factory registration moved later after texture preloading
 
     // Load Lua scripts
     std::cout << "📜 Loading Lua scripts..." << std::endl;
@@ -1262,6 +1247,85 @@ int Game::Run(int argc, char* argv[])
     // Pass base path to Lua for asset resolution
     luaState.GetState()["ASSET_BASE_PATH"] = g_basePath;
     std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
+
+    // ========================================
+    // PRELOAD TEXTURES (including per-enemy textures from Lua config)
+    // ========================================
+    // Use Game::textureMap member so other Game methods (CreateEnemy, CreateEnemyMissile, etc.)
+    // can access preloaded textures.
+    // Keep ownership of dynamically loaded textures so they live for game lifetime
+    std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
+
+    // Core textures we already loaded earlier
+    textureMap["background"] = backgroundTexture.get();
+    textureMap["player"] = playerTexture.get();
+    textureMap["missile"] = missileTexture.get();
+    textureMap["explosion"] = explosionTexture.get();
+    textureMap["enemy_bullets"] = enemyBulletTexture.get();
+
+    // Load enemy-specific textures referenced in EnemiesConfig (if available)
+    try {
+        sol::state& lua = luaState.GetState();
+        sol::table enemiesConfig = lua["EnemiesConfig"];
+        if (enemiesConfig.valid()) {
+            for (auto& kv : enemiesConfig) {
+                // kv.first = key, kv.second = value
+                sol::object key = kv.first;
+                sol::object val = kv.second;
+                if (val.is<sol::table>()) {
+                    sol::table cfg = val.as<sol::table>();
+                    sol::table spriteTbl = cfg["sprite"];
+                    if (spriteTbl.valid()) {
+                        std::string texPath = spriteTbl["texture"].get_or(std::string());
+                        if (!texPath.empty() && textureMap.find(texPath) == textureMap.end()) {
+                            auto tex = std::make_unique<SFMLTexture>();
+                            bool loaded = false;
+                            // Try resolved candidate paths
+                            std::string candidate1 = ResolveAssetPath(std::string("game/assets/") + texPath);
+                            if (!candidate1.empty() && tex->loadFromFile(candidate1)) {
+                                loaded = true;
+                                std::cout << "[Game] Loaded enemy texture: " << candidate1 << std::endl;
+                            } else {
+                                std::string candidate2 = ResolveAssetPath(texPath);
+                                if (!candidate2.empty() && tex->loadFromFile(candidate2)) {
+                                    loaded = true;
+                                    std::cout << "[Game] Loaded enemy texture: " << candidate2 << std::endl;
+                                }
+                            }
+                            if (loaded) {
+                                textureMap[texPath] = tex.get();
+                                dynamicTextures.push_back(std::move(tex));
+                            } else {
+                                std::cerr << "[Game] Warning: could not load enemy texture '" << texPath << "'" << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Game] Exception while preloading enemy textures: " << e.what() << std::endl;
+    }
+
+    // If no generic "enemy" key exists, use the first loaded enemies/* texture as a fallback
+    if (textureMap.find("enemy") == textureMap.end()) {
+        for (auto& kv : textureMap) {
+            if (kv.first.find("enemies/") == 0) {
+                textureMap["enemy"] = kv.second;
+                break;
+            }
+        }
+    }
+
+    // Register factories after textures are prepared so factories can use per-type textures
+    // Register factories and give them access to our textureMap
+    RType::Scripting::FactoryBindings::RegisterFactories(
+        luaState.GetState(),
+        &gCoordinator,
+        textureMap,
+        &allSprites,
+        [this](ECS::Entity e) { this->RegisterEntity(e); }
+    );
 
     // Load UI scripts
     std::cout << "🎨 Loading UI scripts..." << std::endl;
@@ -1466,7 +1530,7 @@ int Game::Run(int argc, char* argv[])
 
                     } else if (tag.name == "Enemy") {
                         // Enemy sprite - r-typesheet5.png is a single horizontal line (533x36)
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
 
                         // Test: Use frame 10 (330 pixels) which should show enemy pointing left
                         IntRect rect(0, 0, 33, 32);  // Frame 0 - match CreateEnemy exactly
@@ -1606,7 +1670,7 @@ int Game::Run(int argc, char* argv[])
                     } else {
                         // Unknown entity type - log warning and use default enemy appearance
                         std::cerr << "[Game] WARNING: Unknown entity tag '" << tag.name << "' for entity " << entity << std::endl;
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
                         IntRect rect(0, 0, 32, 32);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
