@@ -1981,21 +1981,27 @@ int Game::Run(int argc, char* argv[])
                 int enemyCount = 0;
                 int shotsCreated = 0;
                 
-                // Make each enemy shoot
+                // Make each enemy shoot — only enemies that have a Weapon component (configured from Lua)
                 for (auto entity : allEntities) {
-                    if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) &&
-                        gCoordinator.HasComponent<Position>(entity)) {
-                        
-                        enemyCount++;
-                        auto& pos = gCoordinator.GetComponent<Position>(entity);
-                        
-                        // Only shoot if enemy is on screen (X < 1920 and X > 0)
-                        if (pos.x > 50.0f && pos.x < 1800.0f) {
-                            // 50% chance for each enemy to shoot
-                            if (rand() % 2 == 0) {
-                                CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
-                                shotsCreated++;
-                            }
+                    if (!gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) ||
+                        !gCoordinator.HasComponent<Position>(entity)) {
+                        continue;
+                    }
+
+                    // Only consider enemies that actually have a Weapon component
+                    if (!gCoordinator.HasComponent<ShootEmUp::Components::Weapon>(entity)) {
+                        continue;
+                    }
+
+                    enemyCount++;
+                    auto& pos = gCoordinator.GetComponent<Position>(entity);
+
+                    // Only shoot if enemy is on screen (X < 1920 and X > 0)
+                    if (pos.x > 50.0f && pos.x < 1800.0f) {
+                        // 50% chance for each eligible enemy to shoot (keeps previous behaviour)
+                        if (rand() % 2 == 0) {
+                            CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
+                            shotsCreated++;
                         }
                     }
                 }

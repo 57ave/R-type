@@ -162,6 +162,98 @@ void FactoryBindings::RegisterFactories(
     };
     lua["Factory"]["CreateLaserProjectile"] = createLaserProj;
 
+    // Create projectile from a weapon config name (reads WeaponsConfig projectile visual table)
+    std::function<ECS::Entity(std::string, float, float, bool, int, int)> createProjFromWeapon =
+        [ctx](std::string weaponName, float x, float y, bool isPlayer, int ownerId, int level) -> ECS::Entity {
+        sol::state_view lua(*ctx->lua);
+        sol::table weapons = lua["WeaponsConfig"];
+        if (!weapons.valid()) {
+            std::cerr << "[Factory] WeaponsConfig not found!" << std::endl;
+            return 0;
+        }
+        sol::table w = weapons[weaponName];
+        if (!w.valid()) {
+            std::cerr << "[Factory] Weapon not found: " << weaponName << std::endl;
+            return 0;
+        }
+        sol::table proj = w["projectile"];
+        if (!proj.valid()) {
+            std::cerr << "[Factory] Weapon '" << weaponName << "' has no projectile spec" << std::endl;
+            return 0;
+        }
+
+        // Determine texture
+        std::string texPath;
+        eng::engine::rendering::sfml::SFMLTexture* tex = nullptr;
+        // Safely read optional string from Lua (avoid ambiguous sol::table::get_or overload)
+        try {
+            sol::object texObj = proj["texture"];
+            if (texObj.valid() && texObj.is<std::string>()) {
+                texPath = texObj.as<std::string>();
+            } else {
+                texPath = std::string();
+            }
+        } catch (...) {
+            texPath = std::string();
+        }
+        if (!texPath.empty()) {
+            auto it = ctx->textures.find(texPath);
+            if (it == ctx->textures.end() || it->second == nullptr) {
+                // try to load dynamically
+                auto* newTex = new eng::engine::rendering::sfml::SFMLTexture();
+                std::string assetBase = lua["ASSET_BASE_PATH"].get_or(std::string(""));
+                std::vector<std::string> candidates;
+                if (!assetBase.empty()) {
+                    if (assetBase.back() != '/' && assetBase.back() != '\\') assetBase += '/';
+                    candidates.push_back(assetBase + "game/assets/" + texPath);
+                    candidates.push_back(assetBase + texPath);
+                }
+                candidates.push_back(std::string("game/assets/") + texPath);
+                candidates.push_back(texPath);
+                bool loaded = false;
+                for (auto& p : candidates) {
+                    if (newTex->loadFromFile(p)) { loaded = true; break; }
+                }
+                if (!loaded) { delete newTex; }
+                else { ctx->textures[texPath] = newTex; }
+            }
+            auto it2 = ctx->textures.find(texPath);
+            if (it2 != ctx->textures.end()) tex = it2->second;
+        }
+        if (!tex) tex = ctx->textures["missile"]; // fallback
+        if (!tex) {
+            std::cerr << "[Factory] No texture available for projectile" << std::endl;
+            return 0;
+        }
+
+        // Build visual spec from projectile config (normalRect / animated fields)
+        ProjectileFactory::ProjectileVisualSpec spec;
+        sol::table normalRect = proj["normalRect"];
+        if (normalRect.valid()) {
+            spec.x = normalRect.get_or("x", 0);
+            spec.y = normalRect.get_or("y", 0);
+            spec.w = normalRect.get_or("w", 16);
+            spec.h = normalRect.get_or("h", 16);
+        } else {
+            spec.x = proj.get_or("x", 0);
+            spec.y = proj.get_or("y", 0);
+            spec.w = proj.get_or("w", 16);
+            spec.h = proj.get_or("h", 16);
+        }
+        spec.scale = proj.get_or("scale", 1.0f);
+        spec.animated = proj.get_or("animated", false);
+        spec.frameCount = proj.get_or("frameCount", 1);
+        spec.frameTime = proj.get_or("frameTime", 0.1f);
+        spec.spacing = proj.get_or("spacing", 0);
+
+        ECS::Entity e = ProjectileFactory::CreateProjectileFromSpec(
+            *ctx->coordinator, x, y, tex, spec, *ctx->spriteList, isPlayer, ownerId, level
+        );
+        if (e != 0 && ctx->registerEntity) ctx->registerEntity(e);
+        return e;
+    };
+    lua["Factory"]["CreateProjectileFromWeapon"] = createProjFromWeapon;
+
 
     std::function<ECS::Entity(std::string, float, float)> createEnemyFromConfig = 
         [ctx](std::string enemyType, float x, float y) -> ECS::Entity {

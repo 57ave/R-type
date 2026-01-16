@@ -15,7 +15,7 @@ EnemiesConfig = {
         category = "common",
         
     -- Stats (before difficulty scaling)
-    health = 1,
+        health = 1,
         damage = 10,
         speed = 200,
         scoreValue = 100,
@@ -33,7 +33,8 @@ EnemiesConfig = {
             frameHeight = 36,
             scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
         
         -- Animation
@@ -51,9 +52,9 @@ EnemiesConfig = {
             offsetY = 0
         },
         
-        -- Combat
-        weapon = nil,  -- Doesn't shoot
-        shootInterval = 0,
+    -- Combat
+    weapon = "enemy_spread",  -- Switch to spread to test different projectile visuals
+    shootInterval = 1.5,
         
         -- On death
         deathEffect = "explosion_small",
@@ -99,7 +100,8 @@ EnemiesConfig = {
             height = 32
         },
         
-        weapon = nil,
+    weapon = "enemy_bullet",
+    shootInterval = 1.2,
         
         deathEffect = "explosion_small",
         dropChance = 0.08,
@@ -144,7 +146,8 @@ EnemiesConfig = {
             height = 34
         },
         
-        weapon = nil,
+    weapon = "enemy_aimed",
+    shootInterval = 2.0,
         
         deathEffect = "explosion_small",
         dropChance = 0.10,
@@ -188,7 +191,8 @@ EnemiesConfig = {
             height = 28
         },
         
-        weapon = nil,
+    weapon = "enemy_spread",
+    shootInterval = 1.0,
         
         deathEffect = "explosion_small",
         dropChance = 0.03,
@@ -534,7 +538,8 @@ EnemiesConfig = {
             height = 30
         },
         
-        weapon = nil,
+    weapon = "enemy_bullet",
+    shootInterval = 1.8,
         
         deathEffect = "explosion_small",
         dropChance = 1.0,  -- Always drops

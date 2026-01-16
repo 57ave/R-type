@@ -1,5 +1,6 @@
 #include "factories/EnemyFactory.hpp"
 #include "components/ShootEmUpTags.hpp"
+#include "components/Weapon.hpp"
 #include <rendering/Types.hpp>
 
 using namespace eng::engine::rendering;
@@ -57,7 +58,7 @@ ECS::Entity EnemyFactory::CreateBasicEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     // Movement pattern - Simple horizontal
@@ -124,7 +125,7 @@ ECS::Entity EnemyFactory::CreateZigZagEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
@@ -189,7 +190,7 @@ ECS::Entity EnemyFactory::CreateSineWaveEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
@@ -254,7 +255,7 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
@@ -317,7 +318,7 @@ ECS::Entity EnemyFactory::CreateTurretEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
@@ -382,7 +383,7 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     anim.frameHeight = 32;
     anim.startX = 0;
     anim.startY = 0;
-    anim.spacing = 33;
+    anim.spacing = 0;
     coordinator.AddComponent(enemy, anim);
 
     MovementPattern movementPattern;
@@ -480,6 +481,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     float scale = sprite.get_or("scale", 2.5f);
     int startX = sprite.get_or("startX", 0);
     int startY = sprite.get_or("startY", 0);
+    int spacing = sprite.get_or("spacing", 0);
     
     sol::table animation = config.get_or("animation", sol::table());
     int frameCount = animation.get_or("frameCount", 8);
@@ -554,7 +556,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     anim.frameHeight = frameHeight;
     anim.startX = startX;
     anim.startY = startY;
-    anim.spacing = frameWidth;
+    anim.spacing = spacing;
     coordinator.AddComponent(enemy, anim);
     
     MovementPattern movementPattern;
@@ -586,6 +588,60 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     enemyTag.aiAggressiveness = 1.0f;
     coordinator.AddComponent(enemy, enemyTag);
     
+    // Weapon (optionnel) - peut être une string (weapon id), une table (config détaillée)
+    try {
+        sol::object weaponObj = config["weapon"];
+        float shootInterval = config.get_or("shootInterval", 0.0f);
+
+        bool shouldAddWeapon = false;
+        ShootEmUp::Components::Weapon weaponComp;
+
+        if (weaponObj.valid()) {
+            if (weaponObj.get_type() == sol::type::table) {
+                sol::table weaponTable = config.get<sol::table>("weapon");
+                weaponComp.weaponType = weaponTable.get_or("weaponType", std::string("single_shot"));
+                weaponComp.level = weaponTable.get_or("level", 1);
+                weaponComp.fireRate = weaponTable.get_or("fireRate", 0.5f);
+                weaponComp.projectileType = weaponTable.get_or("projectileType", std::string("enemy_bullet"));
+                weaponComp.projectileSpeed = weaponTable.get_or("projectileSpeed", 600.0f);
+                weaponComp.damage = weaponTable.get_or("damage", 1);
+                weaponComp.projectileCount = weaponTable.get_or("projectileCount", 1);
+                weaponComp.spreadAngle = weaponTable.get_or("spreadAngle", 0.0f);
+                shouldAddWeapon = true;
+            } else if (weaponObj.get_type() == sol::type::string) {
+                // Simple form: weapon = "enemy_bullet"
+                std::string weaponId = config.get<std::string>("weapon");
+                weaponComp.weaponType = weaponId;
+                weaponComp.projectileType = weaponId; // use same id for projectile lookup
+                weaponComp.fireRate = shootInterval > 0.0f ? shootInterval : 1.0f;
+                weaponComp.projectileSpeed = 600.0f;
+                weaponComp.damage = 1;
+                weaponComp.projectileCount = 1;
+                weaponComp.lastFireTime = 0.0f;
+                weaponComp.canFire = true;
+                shouldAddWeapon = true;
+            }
+        } else if (shootInterval > 0.0f) {
+            // Backwards compatibility: some configs may set shootInterval without a weapon id
+            weaponComp.weaponType = "enemy_bullet";
+            weaponComp.projectileType = "enemy_bullet";
+            weaponComp.fireRate = shootInterval;
+            weaponComp.projectileSpeed = 600.0f;
+            weaponComp.damage = 1;
+            weaponComp.projectileCount = 1;
+            weaponComp.lastFireTime = 0.0f;
+            weaponComp.canFire = true;
+            shouldAddWeapon = true;
+        }
+
+        if (shouldAddWeapon) {
+            coordinator.AddComponent(enemy, weaponComp);
+            std::cout << "[EnemyFactory] Added Weapon component to '" << enemyName << "' (proj:" << weaponComp.projectileType << ")" << std::endl;
+        }
+    } catch (...) {
+        // ignore malformed weapon tables or types
+    }
+
     std::cout << "[EnemyFactory] Created '" << enemyName << "' (type: " << enemyType 
               << ") at (" << x << ", " << y << ") with " << health << " HP" << std::endl;
     
