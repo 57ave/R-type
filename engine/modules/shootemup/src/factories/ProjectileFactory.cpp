@@ -5,6 +5,78 @@
 using namespace eng::engine::rendering;
 using namespace ShootEmUp::Components;
 
+// Implementation: Create a projectile from a visual spec (used when visuals come from Lua configs)
+ECS::Entity ProjectileFactory::CreateProjectileFromSpec(
+    ECS::Coordinator& coordinator,
+    float x, float y,
+    SFMLTexture* texture,
+    const ProjectileVisualSpec& spec,
+    std::vector<SFMLSprite*>& spriteList,
+    bool isPlayerProjectile,
+    int ownerId,
+    int /*level*/
+) {
+    ECS::Entity projectile = coordinator.CreateEntity();
+
+    coordinator.AddComponent(projectile, Position{x, y});
+    // Default forward velocity for player, backward for enemy
+    float speed = isPlayerProjectile ? 1000.0f : -800.0f;
+    coordinator.AddComponent(projectile, Velocity{speed, 0.0f});
+
+    // Create sprite from spec
+    auto* sprite = CreateProjectileSprite(x, y, texture, spec.x, spec.y, spec.w, spec.h, spriteList);
+    Sprite spriteComp;
+    spriteComp.sprite = sprite;
+    spriteComp.textureRect = IntRect(spec.x, spec.y, spec.w, spec.h);
+    spriteComp.layer = 8;
+    spriteComp.scaleX = spec.scale;
+    spriteComp.scaleY = spec.scale;
+    coordinator.AddComponent(projectile, spriteComp);
+
+    // Animation if requested
+    if (spec.animated && spec.frameCount > 1) {
+        Animation anim;
+        anim.frameTime = spec.frameTime;
+        anim.currentFrame = 0;
+        anim.frameCount = spec.frameCount;
+        anim.loop = true;
+        anim.frameWidth = spec.w;
+        anim.frameHeight = spec.h;
+        anim.startX = spec.x;
+        anim.startY = spec.y;
+        anim.spacing = spec.spacing;
+        coordinator.AddComponent(projectile, anim);
+    }
+
+    // Collider sized from visual size
+    Collider collider;
+    collider.width = spec.w * spec.scale;
+    collider.height = spec.h * spec.scale;
+    collider.tag = isPlayerProjectile ? "bullet" : "enemy_bullet";
+    coordinator.AddComponent(projectile, collider);
+
+    // Damage: default small for normal projectiles; can be overridden later
+    Damage damage;
+    damage.amount = 1;
+    damage.damageType = "normal";
+    coordinator.AddComponent(projectile, damage);
+
+    coordinator.AddComponent(projectile, Tag{isPlayerProjectile ? "bullet" : "enemy_bullet"});
+
+    ProjectileTag projTag;
+    projTag.projectileType = "normal";
+    projTag.ownerId = ownerId;
+    projTag.isPlayerProjectile = isPlayerProjectile;
+    coordinator.AddComponent(projectile, projTag);
+
+    Lifetime lifetime;
+    lifetime.maxLifetime = 5.0f;
+    coordinator.AddComponent(projectile, lifetime);
+
+    return projectile;
+}
+
+
 // Helper pour créer le sprite de base
 SFMLSprite* ProjectileFactory::CreateProjectileSprite(
     float x, float y,

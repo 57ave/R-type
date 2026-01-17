@@ -75,7 +75,6 @@ vcpkg/
 node_modules/
 
 # Game assets (if any)
-assets/
 data/
 
 # User-specific configs

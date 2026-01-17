@@ -22,6 +22,34 @@ namespace eng
                     m_window.setFramerateLimit(60);
                 }
 
+                void SFMLWindow::setSize(uint32_t width, uint32_t height)
+                {
+                    m_width = width;
+                    m_height = height;
+                    m_window.setSize(sf::Vector2u(width, height));
+                    
+                    // Update the view to match new size
+                    sf::View view(sf::FloatRect(0, 0, static_cast<float>(width), static_cast<float>(height)));
+                    m_window.setView(view);
+                }
+
+                void SFMLWindow::setFullscreen(bool fullscreen)
+                {
+                    if (fullscreen) {
+                        sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
+                        m_window.create(desktopMode, m_title, sf::Style::Fullscreen);
+                        // Update view to match fullscreen resolution
+                        sf::View view(sf::FloatRect(0, 0, static_cast<float>(desktopMode.width), static_cast<float>(desktopMode.height)));
+                        m_window.setView(view);
+                    } else {
+                        m_window.create(sf::VideoMode(m_width, m_height), m_title, sf::Style::Default);
+                        // Update view to match window resolution
+                        sf::View view(sf::FloatRect(0, 0, static_cast<float>(m_width), static_cast<float>(m_height)));
+                        m_window.setView(view);
+                    }
+                    m_window.setFramerateLimit(60);
+                }
+
                 void SFMLWindow::close()
                 {
                     m_window.close();
@@ -41,6 +69,10 @@ namespace eng
 
                     // Convert SFML event to engine event
                     switch (sfEvent.type) {
+                        case sf::Event::TextEntered:
+                            event.type = eng::engine::EventType::TextEntered;
+                            event.text.unicode = sfEvent.text.unicode;
+                            break;
                         case sf::Event::Closed:
                             event.type = eng::engine::EventType::Closed;
                             break;

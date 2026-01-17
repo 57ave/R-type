@@ -6,6 +6,10 @@
 // Cache for the resolved base path
 static std::string g_basePath = "";
 
+// Static pointers for menu music control from Lua
+static eng::engine::Sound* g_menuMusic = nullptr;
+static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
+
 // Helper function to resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
     // If we already found the base path, use it
@@ -13,29 +17,75 @@ std::string ResolveAssetPath(const std::string& relativePath) {
         return g_basePath + relativePath;
     }
 
-    // List of possible base paths to check
-    std::vector<std::string> basePaths = {
-        "",                    // Current directory (running from project root)
-        "../../",              // Running from build/game/
-        "../../../",           // Running from deeper build directories
-    };
-
-    // Test file to check if we're in the right directory
-    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
-
-    for (const auto& base : basePaths) {
-        std::string fullPath = base + testFile;
-        std::ifstream file(fullPath);
-        if (file.good()) {
-            g_basePath = base;
-            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
-            return g_basePath + relativePath;
-        }
+    // If we already found the base path, use it
+    if (!g_basePath.empty()) {
+        return g_basePath + relativePath;
     }
 
-    // Fallback: return the path as-is
-    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
+    // Do not embed any file paths in this file. Assume Lua provides
+    // full relative paths via configuration. If g_basePath wasn't set
+    // yet, just return the given relativePath and let the caller handle it.
     return relativePath;
+}
+
+// Load asset/script paths from the Lua state into Game members.
+bool Game::LoadAssetsFromLua() {
+    try {
+        auto& luaState = Scripting::LuaState::Instance();
+        sol::state& L = luaState.GetState();
+        sol::optional<sol::table> assets = L["Assets"];
+        if (!assets) return false;
+
+        backgroundPath = assets->get_or("background", std::string());
+        baseAssetsDir = assets->get_or("base", std::string());
+        // normalize baseAssetsDir to end with '/'
+        if (!baseAssetsDir.empty() && baseAssetsDir.back() != '/') baseAssetsDir += '/';
+
+        if (assets->get<sol::object>("players").is<sol::table>()) {
+            sol::table p = assets->get<sol::table>("players");
+            playerPath = p.get_or("player", std::string());
+            missilePath = p.get_or("missile", std::string());
+        }
+
+        if (assets->get<sol::object>("enemies").is<sol::table>()) {
+            sol::table e = assets->get<sol::table>("enemies");
+            enemyBulletsPath = e.get_or("bullets", std::string());
+            explosionPath = e.get_or("explosion", std::string());
+        }
+
+        if (assets->get<sol::object>("fonts").is<sol::table>()) {
+            sol::table f = assets->get<sol::table>("fonts");
+            defaultFontPath = f.get_or("default", std::string());
+        }
+
+        if (assets->get<sol::object>("sounds").is<sol::table>()) {
+            sol::table s = assets->get<sol::table>("sounds");
+            shootSfxPath = s.get_or("shoot", std::string());
+            menuMusicPath = s.get_or("menu", std::string());
+            soundsBase = s.get_or("base", std::string());
+            if (!soundsBase.empty() && soundsBase.back() != '/') soundsBase += '/';
+        }
+
+        if (assets->get<sol::object>("scripts").is<sol::table>()) {
+            sol::table sc = assets->get<sol::table>("scripts");
+            initScriptPath = sc.get_or("init", std::string());
+            audioConfigPath = sc.get_or("audio_config", std::string());
+            uiInitPath = sc.get_or("ui_init", std::string());
+            spawnScriptPath = sc.get_or("spawn_system", std::string());
+            difficultyScriptsBase = sc.get_or("difficulty_base", std::string());
+            if (!difficultyScriptsBase.empty() && difficultyScriptsBase.back() != '/') difficultyScriptsBase += '/';
+        }
+
+        if (assets->get<sol::object>("config").is<sol::table>()) {
+            sol::table cfg = assets->get<sol::table>("config");
+            settingsJsonPath = cfg.get_or("user_settings", std::string());
+        }
+
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[Game] Exception while reading Assets from Lua: " << ex.what() << std::endl;
+        return false;
+    }
 }
 
 void Game::RegisterEntity(ECS::Entity entity) {
@@ -201,7 +251,7 @@ ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     // Sprite
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
-    sprite->setTexture(enemyTexture.get());
+    sprite->setTexture(textureMap["enemy"]);
     IntRect rect(0, 0, 33, 32);
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
@@ -286,26 +336,106 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
     allSprites.push_back(sprite);
     sprite->setTexture(missileTexture.get());
 
-    IntRect rect;
-    if (!isCharged) {
-        // Missiles normaux - coordonnées de l'ancien fichier qui fonctionnait
-        rect = IntRect(245, 85, 20, 20);
-    } else {
-        // Charged missile sprites (lignes 5-9 avec les gros missiles)
-        struct ChargeData {
-            int xPos, yPos, width, height;
-        };
-        ChargeData chargeLevels[5] = {
-            {233, 100, 15, 15},  // Level 1
-            {202, 117, 31, 15},  // Level 2
-            {170, 135, 47, 15},  // Level 3
-            {138, 155, 63, 15},  // Level 4
-            {105, 170, 79, 17}   // Level 5
-        };
-        ChargeData& data = chargeLevels[chargeLevel - 1];
-        rect = IntRect(data.xPos, data.yPos, data.width, data.height);
+    // Default rect/visuals (fallback)
+    IntRect rect(245, 85, 20, 20);
+    float finalScale = 3.0f;
+    bool addAnimation = false;
+    Animation anim;
+
+    // Try to read projectile visuals from Lua WeaponsConfig for the player's weapon
+    try {
+        sol::state& lua = Scripting::LuaState::Instance().GetState();
+        sol::table weaponsConfig = lua["WeaponsConfig"];
+
+
+        // Determine weapon type: use default fallback (CreateMissile is called without weaponType)
+        // If you later want per-weapon visuals, pass weaponType into CreateMissile or set a global/current weapon in Lua
+        std::string weaponType = "single_shot"; // fallback
+
+        sol::table weaponTable = weaponsConfig[weaponType];
+        if (weaponTable.valid()) {
+            sol::table proj = weaponTable["projectile"];
+            if (proj.valid()) {
+                // Normal rect
+                if (proj["normalRect"].valid()) {
+                    sol::table nr = proj["normalRect"];
+                    int nx = nr["x"].get_or(245);
+                    int ny = nr["y"].get_or(85);
+                    int nw = nr["w"].get_or(20);
+                    int nh = nr["h"].get_or(20);
+                    rect = IntRect(nx, ny, nw, nh);
+                }
+
+                // If charged, prefer per-level rects in Lua: projectile.chargedRects[chargeLevel]
+                if (isCharged) {
+                    bool applied = false;
+
+                    // 1) Check for a table of rects per level
+                    if (proj["chargedRects"].valid()) {
+                        sol::table crs = proj["chargedRects"];
+                        sol::optional<sol::table> cr = crs[chargeLevel];
+                        if (cr) {
+                            int cx = cr->get_or("x", rect.left);
+                            int cy = cr->get_or("y", rect.top);
+                            int cw = cr->get_or("w", rect.width);
+                            int ch = cr->get_or("h", rect.height);
+                            rect = IntRect(cx, cy, cw, ch);
+                            applied = true;
+                        }
+                    }
+
+                    // 2) Fallback to single chargedRect if present
+                    if (!applied && proj["chargedRect"].valid()) {
+                        sol::table cr = proj["chargedRect"];
+                        int cx = cr["x"].get_or(rect.left);
+                        int cy = cr["y"].get_or(rect.top);
+                        int cw = cr["w"].get_or(rect.width);
+                        int ch = cr["h"].get_or(rect.height);
+
+                        // If Lua defines chargelevels with a size multiplier, apply it
+                        if (weaponTable["chargelevels"].valid()) {
+                            sol::table levels = weaponTable["chargelevels"];
+                            sol::optional<sol::table> lvl = levels[chargeLevel];
+                            if (lvl) {
+                                double size = lvl->get_or("size", 0.0);
+                                if (size > 0.0) {
+                                    cw = static_cast<int>(cw * size + 0.5);
+                                    ch = static_cast<int>(ch * size + 0.5);
+                                }
+                            }
+                        }
+
+                        rect = IntRect(cx, cy, cw, ch);
+                        applied = true;
+                    }
+
+                    // 3) If neither present, keep normalRect (rect already set)
+                }
+
+                // Visual scale override
+                finalScale = static_cast<float>(proj["scale"].get_or(static_cast<double>(finalScale)));
+
+                // Animation parameters
+                if (proj["animated"].get_or(false)) {
+                    addAnimation = true;
+                    anim.frameTime = static_cast<float>(proj["frameTime"].get_or(0.1));
+                    anim.currentFrame = 0;
+                    anim.frameCount = static_cast<int>(proj["frameCount"].get_or(1));
+                    anim.loop = true;
+                    anim.frameWidth = rect.width;
+                    anim.frameHeight = rect.height;
+                    anim.startX = rect.left;
+                    anim.startY = rect.top;
+                    // spacing may be specified; fallback to 0
+                    anim.spacing = static_cast<int>(proj["spacing"].get_or(static_cast<double>(0)));
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[CreateMissile] Warning: failed to read WeaponsConfig from Lua: " << e.what() << std::endl;
     }
 
+    // Apply sprite rect/position/scale
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
 
@@ -313,22 +443,21 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
     spriteComp.sprite = sprite;
     spriteComp.textureRect = rect;
     spriteComp.layer = 8;
-    spriteComp.scaleX = 3.0f;  // Scale pour les missiles
-    spriteComp.scaleY = 3.0f;
+    spriteComp.scaleX = finalScale;  // Scale pour les missiles (from data)
+    spriteComp.scaleY = finalScale;
     gCoordinator.AddComponent(missile, spriteComp);
 
-    // Animation seulement pour les missiles chargés
-    if (isCharged) {
-        Animation anim;
-        anim.frameTime = 0.1f;
-        anim.currentFrame = 0;
-        anim.frameCount = 2;
-        anim.loop = true;
-        anim.frameWidth = rect.width;
-        anim.frameHeight = rect.height;
-        anim.startX = rect.left;
-        anim.startY = rect.top;
-        anim.spacing = rect.width + 2;
+    // Add animation if requested by config and/or for charged projectiles
+    if (addAnimation || isCharged) {
+        // If we didn't fill anim above, set sensible defaults for charged
+        if (anim.frameCount <= 0) anim.frameCount = 1;
+        if (anim.frameTime <= 0.0f) anim.frameTime = 0.1f;
+        if (anim.frameWidth <= 0) anim.frameWidth = rect.width;
+        if (anim.frameHeight <= 0) anim.frameHeight = rect.height;
+        if (anim.startX == 0 && anim.startY == 0) {
+            anim.startX = rect.left;
+            anim.startY = rect.top;
+        }
         gCoordinator.AddComponent(missile, anim);
     }
 
@@ -599,6 +728,10 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
+    
+    // Register Audio components
+    gCoordinator.RegisterComponent<AudioSource>();
+    gCoordinator.RegisterComponent<SoundEffect>();
 
     // Register UI components
     gCoordinator.RegisterComponent<Components::UIElement>();
@@ -627,6 +760,22 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "[Game] Lua components registered" << std::endl;
 
+    // ======================================================
+    // Read asset paths from Lua (game_config.lua -> Assets)
+    // Populate variables used later when loading textures/fonts/sounds
+    // ======================================================
+    // Bootstrap: ensure minimal config (game_config.lua) is loaded so Assets table exists.
+    // This is the single required bootstrap script; all asset paths themselves stay in Lua.
+    luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"));
+
+    // Load asset/script paths from Lua and populate Game members.
+    if (!LoadAssetsFromLua()) {
+        std::cerr << "[Game] Error: Assets table missing or invalid in Lua. Aborting." << std::endl;
+        return 1;
+    }
+
+    // Script paths are populated by LoadAssetsFromLua() into Game members
+
     // ========================================
     // INITIALIZE GAME STATE MANAGER
     // ========================================
@@ -636,6 +785,8 @@ int Game::Run(int argc, char* argv[])
     gameStateManager.SetState(GameState::MainMenu);  // Start at main menu
 
     std::cout << "[Game] Game State Manager initialized" << std::endl;
+
+    // NOTE: Menu music will be started AFTER it is loaded (see below)
 
     // ========================================
     // INITIALIZE ALL SYSTEMS
@@ -742,7 +893,7 @@ int Game::Run(int argc, char* argv[])
     uiSystem->Init();
 
     // Load default font for UI
-    if (!uiSystem->LoadFont("default", ResolveAssetPath("game/assets/fonts/Roboto-Regular.ttf"))) {
+        if (!uiSystem->LoadFont("default", ResolveAssetPath(defaultFontPath))) {
         std::cerr << "Warning: Could not load default UI font" << std::endl;
     } else {
         std::cout << "[Game] Default UI font loaded" << std::endl;
@@ -782,13 +933,43 @@ int Game::Run(int argc, char* argv[])
             return;  // Projectiles don't collide with each other
         }
 
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+        // Check if both entities are enemies - ignore enemy vs enemy collisions
+        bool aIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(a);
+        bool bIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(b);
+        if (aIsEnemy && bIsEnemy) {
+            return;  // Enemies don't collide with each other
+        }
 
-        // Check for damage components
-        bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
-        bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
-        bool aHasHealth = gCoordinator.HasComponent<Health>(a);
-        bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+        // Check if enemy projectile hits another enemy - ignore
+        if (aIsProjectile && bIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(a);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+        if (bIsProjectile && aIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(b);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+
+        // Check for damage/health components. Only log collisions that are gameplay-relevant:
+        // - a has Damage and b has Health
+        // - b has Damage and a has Health
+        // - OR either entity is the player (we want to always surface player hits)
+    bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
+    bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
+    bool aHasHealth = gCoordinator.HasComponent<Health>(a);
+    bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+
+        bool significant = (aHasDamage && bHasHealth) || (bHasDamage && aHasHealth) || aIsPlayer || bIsPlayer;
+        if (!significant) {
+            // Not relevant for damage flow/logging: skip verbose output
+            return;
+        }
+
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
 
         // Apply damage: B damages A
         if (aHasHealth && bHasDamage) {
@@ -935,7 +1116,7 @@ int Game::Run(int argc, char* argv[])
                     // Create enemy sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
-                    sprite->setTexture(enemyTexture.get());
+                    sprite->setTexture(textureMap["enemy"]);
                     IntRect rect(0, 0, 33, 36);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
@@ -1097,81 +1278,145 @@ int Game::Run(int argc, char* argv[])
 
     // Set window for UISystem
     uiSystem->SetWindow(&window);
+    
+    // Store window pointer for resolution changes
+    m_window = &window;
+    
+    // Register resolution/fullscreen change callbacks to Lua
+    // Static variables to prevent applying the same resolution repeatedly
+    static int lastAppliedResolution = -1;
+    static bool lastAppliedFullscreen = false;
+    
+    luaState.GetState()["ApplyResolution"] = [this](int resolutionIndex, bool fullscreen) {
+        if (!m_window) return;
+        
+        // Prevent applying the same resolution repeatedly (fixes infinite loop)
+        if (resolutionIndex == lastAppliedResolution && fullscreen == lastAppliedFullscreen) {
+            std::cout << "[Game] Resolution unchanged, skipping apply" << std::endl;
+            return;
+        }
+        
+        std::vector<std::pair<uint32_t, uint32_t>> resolutions = {
+            {1920, 1080},
+            {1280, 720},
+            {1600, 900}
+        };
+        
+        if (resolutionIndex >= 0 && resolutionIndex < static_cast<int>(resolutions.size())) {
+            auto [width, height] = resolutions[resolutionIndex];
+            
+            if (fullscreen) {
+                m_window->setFullscreen(true);
+                std::cout << "[Game] Applied fullscreen mode" << std::endl;
+            } else {
+                // First set the target size, then exit fullscreen
+                m_window->setSize(width, height);
+                m_window->setFullscreen(false);
+                std::cout << "[Game] Applied resolution: " << width << "x" << height << std::endl;
+            }
+            
+            // Remember what we applied to prevent duplicates
+            lastAppliedResolution = resolutionIndex;
+            lastAppliedFullscreen = fullscreen;
+        }
+    };
 
-    // Load textures using resolved asset paths
+    
+
+    // Create textures using resolved (possibly Lua-controlled) paths
     backgroundTexture = std::make_unique<SFMLTexture>();
-    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
-        std::cerr << "Error: Could not load background.png" << std::endl;
+    if (!backgroundTexture->loadFromFile(ResolveAssetPath(backgroundPath))) {
+        std::cerr << "Error: Could not load background: " << backgroundPath << std::endl;
         return 1;
     }
 
     playerTexture = std::make_unique<SFMLTexture>();
-    if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
-        std::cerr << "Error: Could not load player sprite" << std::endl;
+    if (!playerTexture->loadFromFile(ResolveAssetPath(playerPath))) {
+        std::cerr << "Error: Could not load player sprite: " << playerPath << std::endl;
         return 1;
     }
 
     missileTexture = std::make_unique<SFMLTexture>();
-    if (!missileTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet1.png"))) {
-        std::cerr << "Error: Could not load missile sprite" << std::endl;
+    if (!missileTexture->loadFromFile(ResolveAssetPath(missilePath))) {
+        std::cerr << "Error: Could not load missile sprite: " << missilePath << std::endl;
         return 1;
     }
 
-    enemyTexture = std::make_unique<SFMLTexture>();
-    if (!enemyTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet5.png"))) {
-        std::cerr << "Error: Could not load enemy sprite" << std::endl;
-        return 1;
-    }
-    std::cout << "[Game] ✅ Enemy texture loaded: " << enemyTexture->getSize().x << "x" << enemyTexture->getSize().y << std::endl;
-
+    // Note: enemy textures are loaded per-enemy from Lua config later
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
-    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
-        std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
+    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath(enemyBulletsPath))) {
+        std::cerr << "Error: Could not load enemy bullet sprite: " << enemyBulletsPath << std::endl;
         return 1;
     }
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
-    if (!explosionTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet44.png"))) {
-        std::cerr << "Error: Could not load explosion sprite" << std::endl;
+    if (!explosionTexture->loadFromFile(ResolveAssetPath(explosionPath))) {
+        std::cerr << "Error: Could not load explosion sprite: " << explosionPath << std::endl;
         return 1;
     }
 
     // Load sound
-    if (!shootBuffer.loadFromFile(ResolveAssetPath("game/assets/vfx/shoot.ogg"))) {
-        std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
+    if (!shootBuffer.loadFromFile(ResolveAssetPath(shootSfxPath))) {
+        std::cerr << "Warning: Could not load shoot.ogg at " << shootSfxPath << std::endl;
     } else {
         shootSound.setBuffer(shootBuffer);
         shootSound.setVolume(80.f);
     }
 
-    // ========================================
-    // REGISTER FACTORIES TO LUA
-    // ========================================
-    std::cout << "🏭 Registering Factories to Lua..." << std::endl;
+    // Load menu music (from feature/game_menu)
+    std::cout << "[Game] Attempting to load menu music from: " << ResolveAssetPath(menuMusicPath) << std::endl;
+    
+    if (!menuMusicBuffer.loadFromFile(ResolveAssetPath(menuMusicPath))) {
+        std::cerr << "ERROR: Could not load menu music from: " << ResolveAssetPath(menuMusicPath) << std::endl;
+        std::cerr << "       Please verify the file exists and is readable." << std::endl;
+    } else {
+        menuMusic.setBuffer(menuMusicBuffer);
+        menuMusic.setVolume(70.f);  // Set to match default in Lua (70%)
+        menuMusic.setLoop(true);  // Loop continuously
+        
+        // Set static pointers for Lua access
+        g_menuMusic = &menuMusic;
+        g_menuMusicBuffer = &menuMusicBuffer;
+        
+        std::cout << "[Game] ✓ Menu music loaded successfully from: " << menuMusicPath << std::endl;
+        std::cout << "[Game]   Volume: 70%, Loop: enabled" << std::endl;
+        
+        // Start menu music immediately since we're in MainMenu state
+        if (GameStateManager::Instance().GetState() == GameState::MainMenu) {
+            menuMusic.play();
+            std::cout << "[Game] ♪ Menu music started!" << std::endl;
+        }
+    }
 
-    // Prepare texture map for factories
-    std::unordered_map<std::string, SFMLTexture*> textureMap;
-    textureMap["enemy"] = enemyTexture.get();
-    textureMap["missile"] = missileTexture.get();
-    textureMap["player"] = playerTexture.get();
-    textureMap["background"] = backgroundTexture.get();
-    textureMap["explosion"] = explosionTexture.get();
-
-    RType::Scripting::FactoryBindings::RegisterFactories(
-        luaState.GetState(),
-        &gCoordinator,
-        textureMap,
-        &allSprites
-    );
+    // NOTE: Factory registration moved later after texture preloading (from feature/game_features)
 
     // Load Lua scripts
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
-    // Load configuration
-    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
-        std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    // Load main initialization script (must be provided by Lua Assets)
+    if (initScriptPath.empty()) {
+        std::cerr << "Warning: init script path not provided by Lua (Assets.scripts.init). Skipping init.lua load." << std::endl;
+    } else if (!luaState.LoadScript(ResolveAssetPath(initScriptPath))) {
+        std::cerr << "Warning: Could not load init script: " << initScriptPath << std::endl;
+    } else {
+        std::cout << "[Game] ✓ init script loaded - configurations initialized" << std::endl;
+        
+        // Initialize mode based on network setting
+        sol::state& lua = luaState.GetState();
+        if (networkMode) {
+            sol::protected_function initNetwork = lua["InitNetworkMode"];
+            if (initNetwork.valid()) {
+                initNetwork();
+            }
+        } else {
+            sol::protected_function initSolo = lua["InitSoloMode"];
+            if (initSolo.valid()) {
+                initSolo();
+                std::cout << "[Game] Solo mode initialized - Enemy showcase may be active" << std::endl;
+            }
+        }
     }
 
     // Set up game state callbacks for the engine (keeps engine abstract)
@@ -1242,10 +1487,216 @@ int Game::Run(int argc, char* argv[])
     luaState.GetState()["ASSET_BASE_PATH"] = g_basePath;
     std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
 
+    // ========================================
+    // LOAD AUDIO CONFIGURATION
+    // ========================================
+    std::cout << "🎵 Loading Audio Configuration..." << std::endl;
+    if (!luaState.LoadScript(ResolveAssetPath(audioConfigPath))) {
+        std::cerr << "[Audio] Warning: Could not load audio_config.lua" << std::endl;
+    } else {
+        std::cout << "[Audio] Audio configuration loaded" << std::endl;
+    }
+
+    // Load user settings (volumes)
+    LoadUserSettings();
+    
+    // Apply loaded settings to existing music
+    menuMusic.setVolume(currentMusicVolume);
+    shootSound.setVolume(currentSFXVolume);
+
+    // ========================================
+    // REGISTER AUDIO CALLBACKS FOR LUA
+    // ========================================
+    
+    // Legacy menu music control (backwards compatibility)
+    luaState.GetState()["SetMenuMusicVolume"] = [this](float volume) {
+        SetMusicVolume(volume);
+    };
+    
+    luaState.GetState()["GetMenuMusicVolume"] = [this]() -> float {
+        return GetMusicVolume();
+    };
+    
+    // New audio control callbacks
+    luaState.GetState()["OnMusicVolumeChanged"] = [this](float value) {
+        SetMusicVolume(value);
+    };
+    
+    luaState.GetState()["OnSFXVolumeChanged"] = [this](float value) {
+        SetSFXVolume(value);
+    };
+    
+    // Save settings callback (called from Lua OnApplySettings)
+    luaState.GetState()["SaveUserSettingsToFile"] = [this]() {
+        SaveUserSettings();
+    };
+    
+    luaState.GetState()["OnDifficultyChanged"] = [this](int index) {
+        std::vector<std::string> difficulties = {"easy", "normal", "hard"};
+        if (index >= 0 && index < 3) {
+            LoadDifficulty(difficulties[index]);
+        }
+    };
+    
+    // Audio namespace for Lua
+    auto audioNamespace = luaState.GetState()["Audio"].get_or_create<sol::table>();
+    
+    audioNamespace["PlayMusic"] = [this](const std::string& name, bool loop) {
+        PlayMusic(name, loop);
+    };
+    
+    audioNamespace["FadeToMusic"] = [this](const std::string& name, float duration) {
+        FadeToMusic(name, duration);
+    };
+    
+    audioNamespace["StopMusic"] = [this]() {
+        StopMusic();
+    };
+    
+    audioNamespace["PauseMusic"] = [this]() {
+        PauseMusic();
+    };
+    
+    audioNamespace["ResumeMusic"] = [this]() {
+        ResumeMusic();
+    };
+    
+    audioNamespace["SetMusicVolume"] = [this](float volume) {
+        SetMusicVolume(volume);
+    };
+    
+    audioNamespace["SetSFXVolume"] = [this](float volume) {
+        SetSFXVolume(volume);
+    };
+    
+    audioNamespace["GetMusicVolume"] = [this]() -> float {
+        return GetMusicVolume();
+    };
+    
+    audioNamespace["GetSFXVolume"] = [this]() -> float {
+        return GetSFXVolume();
+    };
+    
+    // Stage/Boss music control
+    audioNamespace["SetStage"] = [this](int stage) {
+        SetCurrentStage(stage);
+    };
+    
+    audioNamespace["OnBossSpawned"] = [this]() {
+        OnBossSpawned();
+    };
+    
+    audioNamespace["OnBossDefeated"] = [this]() {
+        OnBossDefeated();
+    };
+    
+    audioNamespace["OnGameOver"] = [this]() {
+        OnGameOver();
+    };
+    
+    audioNamespace["OnVictory"] = [this]() {
+        OnAllStagesClear();
+    };
+    
+    // SFX playback (via AudioSystem)
+    audioNamespace["PlaySFX"] = [this](const std::string& name, float volumeMult) {
+        if (audioSystem) {
+            audioSystem->PlaySFX(name, volumeMult);
+        } else {
+            // Fallback: play shoot sound for now
+            if (name == "shoot.ogg" || name == "playerShoot") {
+                shootSound.play();
+            }
+        }
+    };
+    
+    std::cout << "[Game] Audio control bindings registered to Lua" << std::endl;
+
+    // ========================================
+    // PRELOAD TEXTURES (including per-enemy textures from Lua config) - from feature/game_features
+    // ========================================
+    // Use Game::textureMap member so other Game methods (CreateEnemy, CreateEnemyMissile, etc.)
+    // can access preloaded textures.
+    // Keep ownership of dynamically loaded textures so they live for game lifetime
+    std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
+
+    // Core textures we already loaded earlier
+    textureMap["background"] = backgroundTexture.get();
+    textureMap["player"] = playerTexture.get();
+    textureMap["missile"] = missileTexture.get();
+    textureMap["explosion"] = explosionTexture.get();
+    textureMap["enemy_bullets"] = enemyBulletTexture.get();
+
+    // Load enemy-specific textures referenced in EnemiesConfig (if available)
+    try {
+        sol::state& lua = luaState.GetState();
+        sol::table enemiesConfig = lua["EnemiesConfig"];
+        if (enemiesConfig.valid()) {
+            for (auto& kv : enemiesConfig) {
+                // kv.first = key, kv.second = value
+                sol::object key = kv.first;
+                sol::object val = kv.second;
+                if (val.is<sol::table>()) {
+                    sol::table cfg = val.as<sol::table>();
+                    sol::table spriteTbl = cfg["sprite"];
+                    if (spriteTbl.valid()) {
+                        std::string texPath = spriteTbl["texture"].get_or(std::string());
+                        if (!texPath.empty() && textureMap.find(texPath) == textureMap.end()) {
+                            auto tex = std::make_unique<SFMLTexture>();
+                            bool loaded = false;
+                            // Try resolved candidate paths
+                            std::string candidate1 = ResolveAssetPath(baseAssetsDir + texPath);
+                            if (!candidate1.empty() && tex->loadFromFile(candidate1)) {
+                                loaded = true;
+                                std::cout << "[Game] Loaded enemy texture: " << candidate1 << std::endl;
+                            } else {
+                                std::string candidate2 = ResolveAssetPath(texPath);
+                                if (!candidate2.empty() && tex->loadFromFile(candidate2)) {
+                                    loaded = true;
+                                    std::cout << "[Game] Loaded enemy texture: " << candidate2 << std::endl;
+                                }
+                            }
+                            if (loaded) {
+                                textureMap[texPath] = tex.get();
+                                dynamicTextures.push_back(std::move(tex));
+                            } else {
+                                std::cerr << "[Game] Warning: could not load enemy texture '" << texPath << "'" << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Game] Exception while preloading enemy textures: " << e.what() << std::endl;
+    }
+
+    // If no generic "enemy" key exists, use the first loaded enemies/* texture as a fallback
+    if (textureMap.find("enemy") == textureMap.end()) {
+        for (auto& kv : textureMap) {
+            if (kv.first.find("enemies/") == 0) {
+                textureMap["enemy"] = kv.second;
+                break;
+            }
+        }
+    }
+
+    // Register factories after textures are prepared so factories can use per-type textures
+    // Register factories and give them access to our textureMap
+    RType::Scripting::FactoryBindings::RegisterFactories(
+        luaState.GetState(),
+        &gCoordinator,
+        textureMap,
+        &allSprites,
+        [this](ECS::Entity e) { this->RegisterEntity(e); }
+    );
+
     // Load UI scripts
     std::cout << "🎨 Loading UI scripts..." << std::endl;
-    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/ui_init.lua"))) {
-        std::cerr << "Warning: Could not load ui_init.lua" << std::endl;
+    if (uiInitPath.empty()) {
+        std::cerr << "Warning: UI init script path not provided by Lua (Assets.scripts.ui_init). Skipping UI init." << std::endl;
+    } else if (!luaState.LoadScript(ResolveAssetPath(uiInitPath))) {
+        std::cerr << "Warning: Could not load UI init script: " << uiInitPath << std::endl;
     } else {
         // Initialize UI from Lua
         sol::state& lua = luaState.GetState();
@@ -1263,16 +1714,20 @@ int Game::Run(int argc, char* argv[])
         }
     }
 
-    // Load spawn system
-    spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
-        ResolveAssetPath("assets/scripts/systems/spawn_system.lua"),
-        &gCoordinator
-    );
-
-    if (spawnScriptSystem) {
-        std::cout << "[Game] Spawn system loaded from Lua" << std::endl;
+    // Load spawn system (path provided by Lua)
+    if (spawnScriptPath.empty()) {
+        std::cerr << "Warning: spawn system script path not provided by Lua (Assets.scripts.spawn_system). Skipping spawn system load." << std::endl;
     } else {
-        std::cerr << "[Game] Warning: Spawn system failed to load" << std::endl;
+        spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
+            ResolveAssetPath(spawnScriptPath),
+            &gCoordinator
+        );
+
+        if (spawnScriptSystem) {
+            std::cout << "[Game] Spawn system loaded from Lua" << std::endl;
+        } else {
+            std::cerr << "[Game] Warning: Spawn system failed to load from: " << spawnScriptPath << std::endl;
+        }
     }
 
     // Create game entities - but NOT the player yet (created when game starts)
@@ -1296,6 +1751,12 @@ int Game::Run(int argc, char* argv[])
     bool hasChargingEffect = false;
 
     std::cout << "Game initialized successfully!" << std::endl;
+
+    // In network mode, start directly in Playing state (server handles game logic)
+    if (networkMode) {
+        GameStateManager::Instance().SetState(GameState::Playing);
+        std::cout << "[Game] Network mode: Starting directly in Playing state" << std::endl;
+    }
 
     // Input mask for network
     uint8_t inputMask = 0;
@@ -1335,6 +1796,51 @@ int Game::Run(int argc, char* argv[])
                        currentState == GameState::Lobby ||
                        currentState == GameState::Credits);
 
+        // Manage menu music based on game state
+        static GameState previousState = GameState::MainMenu;
+        static bool stageOneMusicStarted = false;
+        if (currentState != previousState) {
+            // When entering menu states
+            if (inMenu) {
+                // Special case: Pause menu - pause game music, don't play menu music
+                if (currentState == GameState::Paused) {
+                    PauseMusic();
+                    std::cout << "[Game] Game music paused (entering pause menu)" << std::endl;
+                } else {
+                    // For other menus (MainMenu, Options, etc.), play menu music
+                    if (menuMusic.getStatus() != eng::engine::Sound::Playing) {
+                        menuMusic.play();
+                        std::cout << "[Game] Menu music started" << std::endl;
+                    }
+                    stageOneMusicStarted = false; // Reset for next game
+                }
+            } 
+            // When leaving menu to game
+            else {
+                // Leaving pause menu - resume game music
+                if (previousState == GameState::Paused) {
+                    ResumeMusic();
+                    std::cout << "[Game] Game music resumed (leaving pause menu)" << std::endl;
+                } else {
+                    // Leaving main menu to start game - stop menu music
+                    if (menuMusic.getStatus() == eng::engine::Sound::Playing) {
+                        menuMusic.stop();
+                        std::cout << "[Game] Menu music stopped" << std::endl;
+                    }
+                    // Start stage 1 music when entering gameplay
+                    if (!stageOneMusicStarted && currentState == GameState::Playing) {
+                        SetCurrentStage(1); // This will start stage 1 music
+                        stageOneMusicStarted = true;
+                        std::cout << "[Game] Starting Stage 1 music!" << std::endl;
+                    }
+                }
+            }
+            previousState = currentState;
+        }
+
+        // Update music fade (for smooth transitions)
+        UpdateMusicFade(deltaTime);
+
         // Find local player entity in network mode
         if (networkMode && player == 0 && networkSystem) {
             // Find entity with isLocalPlayer = true
@@ -1346,6 +1852,21 @@ int Game::Run(int argc, char* argv[])
                         std::cout << "[Game] Found local player entity: " << player << " (networkId: " << netId.networkId << ")" << std::endl;
                         break;
                     }
+                }
+            }
+        }
+
+        // ========================================
+        // UPDATE GAME LOGIC (Lua callbacks, showcase, etc.)
+        // ========================================
+        if (!inMenu) {
+            sol::state& lua = luaState.GetState();
+            sol::protected_function updateGame = lua["UpdateGame"];
+            if (updateGame.valid()) {
+                sol::protected_function_result result = updateGame(deltaTime);
+                if (!result.valid()) {
+                    sol::error err = result;
+                    // Silently fail - don't spam console with errors
                 }
             }
         }
@@ -1424,7 +1945,7 @@ int Game::Run(int argc, char* argv[])
 
                     } else if (tag.name == "Enemy") {
                         // Enemy sprite - r-typesheet5.png is a single horizontal line (533x36)
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
 
                         // Test: Use frame 10 (330 pixels) which should show enemy pointing left
                         IntRect rect(0, 0, 33, 32);  // Frame 0 - match CreateEnemy exactly
@@ -1564,7 +2085,7 @@ int Game::Run(int argc, char* argv[])
                     } else {
                         // Unknown entity type - log warning and use default enemy appearance
                         std::cerr << "[Game] WARNING: Unknown entity tag '" << tag.name << "' for entity " << entity << std::endl;
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
                         IntRect rect(0, 0, 32, 32);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
@@ -1614,6 +2135,12 @@ int Game::Run(int argc, char* argv[])
 
             // Pass events to UI system when in menu states
             if (currentGameState != GameState::Playing) {
+                if (event.type == eng::engine::EventType::TextEntered) {
+                    // UTF-32 vers char (ASCII seulement, sinon ignorer ou adapter)
+                    if (event.text.unicode < 128 && event.text.unicode >= 32) {
+                        uiSystem->HandleTextInput(static_cast<char>(event.text.unicode));
+                    }
+                }
                 uiSystem->HandleEvent(event);
             }
 
@@ -1745,12 +2272,21 @@ int Game::Run(int argc, char* argv[])
         bool movingUp = false, movingDown = false, movingLeft = false, movingRight = false;
         bool firing = false;
         
-        if (!inMenu) {
+        // In network mode, always capture inputs (server handles game state)
+        // In local mode, only capture when not in menu
+        if (networkMode || !inMenu) {
             movingUp = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Up);
             movingDown = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Down);
             movingLeft = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Left);
             movingRight = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Right);
             firing = spacePressed;
+            
+            // Debug: Log inputs in network mode
+            if (networkMode && (movingUp || movingDown || movingLeft || movingRight || firing)) {
+                std::cout << "[Input] Up:" << movingUp << " Down:" << movingDown 
+                          << " Left:" << movingLeft << " Right:" << movingRight 
+                          << " Fire:" << firing << std::endl;
+            }
         }
 
         // Build input mask for network (bit flags from Protocol.md)
@@ -1784,6 +2320,11 @@ int Game::Run(int argc, char* argv[])
 
         // Send input to server if in network mode
         if (networkMode && networkSystem) {
+            // Only log when there's actual input to reduce spam
+            if (inputMask != 0) {
+                std::cout << "[Network] Sending inputMask=" << (int)inputMask 
+                          << " chargeLevel=" << (int)chargeLevel << std::endl;
+            }
             networkSystem->sendInput(inputMask, chargeLevel);
         }
 
@@ -1822,6 +2363,8 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         if (!inMenu && !networkMode) {
             enemySpawnTimer += deltaTime;
+            // Local Lua state reference for config/factory access
+            sol::state& lua = luaState.GetState();
             
             if (enemySpawnTimer >= enemySpawnInterval) {
                 enemySpawnTimer = 0.0f;
@@ -1829,15 +2372,27 @@ int Game::Run(int argc, char* argv[])
                 // Random Y position
                 float randomY = 100.0f + static_cast<float>(rand() % 800);
                 
-                // Random pattern type
-                std::vector<std::string> patterns = {"straight", "zigzag", "sinewave"};
-                std::string pattern = patterns[rand() % patterns.size()];
+                // Random enemy type - use proper Lua configs
+                std::vector<std::string> enemyTypes = {"basic", "zigzag", "sinewave", "kamikaze"};
+                std::string enemyType = enemyTypes[rand() % enemyTypes.size()];
                 
-                // Create enemy using the Game::CreateEnemy method (which has proper sprites & animations)
-                ECS::Entity enemy = CreateEnemy(1920.0f, randomY, pattern);
-                
-                if (enemy != 0) {
-                    std::cout << "[Game] Spawned " << pattern << " enemy at Y=" << randomY << std::endl;
+                // Create enemy using Lua factory
+                sol::table enemiesConfig = lua["EnemiesConfig"];
+                if (enemiesConfig.valid()) {
+                    sol::table enemyConfig = enemiesConfig[enemyType];
+                    if (enemyConfig.valid()) {
+                        sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
+                        if (createEnemy.valid()) {
+                            auto result = createEnemy(1920.0f, randomY, enemyConfig);
+                            if (result.valid()) {
+                                ECS::Entity enemy = result;
+                                if (enemy != 0) {
+                                    std::string enemyName = enemyConfig.get_or("name", enemyType);
+                                    std::cout << "[Game] Spawned " << enemyName << " at Y=" << randomY << std::endl;
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 // Vary spawn interval for unpredictability
@@ -1847,37 +2402,118 @@ int Game::Run(int argc, char* argv[])
             // ========================================
             // 4b. ENEMY SHOOTING
             // ========================================
-            enemyShootTimer += deltaTime;
+            // Each enemy manages its own fire timer independently
+            int shotsCreated = 0;
             
-            if (enemyShootTimer >= enemyShootInterval) {
-                enemyShootTimer = 0.0f;
+            for (auto entity : allEntities) {
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) ||
+                    !gCoordinator.HasComponent<Position>(entity)) {
+                    continue;
+                }
+
+                // Only consider enemies that actually have a Weapon component
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::Weapon>(entity)) {
+                    continue;
+                }
+
+                auto& weapon = gCoordinator.GetComponent<ShootEmUp::Components::Weapon>(entity);
+                auto& pos = gCoordinator.GetComponent<Position>(entity);
                 
-                int enemyCount = 0;
-                int shotsCreated = 0;
-                
-                // Make each enemy shoot
-                for (auto entity : allEntities) {
-                    if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) &&
-                        gCoordinator.HasComponent<Position>(entity)) {
-                        
-                        enemyCount++;
-                        auto& pos = gCoordinator.GetComponent<Position>(entity);
-                        
-                        // Only shoot if enemy is on screen (X < 1920 and X > 0)
-                        if (pos.x > 50.0f && pos.x < 1800.0f) {
-                            // 50% chance for each enemy to shoot
-                            if (rand() % 2 == 0) {
-                                CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
-                                shotsCreated++;
+                // Update fire timer every frame
+                weapon.lastFireTime += deltaTime;
+
+                // Only shoot if enemy is on screen and fire timer is ready
+                if (pos.x > 50.0f && pos.x < 1800.0f && weapon.lastFireTime >= weapon.fireRate) {
+                    weapon.lastFireTime = 0.0f;
+                    
+                    // Get weapon config from Lua
+                    sol::table weaponsConfig = lua["WeaponsConfig"];
+                    if (weaponsConfig.valid()) {
+                        sol::table weaponTable = weaponsConfig[weapon.weaponType];
+                        if (weaponTable.valid()) {
+                            // Check if weapon is aimed at player
+                            bool isAimed = weaponTable.get_or("aimed", false);
+                            int projCount = weapon.projectileCount;
+                            float spreadAngle = weapon.spreadAngle;
+                            
+                            if (isAimed) {
+                                // Aimed shot - calculate direction towards player
+                                float targetX = 100.0f;
+                                float targetY = static_cast<float>(window.getSize().y) / 2.0f;
+                                
+                                // Find player position
+                                if (player != 0 && gCoordinator.HasComponent<Position>(player)) {
+                                    auto& playerPos = gCoordinator.GetComponent<Position>(player);
+                                    targetX = playerPos.x;
+                                    targetY = playerPos.y;
+                                }
+                                
+                                // Calculate angle to player
+                                float dx = targetX - pos.x;
+                                float dy = targetY - pos.y;
+                                float angleRad = std::atan2(dy, dx);
+                                
+                                // Call Lua factory to create aimed projectile
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        ECS::Entity proj = result;
+                                        if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                            auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                            float speed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                            vel.dx = std::cos(angleRad) * speed;
+                                            vel.dy = std::sin(angleRad) * speed;
+                                        }
+                                        shotsCreated++;
+                                    }
+                                }
+                            } else if (projCount > 1 || spreadAngle > 0.0f) {
+                                // Spread shot
+                                float startAngle = -spreadAngle / 2.0f;
+                                float angleStep = (projCount > 1) ? (spreadAngle / (projCount - 1)) : 0.0f;
+                                
+                                for (int i = 0; i < projCount; i++) {
+                                    float angle = startAngle + (angleStep * i);
+                                    float angleRad = angle * 3.14159f / 180.0f;
+                                    
+                                    // Call Lua factory
+                                    sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                    if (createProj.valid()) {
+                                        auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                        if (result.valid()) {
+                                            ECS::Entity proj = result;
+                                            if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                                auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                                float baseSpeed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                                vel.dx = std::cos(angleRad) * baseSpeed;
+                                                vel.dy = std::sin(angleRad) * baseSpeed;
+                                            }
+                                            shotsCreated++;
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Normal straight shot
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        shotsCreated++;
+                                    }
+                                }
                             }
+                        } else {
+                            // Fallback to simple bullet if weapon config not found
+                            CreateEnemyMissile(pos.x - 30.0f, pos.y);
+                            shotsCreated++;
                         }
+                    } else {
+                        // Fallback if WeaponsConfig not loaded
+                        CreateEnemyMissile(pos.x - 30.0f, pos.y);
+                        shotsCreated++;
                     }
                 }
-                
-                std::cout << "[Enemy Shoot] Enemies: " << enemyCount << ", Shots: " << shotsCreated << std::endl;
-                
-                // Vary shoot interval
-                enemyShootInterval = 1.0f + static_cast<float>(rand() % 15) / 10.0f; // 1.0 to 2.5 seconds
             }
         }
 
@@ -1931,6 +2567,7 @@ int Game::Run(int argc, char* argv[])
                 lifetimeSystem->Update(deltaTime);
             } else {
                 // Local mode: Full simulation
+                movementPatternSystem->SetPlayerEntity(player);  // Update player reference for chase patterns
                 movementPatternSystem->Update(deltaTime);
                 movementSystem->Update(deltaTime);
                 boundarySystem->Update(deltaTime);
@@ -1982,4 +2619,311 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "Game shutdown complete." << std::endl;
     return 0;
+}
+
+// ============================================
+// AUDIO SYSTEM IMPLEMENTATION
+// ============================================
+
+void Game::PlayMusic(const std::string& musicName, bool loop) {
+    // Determine sounds base from Lua Assets table if available, otherwise use default
+    // Read sounds base from Lua (if provided). If not provided, assume
+    // musicName may be a full path and pass it directly to ResolveAssetPath.
+    // Use cached soundsBase if available
+    std::string musicPath;
+    if (soundsBase.empty()) musicPath = ResolveAssetPath(musicName);
+    else musicPath = ResolveAssetPath(soundsBase + musicName);
+    
+    // Check if we need to load the buffer
+    if (musicBuffers.find(musicName) == musicBuffers.end()) {
+        auto buffer = std::make_unique<eng::engine::SoundBuffer>();
+        if (!buffer->loadFromFile(musicPath)) {
+            std::cerr << "[Audio] Failed to load music: " << musicPath << std::endl;
+            return;
+        }
+        musicBuffers[musicName] = std::move(buffer);
+        std::cout << "[Audio] Loaded music: " << musicName << std::endl;
+    }
+    
+    // Stop current music
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        currentMusicSound->stop();
+    }
+    
+    // Create and play new music
+    currentMusicSound = std::make_unique<eng::engine::Sound>();
+    currentMusicSound->setBuffer(*musicBuffers[musicName]);
+    currentMusicSound->setVolume(currentMusicVolume);
+    currentMusicSound->setLoop(loop);
+    currentMusicSound->play();
+    currentMusicName = musicName;
+    
+    std::cout << "[Audio] ♪ Playing: " << musicName << " (Volume: " << currentMusicVolume << "%, Loop: " << (loop ? "yes" : "no") << ")" << std::endl;
+}
+
+void Game::FadeToMusic(const std::string& musicName, float duration) {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        // Start fade
+        isFadingMusic = true;
+        fadeTimer = 0.0f;
+        fadeDuration = duration;
+        nextMusicName = musicName;
+        fadeOutComplete = false;
+        std::cout << "[Audio] Starting fade to: " << musicName << " (duration: " << duration << "s)" << std::endl;
+    } else {
+        // No current music, just play the new one
+        PlayMusic(musicName);
+    }
+}
+
+void Game::UpdateMusicFade(float deltaTime) {
+    if (!isFadingMusic) return;
+    
+    fadeTimer += deltaTime;
+    float halfDuration = fadeDuration / 2.0f;
+    
+    if (fadeTimer < halfDuration) {
+        // Fade out phase (first half)
+        if (currentMusicSound) {
+            float fadeProgress = fadeTimer / halfDuration;
+            float volume = currentMusicVolume * (1.0f - fadeProgress);
+            currentMusicSound->setVolume(std::max(0.0f, volume));
+        }
+    } else if (!fadeOutComplete) {
+        // Switch music at midpoint
+        if (currentMusicSound) {
+            currentMusicSound->stop();
+        }
+        PlayMusic(nextMusicName);
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(0.0f); // Start at 0 for fade in
+        }
+        fadeOutComplete = true;
+    } else if (fadeTimer < fadeDuration) {
+        // Fade in phase (second half)
+        float fadeInProgress = (fadeTimer - halfDuration) / halfDuration;
+        float volume = currentMusicVolume * fadeInProgress;
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(std::min(currentMusicVolume, volume));
+        }
+    } else {
+        // Fade complete
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(currentMusicVolume);
+        }
+        isFadingMusic = false;
+        std::cout << "[Audio] Fade complete - now playing: " << currentMusicName << std::endl;
+    }
+}
+
+void Game::StopMusic() {
+    if (currentMusicSound) {
+        currentMusicSound->stop();
+        std::cout << "[Audio] Music stopped" << std::endl;
+    }
+    isFadingMusic = false;
+}
+
+void Game::PauseMusic() {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        currentMusicSound->pause();
+        std::cout << "[Audio] Music paused" << std::endl;
+    }
+}
+
+void Game::ResumeMusic() {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Paused) {
+        currentMusicSound->play();
+        std::cout << "[Audio] Music resumed" << std::endl;
+    }
+}
+
+void Game::SetMusicVolume(float volume) {
+    currentMusicVolume = std::clamp(volume, 0.0f, 100.0f);
+    
+    // Apply to current music (if not fading)
+    if (currentMusicSound && !isFadingMusic) {
+        currentMusicSound->setVolume(currentMusicVolume);
+    }
+    
+    // Also update the old menu music (for backwards compatibility)
+    menuMusic.setVolume(currentMusicVolume);
+    
+    std::cout << "[Audio] Music volume set to: " << currentMusicVolume << "%" << std::endl;
+}
+
+void Game::SetSFXVolume(float volume) {
+    currentSFXVolume = std::clamp(volume, 0.0f, 100.0f);
+    
+    // Update shoot sound volume
+    shootSound.setVolume(currentSFXVolume);
+    
+    // Update AudioSystem if available
+    if (audioSystem) {
+        audioSystem->SetSFXVolume(currentSFXVolume);
+    }
+    
+    std::cout << "[Audio] SFX volume set to: " << currentSFXVolume << "%" << std::endl;
+}
+
+void Game::SetCurrentStage(int stage) {
+    currentStage = std::clamp(stage, 1, 8);
+    isBossFight = false;
+    
+    // Get stage music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::function getStageMusicPath = lua["GetStageMusicPath"];
+    
+    if (getStageMusicPath.valid()) {
+        std::string stageMusic = getStageMusicPath(currentStage);
+        FadeToMusic(stageMusic, 1.0f);
+        std::cout << "[Audio] Stage " << currentStage << " - Music: " << stageMusic << std::endl;
+    } else {
+        std::cerr << "[Audio] GetStageMusicPath function not found in Lua!" << std::endl;
+    }
+}
+
+void Game::OnBossSpawned() {
+    isBossFight = true;
+    
+    // Get boss music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string bossMusic = audioConfig["music"]["boss"];
+        FadeToMusic(bossMusic, 1.0f);
+        std::cout << "[Audio] ⚔️ BOSS FIGHT - Stage " << currentStage << std::endl;
+    } else {
+        FadeToMusic("BOSS THEME.ogg", 1.0f);
+    }
+}
+
+void Game::OnBossDefeated() {
+    isBossFight = false;
+    
+    // Get stage clear music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string clearMusic = audioConfig["music"]["stageClear"];
+        PlayMusic(clearMusic, false); // Play once, no loop
+        std::cout << "[Audio] 🎉 Stage " << currentStage << " Clear!" << std::endl;
+    } else {
+        PlayMusic("RETURN IN TRIUMPH (STAGE CLEAR).ogg", false);
+    }
+}
+
+void Game::OnGameOver() {
+    // Get game over music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string gameOverMusic = audioConfig["music"]["gameOver"];
+        FadeToMusic(gameOverMusic, 0.5f); // Fast fade for game over
+        std::cout << "[Audio] 💀 GAME OVER" << std::endl;
+    } else {
+        FadeToMusic("THE END OF WAR (GAME OVER).ogg", 0.5f);
+    }
+}
+
+void Game::OnAllStagesClear() {
+    // Get all clear music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string allClearMusic = audioConfig["music"]["allClear"];
+        FadeToMusic(allClearMusic, 1.0f);
+        std::cout << "[Audio] 🏆 ALL STAGES CLEAR!" << std::endl;
+    } else {
+        FadeToMusic("LIKE A HERO (ALL STAGE CLEAR).ogg", 1.0f);
+    }
+}
+
+void Game::LoadDifficulty(const std::string& difficulty) {
+    std::string diffPath = ResolveAssetPath(difficultyScriptsBase + std::string("difficulty_") + difficulty + std::string(".lua"));
+    
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    
+    try {
+        lua.script_file(diffPath);
+        
+        sol::table diffSettings = lua["DifficultySettings"];
+        if (diffSettings.valid()) {
+            std::cout << "[Game] Loaded difficulty: " << difficulty << std::endl;
+            
+            // Log some settings
+            std::string name = diffSettings["displayName"];
+            sol::table enemies = diffSettings["enemies"];
+            float healthMult = enemies["healthMultiplier"];
+            float speedMult = enemies["speedMultiplier"];
+            
+            std::cout << "[Game]   Enemy Health: x" << healthMult << std::endl;
+            std::cout << "[Game]   Enemy Speed: x" << speedMult << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Game] Failed to load difficulty: " << e.what() << std::endl;
+    }
+}
+
+void Game::SaveUserSettings() {
+    std::string settingsPath = ResolveAssetPath(settingsJsonPath);
+    
+    std::ofstream file(settingsPath);
+    if (file.is_open()) {
+        file << "{\n";
+        file << "    \"audio\": {\n";
+        file << "        \"musicVolume\": " << currentMusicVolume << ",\n";
+        file << "        \"sfxVolume\": " << currentSFXVolume << "\n";
+        file << "    },\n";
+        file << "    \"gameplay\": {\n";
+        file << "        \"difficulty\": \"normal\"\n";
+        file << "    }\n";
+        file << "}\n";
+        file.close();
+        std::cout << "[Settings] ✓ Saved to: " << settingsPath << std::endl;
+    } else {
+        std::cerr << "[Settings] Failed to save settings to: " << settingsPath << std::endl;
+    }
+}
+
+void Game::LoadUserSettings() {
+    // Use cached path from Game members
+    if (settingsJsonPath.empty()) {
+        std::cerr << "[Settings] No settings path provided by Lua (Assets.config.user_settings). Skipping load." << std::endl;
+        return;
+    }
+
+    std::string settingsPath = ResolveAssetPath(settingsJsonPath);
+    std::ifstream file(settingsPath);
+    if (file.is_open()) {
+        std::string content((std::istreambuf_iterator<char>(file)),
+                            std::istreambuf_iterator<char>());
+        file.close();
+        
+        // Simple JSON parsing for our specific format
+        // Look for musicVolume
+        size_t pos = content.find("\"musicVolume\":");
+        if (pos != std::string::npos) {
+            pos += 14; // Skip past "musicVolume":
+            float value = std::stof(content.substr(pos));
+            currentMusicVolume = std::clamp(value, 0.0f, 100.0f);
+        }
+        
+        // Look for sfxVolume
+        pos = content.find("\"sfxVolume\":");
+        if (pos != std::string::npos) {
+            pos += 12; // Skip past "sfxVolume":
+            float value = std::stof(content.substr(pos));
+            currentSFXVolume = std::clamp(value, 0.0f, 100.0f);
+        }
+        
+    std::cout << "[Settings] ✓ Loaded from: " << settingsPath << std::endl;
+        std::cout << "[Settings]   Music: " << currentMusicVolume << "%, SFX: " << currentSFXVolume << "%" << std::endl;
+    } else {
+        std::cout << "[Settings] No saved settings found, using defaults" << std::endl;
+    }
 }

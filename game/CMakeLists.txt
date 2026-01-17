@@ -68,6 +68,7 @@ target_link_libraries(r-type_game PRIVATE
     BoundarySystem
     HealthSystem
     UISystem
+    AudioSystem
     
     # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
     shootemup

@@ -6,6 +6,8 @@
 #include <rendering/sfml/SFMLTexture.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <vector>
+#include <unordered_map>
+#include <functional>
 
 /**
  * @file FactoryBindings.hpp
@@ -38,15 +40,18 @@ namespace Scripting {
             sol::state& lua,
             ECS::Coordinator* coordinator,
             std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*> textures,
-            std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList
+            std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList,
+            std::function<void(ECS::Entity)> registerEntityCallback
         );
 
     private:
         // Helper to store context in Lua registry
-        struct FactoryContext {
+            struct FactoryContext {
             ECS::Coordinator* coordinator;
             std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*> textures;
             std::vector<eng::engine::rendering::sfml::SFMLSprite*>* spriteList;
+            sol::state* lua;
+            std::function<void(ECS::Entity)> registerEntity;
         };
     };
 

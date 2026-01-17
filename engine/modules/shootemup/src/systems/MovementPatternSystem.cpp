@@ -3,6 +3,7 @@
 #include <components/MovementPattern.hpp>
 #include <ecs/Coordinator.hpp>
 #include <cmath>
+#include <cstdlib>
 
 using namespace ShootEmUp::Components;
 
@@ -38,8 +39,8 @@ void MovementPatternSystem::Update(float dt)
             // Simple horizontal movement to the left
             pos.x -= pattern.speed * dt;
         }
-        else if (pattern.patternType == "sine_wave") {
-            // Sine wave movement
+        else if (pattern.patternType == "sine_wave" || pattern.patternType == "sinewave") {
+            // Sine wave movement (both spellings supported)
             pos.x -= pattern.speed * dt;
             pos.y = pattern.startY + pattern.amplitude * std::sin(pattern.frequency * pattern.timeAlive);
         }
@@ -48,7 +49,6 @@ void MovementPatternSystem::Update(float dt)
             pos.x -= pattern.speed * dt;
             pos.y = pattern.startY + pattern.amplitude * std::sin(pattern.frequency * pattern.timeAlive * 2.0f);
         }
-
         else if (pattern.patternType == "circular") {
             // Circular movement while advancing
             pos.x -= pattern.speed * dt * 0.5f;
@@ -64,6 +64,49 @@ void MovementPatternSystem::Update(float dt)
             // Diagonal upward
             pos.x -= pattern.speed * dt;
             pos.y -= pattern.speed * dt * 0.5f;
+        }
+        else if (pattern.patternType == "stationary" || pattern.patternType == "hover") {
+            // Stationary - no movement
+            // Entity stays at its current position
+        }
+        else if (pattern.patternType == "chase") {
+            // Chase/Kamikaze - move towards player
+            float playerX = 100.0f;  // Default fallback
+            float playerY = windowHeight_ / 2.0f;
+            
+            // Get player position if player entity is set
+            if (playerEntity_ != 0 && coordinator_->HasComponent<Position>(playerEntity_)) {
+                auto& playerPos = coordinator_->GetComponent<Position>(playerEntity_);
+                playerX = playerPos.x;
+                playerY = playerPos.y;
+            }
+            
+            // Calculate direction to player
+            float dx = playerX - pos.x;
+            float dy = playerY - pos.y;
+            float distance = std::sqrt(dx * dx + dy * dy);
+            
+            // Move towards player
+            if (distance > 1.0f) {
+                pos.x += (dx / distance) * pattern.speed * dt;
+                pos.y += (dy / distance) * pattern.speed * dt;
+            }
+        }
+        else if (pattern.patternType == "evasive") {
+            // Evasive - dodge player shots by moving unpredictably
+            pos.x -= pattern.speed * dt * 0.7f;
+            
+            // Random dodging every 0.5 seconds
+            if (std::fmod(pattern.timeAlive, 0.5f) < dt) {
+                pattern.startY = pos.y + ((std::rand() % 2 == 0) ? 50.0f : -50.0f);
+            }
+            
+            // Smooth movement to dodge position
+            float targetY = pattern.startY;
+            float diff = targetY - pos.y;
+            if (std::abs(diff) > 5.0f) {
+                pos.y += (diff > 0 ? 1.0f : -1.0f) * pattern.speed * dt * 0.8f;
+            }
         }
 
         // Clamp Y position to screen bounds

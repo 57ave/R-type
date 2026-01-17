@@ -25,6 +25,32 @@ using namespace eng::engine::rendering::sfml;
  */
 class ProjectileFactory {
 public:
+    struct ProjectileVisualSpec {
+        int x = 0;
+        int y = 0;
+        int w = 16;
+        int h = 16;
+        bool animated = false;
+        int frameCount = 1;
+        float frameTime = 0.1f;
+        float scale = 1.0f;
+        int spacing = 0;
+    };
+
+    /**
+     * @brief Create a projectile using an explicit visual specification (from Lua config)
+     */
+    static ECS::Entity CreateProjectileFromSpec(
+        ECS::Coordinator& coordinator,
+        float x, float y,
+        SFMLTexture* texture,
+        const ProjectileVisualSpec& spec,
+        std::vector<SFMLSprite*>& spriteList,
+        bool isPlayerProjectile = true,
+        int ownerId = 0,
+        int level = 1
+    );
+
     /**
      * @brief Crée un projectile NORMAL - Simple bullet
      */

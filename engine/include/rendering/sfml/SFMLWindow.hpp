@@ -23,6 +23,8 @@ namespace eng
 
                         // Window management
                         void create(uint32_t width, uint32_t height, const std::string &title);
+                        void setSize(uint32_t width, uint32_t height);
+                        void setFullscreen(bool fullscreen);
                         void close();
                         bool isOpen() const;
 

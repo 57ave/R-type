@@ -1,0 +1,9 @@
+{
+    "audio": {
+        "musicVolume": 40,
+        "sfxVolume": 74
+    },
+    "gameplay": {
+        "difficulty": "normal"
+    }
+}
