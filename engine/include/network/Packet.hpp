@@ -7,11 +7,7 @@
 #include <iostream>
 #include "Serializer.hpp"
 
-#ifdef __APPLE__
-#include <machine/endian.h>
-#else
-#include <endian.h>
-#endif
+
 
 #pragma pack(push, 1)
 

@@ -6,6 +6,16 @@
 #include <set>
 #include <functional>
 #include <filesystem>
+#include <fstream>
+
+std::ofstream gameLogFile;
+void log_game(const std::string& msg) {
+    std::cout << msg << std::endl;
+    if (gameLogFile.is_open()) {
+        gameLogFile << msg << std::endl;
+        gameLogFile.flush();
+    }
+}
 
 // Engine includes - Core
 #include <ecs/ECS.hpp>
@@ -476,7 +486,14 @@ ECS::Entity CreateShootEffect(float x, float y, ECS::Entity) {
 
 int main(int argc, char* argv[])
 {
-    std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
+    // Initialize logging
+    gameLogFile.open("game_log.txt");
+    std::streambuf* oldCerr = std::cerr.rdbuf(gameLogFile.rdbuf());
+    (void)oldCerr;
+
+    log_game("R-Type Game Starting with ECS Engine (Refactored)...");
+    
+    try {
     
     // Parse command line arguments
     bool networkMode = false;
@@ -641,6 +658,69 @@ int main(int argc, char* argv[])
     
     std::cout << "[Game] All Systems initialized!" << std::endl;
     
+    // Create window and renderer EARLY (so we can show loading screen)
+    SFMLWindow window;
+    window.create(1920, 1080, "R-Type - ECS Version");
+    
+    SFMLRenderer renderer(&window.getSFMLWindow());
+    
+    // Load textures (try multiple paths for flexibility)
+    backgroundTexture = std::make_unique<SFMLTexture>();
+    std::string bgPath = "assets/background.png";
+    if (!backgroundTexture->loadFromFile(bgPath)) {
+        log_game("Warning: Could not load background.png. Using fallback.");
+        sf::Image img;
+        img.create(800, 600, sf::Color::Black);
+        backgroundTexture->loadFromImage(img);
+    }
+    
+    playerTexture = std::make_unique<SFMLTexture>();
+    std::string playerPath = "assets/players/r-typesheet42.png";
+    if (!playerTexture->loadFromFile(playerPath)) {
+        log_game("Warning: Could not load player sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Transparent);
+        // Draw green box
+        for(int x=66; x<99; x++) {
+            for(int y=0; y<17; y++) {
+                img.setPixel(x, y, sf::Color::Green);
+            }
+        }
+        playerTexture->loadFromImage(img);
+    }
+    
+    missileTexture = std::make_unique<SFMLTexture>();
+    if (!missileTexture->loadFromFile("assets/players/r-typesheet1.png")) {
+        log_game("Warning: Could not load missile sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Cyan); 
+        missileTexture->loadFromImage(img);
+    }
+    
+    enemyTexture = std::make_unique<SFMLTexture>();
+    if (!enemyTexture->loadFromFile("assets/enemies/r-typesheet5.png")) {
+        log_game("Warning: Could not load enemy sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Red);
+        enemyTexture->loadFromImage(img);
+    }
+    
+    explosionTexture = std::make_unique<SFMLTexture>();
+    if (!explosionTexture->loadFromFile("assets/enemies/r-typesheet44.png")) {
+        log_game("Warning: Could not load explosion sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Yellow);
+        explosionTexture->loadFromImage(img);
+    }
+    
+    // Load sound
+    if (!shootBuffer.loadFromFile("assets/vfx/shoot.ogg")) {
+        log_game("Warning: Could not load shoot.ogg");
+    } else {
+        shootSound.setBuffer(shootBuffer);
+        shootSound.setVolume(80.f);
+    }
+
     // Network setup
     std::shared_ptr<NetworkClient> networkClient;
     std::shared_ptr<rtype::engine::systems::NetworkSystem> networkSystem;
@@ -684,10 +764,20 @@ int main(int argc, char* argv[])
             auto lastHelloTime = startTime;
             bool connected = false;
             while (!connected) {
+                // Update Window
+                sf::Event event;
+                while (window.getSFMLWindow().pollEvent(event)) {
+                    if (event.type == sf::Event::Closed) {
+                        return 0;
+                    }
+                }
+                
+                window.getSFMLWindow().clear(sf::Color(20, 20, 20)); // Dark Grey
+                window.getSFMLWindow().display();
+                
                 networkClient->process();
                 while (networkClient->hasReceivedPackets()) {
                     auto packet = networkClient->getNextReceivedPacket();
-                    std::cout << "[Game] Checking packet type: " << std::hex << packet.header.type << std::dec << std::endl;
                     if (static_cast<GamePacketType>(packet.header.type) == GamePacketType::SERVER_WELCOME) {
                         if (packet.payload.size() >= 1) {
                             uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
@@ -699,8 +789,12 @@ int main(int argc, char* argv[])
                     }
                 }
                 
-                
                 auto now = std::chrono::steady_clock::now();
+                int elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+
+                // Update Title with status
+                std::string title = "Connecting to " + serverAddress + ":" + std::to_string(serverPort) + " (" + std::to_string(elapsed) + "s)...";
+                window.getSFMLWindow().setTitle(title);
                 
                 // Resend Hello every 1 second
                 if (std::chrono::duration_cast<std::chrono::seconds>(now - lastHelloTime).count() >= 1) {
@@ -709,82 +803,21 @@ int main(int argc, char* argv[])
                      lastHelloTime = now;
                 }
 
-                if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 5) {
-                    std::cerr << "[Game] Connection timeout!" << std::endl;
+                if (elapsed > 10) { // Increased timeout to 10s
+                    log_game("[Game] Connection timeout!");
                     return 1;
                 }
                 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            window.getSFMLWindow().setTitle("R-Type - Connected! Player " + std::to_string(networkSystem->getLocalPlayerId()));
         } catch (const std::exception& e) {
             std::cerr << "[Game] Network error: " << e.what() << std::endl;
             return 1;
         }
     }
     
-    // Create window and renderer
-    SFMLWindow window;
-    window.create(1920, 1080, "R-Type - ECS Version");
-    
-    SFMLRenderer renderer(&window.getSFMLWindow());
-    
-    // Load textures (try multiple paths for flexibility)
-    backgroundTexture = std::make_unique<SFMLTexture>();
-    bool bgLoaded = backgroundTexture->loadFromFile("../../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("../client/assets/background.png") ||
-                    backgroundTexture->loadFromFile("client/assets/background.png");
-    if (!bgLoaded) {
-        std::cerr << "Error: Could not load background.png" << std::endl;
-        std::cerr << "Tried paths: ../../client/assets/, ../client/assets/, client/assets/" << std::endl;
-        return 1;
-    }
-    
-    playerTexture = std::make_unique<SFMLTexture>();
-    bool playerLoaded = playerTexture->loadFromFile("../../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("../client/assets/players/r-typesheet42.png") ||
-                        playerTexture->loadFromFile("client/assets/players/r-typesheet42.png");
-    if (!playerLoaded) {
-        std::cerr << "Error: Could not load player sprite" << std::endl;
-        return 1;
-    }
-    
-    missileTexture = std::make_unique<SFMLTexture>();
-    bool missileLoaded = missileTexture->loadFromFile("../../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("../client/assets/players/r-typesheet1.png") ||
-                         missileTexture->loadFromFile("client/assets/players/r-typesheet1.png");
-    if (!missileLoaded) {
-        std::cerr << "Error: Could not load missile sprite" << std::endl;
-        return 1;
-    }
-    
-    enemyTexture = std::make_unique<SFMLTexture>();
-    bool enemyLoaded = enemyTexture->loadFromFile("../../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("../client/assets/enemies/r-typesheet5.png") ||
-                       enemyTexture->loadFromFile("client/assets/enemies/r-typesheet5.png");
-    if (!enemyLoaded) {
-        std::cerr << "Error: Could not load enemy sprite" << std::endl;
-        return 1;
-    }
-    
-    explosionTexture = std::make_unique<SFMLTexture>();
-    bool explosionLoaded = explosionTexture->loadFromFile("../../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("../client/assets/enemies/r-typesheet44.png") ||
-                           explosionTexture->loadFromFile("client/assets/enemies/r-typesheet44.png");
-    if (!explosionLoaded) {
-        std::cerr << "Error: Could not load explosion sprite" << std::endl;
-        return 1;
-    }
-    
-    // Load sound
-    bool soundLoaded = shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("../client/assets/vfx/shoot.ogg") ||
-                       shootBuffer.loadFromFile("client/assets/vfx/shoot.ogg");
-    if (!soundLoaded) {
-        std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
-    } else {
-        shootSound.setBuffer(shootBuffer);
-        shootSound.setVolume(80.f);
-    }
+    // Window and Textures moved to top for better UX
     
     // Create game entities
     ECS::Entity player = 0;
@@ -1184,5 +1217,12 @@ int main(int argc, char* argv[])
     gCoordinator.Shutdown();
     
     std::cout << "Game shutdown complete." << std::endl;
+    } catch (const std::exception& e) {
+        log_game(std::string("FATAL ERROR: ") + e.what());
+        return 1;
+    } catch (...) {
+        log_game("FATAL ERROR: Unknown exception occurred.");
+        return 1;
+    }
     return 0;
 }

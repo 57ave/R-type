@@ -3,6 +3,8 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 #include <vector>
 #include <cmath>
 
@@ -19,7 +21,12 @@ class Background
 
         bool loadTexture(const std::string &path)
         {
-            return texture.loadFromFile(path);
+            if (texture.loadFromFile(path)) return true;
+            
+            std::cout << "WARNING: Failed to load background '" << path << "'. Using fallback." << std::endl;
+            sf::Image img;
+            img.create(800, 600, sf::Color::Black);
+            return texture.loadFromImage(img);
         }
 
         void init(sf::Vector2u windowSize)
@@ -85,7 +92,19 @@ class Player
 
         bool loadTexture(const std::string &path)
         {
-            return texture.loadFromFile(path);
+            if (texture.loadFromFile(path)) return true;
+
+            std::cout << "WARNING: Failed to load player '" << path << "'. Using fallback." << std::endl;
+            sf::Image img;
+            // Create a large enough image for the spritesheet coords
+            img.create(512, 512, sf::Color::Transparent);
+            // Draw a visible box for the player (approximate center column)
+            for(int x=66; x<99; x++) {
+                for(int y=0; y<17; y++) {
+                    img.setPixel(x, y, sf::Color::Green);
+                }
+            }
+            return texture.loadFromImage(img);
         }
 
         void init(int line = 0)
@@ -779,64 +798,115 @@ class Missile
 
 int main()
 {
-    sf::Event ev;
-    sf::RenderWindow window(sf::VideoMode(1920, 1080), "R-Type");
-    sf::Clock clock;
+    // Initialize logging
+    std::ofstream logFile("client_log.txt");
+    auto log = [&](const std::string& msg) {
+        std::cout << msg << std::endl;
+        if (logFile.is_open()) {
+            logFile << msg << std::endl;
+            logFile.flush();
+        }
+    };
 
+    // Redirect std::cerr to log file to capture SFML errors
+    std::streambuf* oldCerr = std::cerr.rdbuf(logFile.rdbuf());
+    (void)oldCerr;
+
+    log("Starting R-Type Client...");
+
+    try {
+        sf::Event ev;
+        sf::RenderWindow window(sf::VideoMode(1920, 1080), "R-Type");
+        sf::Clock clock;
+
+        log("Window created.");
+
+    // Debug paths
+    namespace fs = std::filesystem;
+    log("Current Working Directory: " + fs::current_path().string());
+    
     // Initialiser le background
     Background background;
-    if (!background.loadTexture("../../client/assets/background.png"))
+    // Use relative path for release structure
+    std::string bgPath = "assets/background.png";
+    log("Loading background from: " + bgPath);
+    
+    if (fs::exists(bgPath)) {
+        log("File exists at path: " + fs::absolute(bgPath).string());
+        
+        // Try to open it raw
+        std::ifstream f(bgPath, std::ios::binary);
+        if (f.good()) {
+            f.seekg(0, std::ios::end);
+            log("File size: " + std::to_string(f.tellg()) + " bytes");
+            f.close();
+        } else {
+            log("ERROR: Cannot open file for reading!");
+        }
+
+    } else {
+        log("ERROR: File does NOT exist at path: " + fs::absolute(bgPath).string());
+    }
+
+    if (!background.loadTexture(bgPath))
     {
-        std::cerr << "Error: Could not load background.png" << std::endl;
-        return 1;
+        log("CRITICAL ERROR: Failed to load background and fallback generation failed.");
+        // We can optionally return 1 here or continue, but loadFromImage failing is very rare.
     }
     background.init(window.getSize());
+    log("Background loaded.");
 
     // Initialiser le player
     Player player;
-    if (!player.loadTexture("../../client/assets/players/r-typesheet42.png"))
+    std::string playerPath = "assets/players/r-typesheet42.png";
+    log("Loading player from: " + playerPath);
+    if (!player.loadTexture(playerPath))
     {
-        std::cerr << "Error: Could not load player sprite" << std::endl;
-        return 1;
+        log("CRITICAL ERROR: Failed to load player and fallback generation failed.");
     }
     player.init();
 
     // Charger la texture des missiles
     sf::Texture missileTexture;
-    if (!missileTexture.loadFromFile("../../client/assets/players/r-typesheet1.png"))
+    if (!missileTexture.loadFromFile("assets/players/r-typesheet1.png"))
     {
-        std::cerr << "Error: Could not load missile sprite" << std::endl;
-        return 1;
+        log("Warning: Could not load missile sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Cyan); // Cyan missiles
+        missileTexture.loadFromImage(img);
     }
 
     // Charger le son de tir (vfx/shoot.ogg)
     sf::SoundBuffer shootBuffer;
     sf::Sound shootSound;
-    if (!shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg"))
+    if (!shootBuffer.loadFromFile("assets/vfx/shoot.ogg"))
     {
-        std::cerr << "Warning: Could not load shoot.ogg (no shoot sound)" << std::endl;
-        // Ne pas échouer la compilation/exécution si le son manque, on continue sans son
+         log("Warning: Could not load shoot.ogg (no shoot sound)");
     }
     else
     {
         shootSound.setBuffer(shootBuffer);
-        shootSound.setVolume(80.f); // ajuster si besoin
+        shootSound.setVolume(80.f); 
     }
 
     // Charger la texture des ennemis (vaisseau rouge)
     sf::Texture enemyTexture;
-    if (!enemyTexture.loadFromFile("../../client/assets/enemies/r-typesheet5.png"))
+    if (!enemyTexture.loadFromFile("assets/enemies/r-typesheet5.png"))
     {
-        std::cerr << "Error: Could not load enemy sprite" << std::endl;
-        return 1;
+        log("Warning: Could not load enemy sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Red); // Red enemies
+        enemyTexture.loadFromImage(img);
     }
 
     // Charger la texture des explosions
     sf::Texture explosionTexture;
-    if (!explosionTexture.loadFromFile("../../client/assets/enemies/r-typesheet44.png"))
+    if (!explosionTexture.loadFromFile("assets/enemies/r-typesheet44.png"))
     {
-        std::cerr << "Error: Could not load explosion sprite" << std::endl;
-        return 1;
+        log("Warning: Could not load explosion sprite. Using fallback.");
+        sf::Image img;
+        img.create(512, 512, sf::Color::Yellow); // Yellow explosions
+        explosionTexture.loadFromImage(img);
     }
 
     std::vector<Missile> missiles;
@@ -1204,5 +1274,14 @@ int main()
         delete activeChargingEffect;
     }
 
+    } catch (const std::exception& e) {
+        log("CRASH: Uncaught exception: " + std::string(e.what()));
+        return 1;
+    } catch (...) {
+        log("CRASH: Unknown exception occurred.");
+        return 1;
+    }
+
+    log("Client exited normally.");
     return 0;
 }
