@@ -111,6 +111,87 @@ struct RenameRoomPayload {
     }
 };
 
+// Nouveau: Informations d'un joueur dans une room (Problème 2)
+struct PlayerInRoomInfo {
+    uint32_t playerId;
+    std::string playerName;
+    bool isHost;
+    bool isReady;
+    
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(playerId);
+        serializer.writeString(playerName);
+        serializer.write(isHost);
+        serializer.write(isReady);
+        return serializer.getBuffer();
+    }
+    
+    static PlayerInRoomInfo deserialize(Network::Deserializer& deserializer) {
+        PlayerInRoomInfo info;
+        info.playerId = deserializer.read<uint32_t>();
+        info.playerName = deserializer.readString();
+        info.isHost = deserializer.read<bool>();
+        info.isReady = deserializer.read<bool>();
+        return info;
+    }
+};
+
+// Nouveau: Payload pour la liste des joueurs dans une room (Problème 2)
+struct RoomPlayersPayload {
+    uint32_t roomId;
+    std::vector<PlayerInRoomInfo> players;
+    
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(roomId);
+        serializer.write(static_cast<uint32_t>(players.size()));
+        for (const auto& player : players) {
+            auto buf = player.serialize();
+            serializer.writeBytes(buf.data(), buf.size());
+        }
+        return serializer.getBuffer();
+    }
+    
+    static RoomPlayersPayload deserialize(const std::vector<char>& data) {
+        Network::Deserializer deserializer(data);
+        RoomPlayersPayload payload;
+        payload.roomId = deserializer.read<uint32_t>();
+        uint32_t count = deserializer.read<uint32_t>();
+        for (uint32_t i = 0; i < count; ++i) {
+            payload.players.push_back(PlayerInRoomInfo::deserialize(deserializer));
+        }
+        return payload;
+    }
+};
+
+// Nouveau: Payload pour les messages de chat (Problème 4)
+struct ChatMessagePayload {
+    uint32_t senderId;
+    std::string senderName;
+    std::string message;
+    uint32_t roomId;
+    
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(senderId);
+        serializer.writeString(senderName);
+        serializer.writeString(message);
+        serializer.write(roomId);
+        return serializer.getBuffer();
+    }
+    
+    static ChatMessagePayload deserialize(const std::vector<char>& data) {
+        Network::Deserializer deserializer(data);
+        ChatMessagePayload payload;
+        payload.senderId = deserializer.read<uint32_t>();
+        payload.senderName = deserializer.readString();
+        payload.message = deserializer.readString();
+        payload.roomId = deserializer.read<uint32_t>();
+        return payload;
+    }
+};
+
 
 enum class GamePacketType : uint16_t {
     CLIENT_HELLO = 0x01,
@@ -131,7 +212,9 @@ enum class GamePacketType : uint16_t {
     CLIENT_LEFT = 0x16,
     ROOM_JOINED = 0x30,
     ROOM_LIST_REPLY = 0x31,
-    ROOM_CREATED = 0x32
+    ROOM_CREATED = 0x32,
+    ROOM_PLAYERS_UPDATE = 0x33,  // Nouveau: mise à jour de la liste des joueurs
+    CHAT_MESSAGE = 0x40          // Nouveau: messages de chat
 };
 
 // Enum for EntityType

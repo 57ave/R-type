@@ -76,11 +76,22 @@ public:
                 // Update game simulation with FIXED deltaTime
                 updateEntities(fixedDeltaTime);
                 
-                // Spawn enemies
-                enemySpawnTimer += fixedDeltaTime;
-                if (enemySpawnTimer >= enemySpawnInterval) {
-                    enemySpawnTimer = 0.0f;
-                    spawnEnemy();
+                // Spawn enemies ONLY if there's an active game (room in PLAYING state)
+                bool hasActiveGame = false;
+                auto rooms = server_.getRoomManager().getRooms();
+                for (const auto& room : rooms) {
+                    if (room.state == RoomState::PLAYING) {
+                        hasActiveGame = true;
+                        break;
+                    }
+                }
+                
+                if (hasActiveGame) {
+                    enemySpawnTimer += fixedDeltaTime;
+                    if (enemySpawnTimer >= enemySpawnInterval) {
+                        enemySpawnTimer = 0.0f;
+                        spawnEnemy();
+                    }
                 }
                 
                 // Send world snapshot at reduced rate (30Hz)
@@ -114,33 +125,40 @@ private:
                 case GamePacketType::CLIENT_DISCONNECT:
                     handleClientDisconnect(sender);
                     break;
+                    
+                // Rooming system packets
+                case GamePacketType::ROOM_LIST:
+                    handleRoomListRequest(sender);
+                    break;
+                case GamePacketType::CREATE_ROOM:
+                    handleCreateRoom(packet, sender);
+                    break;
+                case GamePacketType::JOIN_ROOM:
+                    handleJoinRoom(packet, sender);
+                    break;
+                case GamePacketType::GAME_START:
+                    handleGameStart(packet, sender);
+                    break;
+                case GamePacketType::CHAT_MESSAGE:
+                    handleChatMessage(packet, sender);
+                    break;
+                    
                 default:
+                    std::cout << "[GameServer] Unknown packet type: " << packet.header.type << std::endl;
                     break;
             }
         }
     }
 
     void handleClientHello(const NetworkPacket&, const asio::ip::udp::endpoint& sender) {
-        // Create player entity
+        // Assign player ID but don't create game entity yet
+        // Entity will be created when the room starts (GAME_START)
         uint8_t playerId = nextPlayerId_++;
         
-        ServerEntity player;
-        player.id = nextEntityId_++;
-        player.type = EntityType::ENTITY_PLAYER;
-        player.x = 100.0f;
-        player.y = 200.0f + (playerId * 150.0f); // Offset players vertically with more space
-        player.vx = 0.0f;
-        player.vy = 0.0f;
-        player.hp = 100;
-        player.playerId = playerId;
-        player.playerLine = (playerId - 1) % 5; // Cycle through 5 different ship colors (lines 0-4)
+        endpointToPlayerId_[sender] = playerId; // Map endpoint to playerId
         
-        entities_[player.id] = player;
-        playerEntities_[playerId] = player.id;
-        endpointToPlayerId_[sender] = playerId; // Map endpoint to playerId for disconnect handling
-        
-        std::cout << "[GameServer] Client connected. Player ID: " << (int)playerId 
-                  << " Entity ID: " << player.id << std::endl;
+        std::cout << "[GameServer] Client connected. Assigned Player ID: " << (int)playerId 
+                  << " (entity will be created when game starts)" << std::endl;
         
         // Send SERVER_WELCOME
         NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
@@ -149,8 +167,7 @@ private:
         
         server_.sendTo(welcome, sender);
         
-        // Send ENTITY_SPAWN for the new player to all clients
-        broadcastEntitySpawn(player);
+        // Don't create entity or broadcast yet - wait for game to start
     }
 
     void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint&) {
@@ -461,43 +478,109 @@ private:
     }
 
     void sendWorldSnapshot() {
-        // Build snapshot (exclude temporary entities like explosions)
-        std::vector<const ServerEntity*> snapshotEntities;
-        for (const auto& [id, entity] : entities_) {
-            // Skip explosions and other temporary effects in snapshots
-            if (entity.type == EntityType::ENTITY_EXPLOSION) {
-                continue;
+        auto& roomManager = server_.getRoomManager();
+        auto allRooms = roomManager.getAllRooms();
+        
+        // Check if there are any rooms in PLAYING state
+        bool hasPlayingRooms = false;
+        for (auto& [roomId, room] : allRooms) {
+            if (room->state == RoomState::PLAYING) {
+                hasPlayingRooms = true;
+                break;
             }
-            snapshotEntities.push_back(&entity);
         }
         
-        SnapshotHeader header;
-        header.entityCount = snapshotEntities.size();
-        
-        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
-        packet.header.timestamp = getCurrentTimestamp();
-        
-        // Add header
-        auto headerData = header.serialize();
-        packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
-        
-        // Add entities (excluding explosions)
-        for (const auto* entity : snapshotEntities) {
-            EntityState state;
-            state.id = entity->id;
-            state.type = entity->type;
-            state.x = entity->x;
-            state.y = entity->y;
-            state.vx = entity->vx;
-            state.vy = entity->vy;
-            state.hp = entity->hp;
-            state.playerLine = entity->playerLine;
+        // MODE ROOMS: Envoyer un snapshot par room
+        if (hasPlayingRooms) {
+            for (auto& [roomId, room] : allRooms) {
+                if (room->state != RoomState::PLAYING) continue;
+                
+                std::vector<const ServerEntity*> snapshotEntities;
+                
+                // Ajouter TOUS les joueurs de cette room
+                for (uint8_t playerId : room->playerIds) {
+                    auto it = playerEntities_.find(playerId);
+                    if (it != playerEntities_.end()) {
+                        uint32_t entityId = it->second;
+                        auto entityIt = entities_.find(entityId);
+                        if (entityIt != entities_.end()) {
+                            snapshotEntities.push_back(&entityIt->second);
+                        }
+                    }
+                }
+                
+                // Ajouter les autres entités (ennemis, projectiles, etc.)
+                for (const auto& [id, entity] : entities_) {
+                    if (entity.type == EntityType::ENTITY_EXPLOSION) continue;
+                    if (entity.type == EntityType::ENTITY_PLAYER) continue;
+                    snapshotEntities.push_back(&entity);
+                }
+                
+                // Construire le packet
+                SnapshotHeader header;
+                header.entityCount = snapshotEntities.size();
+                NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
+                packet.header.timestamp = getCurrentTimestamp();
+                
+                auto headerData = header.serialize();
+                packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
+                
+                for (const auto* entity : snapshotEntities) {
+                    EntityState state;
+                    state.id = entity->id;
+                    state.type = entity->type;
+                    state.x = entity->x;
+                    state.y = entity->y;
+                    state.vx = entity->vx;
+                    state.vy = entity->vy;
+                    state.hp = entity->hp;
+                    state.playerLine = entity->playerLine;
+                    state.chargeLevel = entity->chargeLevel;
+                    state.enemyType = entity->enemyType;
+                    state.projectileType = entity->projectileType;
+                    
+                    auto stateData = state.serialize();
+                    packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
+                }
+                
+                broadcastToRoom(roomId, packet);
+            }
+        } else {
+            // MODE LOCAL/CLASSIQUE: Broadcast à tous (pas de rooms actives)
+            std::vector<const ServerEntity*> snapshotEntities;
+            for (const auto& [id, entity] : entities_) {
+                if (entity.type == EntityType::ENTITY_EXPLOSION) continue;
+                snapshotEntities.push_back(&entity);
+            }
             
-            auto stateData = state.serialize();
-            packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
+            SnapshotHeader header;
+            header.entityCount = snapshotEntities.size();
+            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
+            packet.header.timestamp = getCurrentTimestamp();
+            
+            auto headerData = header.serialize();
+            packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
+            
+            for (const auto* entity : snapshotEntities) {
+                EntityState state;
+                state.id = entity->id;
+                state.type = entity->type;
+                state.x = entity->x;
+                state.y = entity->y;
+                state.vx = entity->vx;
+                state.vy = entity->vy;
+                state.hp = entity->hp;
+                state.playerLine = entity->playerLine;
+                state.chargeLevel = entity->chargeLevel;
+                state.enemyType = entity->enemyType;
+                state.projectileType = entity->projectileType;
+                
+                auto stateData = state.serialize();
+                packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
+            }
+            
+            server_.broadcast(packet);
         }
-        
-        server_.broadcast(packet);
     }
 
     void broadcastEntitySpawn(const ServerEntity& entity) {
@@ -532,6 +615,299 @@ private:
         server_.broadcast(packet);
     }
 
+    // ========== ROOMING SYSTEM HANDLERS ==========
+    
+    void handleRoomListRequest(const asio::ip::udp::endpoint& sender) {
+        auto rooms = server_.getRoomManager().getRooms();
+        
+        RoomListPayload payload;
+        for (const auto& room : rooms) {
+            RoomInfo info;
+            info.id = room.id;
+            info.name = room.name;
+            info.currentPlayers = static_cast<uint8_t>(room.playerIds.size());
+            info.maxPlayers = room.maxPlayers;
+            payload.rooms.push_back(info);
+        }
+        
+        NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));
+        reply.setPayload(payload.serialize());
+        reply.header.timestamp = getCurrentTimestamp();
+        
+        server_.sendTo(reply, sender);
+        
+        std::cout << "[GameServer] Sent room list (" << rooms.size() << " rooms) to " 
+                  << sender << std::endl;
+    }
+    
+    void handleCreateRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        try {
+            CreateRoomPayload payload = CreateRoomPayload::deserialize(packet.payload);
+            
+            // Find player ID from session
+            auto session = server_.getSession(sender);
+            if (!session) {
+                std::cerr << "[GameServer] CREATE_ROOM from unknown client" << std::endl;
+                return;
+            }
+            
+            uint8_t playerId = session->playerId;
+            uint32_t roomId = server_.getRoomManager().createRoom(
+                payload.name, 
+                payload.maxPlayers, 
+                playerId  // host
+            );
+            
+            // IMPORTANT: L'hôte doit rejoindre sa propre room !
+            bool joined = server_.getRoomManager().joinRoom(roomId, playerId);
+            if (joined) {
+                session->roomId = roomId;
+                playerToRoom_[playerId] = roomId;
+            }
+            
+            std::cout << "[GameServer] Room '" << payload.name << "' created (ID: " 
+                      << roomId << ") by player " << static_cast<int>(playerId) << std::endl;
+            
+            // Send ROOM_CREATED confirmation
+            NetworkPacket createdReply(static_cast<uint16_t>(GamePacketType::ROOM_CREATED));
+            Network::Serializer createdSerializer;
+            createdSerializer.write(roomId);
+            createdReply.setPayload(createdSerializer.getBuffer());
+            createdReply.header.timestamp = getCurrentTimestamp();
+            server_.sendTo(createdReply, sender);
+            
+            // Send ROOM_JOINED confirmation (pour que le client affiche le lobby)
+            NetworkPacket joinedReply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
+            Network::Serializer joinedSerializer;
+            joinedSerializer.write(roomId);
+            joinedSerializer.writeString(payload.name);
+            joinedReply.setPayload(joinedSerializer.getBuffer());
+            joinedReply.header.timestamp = getCurrentTimestamp();
+            server_.sendTo(joinedReply, sender);
+            
+            // NOUVEAU: Broadcaster la liste des joueurs (l'hôte se verra maintenant)
+            broadcastRoomPlayers(roomId);
+            
+            // Note: Pas de broadcast de room list ici - les clients font REFRESH manuellement
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[GameServer] Error creating room: " << e.what() << std::endl;
+        }
+    }
+    
+    void handleJoinRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        try {
+            JoinRoomPayload payload = JoinRoomPayload::deserialize(packet.payload);
+            
+            auto session = server_.getSession(sender);
+            if (!session) {
+                std::cerr << "[GameServer] JOIN_ROOM from unknown client" << std::endl;
+                return;
+            }
+            
+            uint8_t playerId = session->playerId;
+            bool success = server_.getRoomManager().joinRoom(payload.roomId, playerId);
+            
+            if (success) {
+                session->roomId = payload.roomId;
+                playerToRoom_[playerId] = payload.roomId;
+                
+                std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
+                          << " joined room " << payload.roomId << std::endl;
+                
+                // Send confirmation to client
+                NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
+                Network::Serializer serializer;
+                serializer.write(payload.roomId);
+                
+                auto room = server_.getRoomManager().getRoom(payload.roomId);
+                if (room) {
+                    serializer.writeString(room->name);
+                } else {
+                    serializer.writeString("Unknown Room");
+                }
+                
+                reply.setPayload(serializer.getBuffer());
+                reply.header.timestamp = getCurrentTimestamp();
+                server_.sendTo(reply, sender);
+                
+                // NOUVEAU: Broadcast updated player list to all room members
+                broadcastRoomPlayers(payload.roomId);
+                
+                // Note: Pas de broadcast de room list ici - les clients font REFRESH manuellement
+                
+            } else {
+                std::cerr << "[GameServer] Failed to join room " << payload.roomId 
+                          << " (room full or not found)" << std::endl;
+            }
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[GameServer] Error joining room: " << e.what() << std::endl;
+        }
+    }
+    
+    void handleGameStart(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        auto session = server_.getSession(sender);
+        if (!session || session->roomId == 0) {
+            std::cerr << "[GameServer] GAME_START from player not in a room" << std::endl;
+            return;
+        }
+        
+        auto room = server_.getRoomManager().getRoom(session->roomId);
+        if (!room) {
+            std::cerr << "[GameServer] GAME_START: room not found" << std::endl;
+            return;
+        }
+        
+        // Verify that the sender is the host
+        if (room->hostPlayerId != session->playerId) {
+            std::cerr << "[GameServer] Non-host player " << static_cast<int>(session->playerId) 
+                      << " tried to start game in room " << session->roomId << std::endl;
+            return;
+        }
+        
+        // Prevent double-start: check if game already started
+        if (room->state == RoomState::PLAYING) {
+            std::cout << "[GameServer] Game already started in room " << session->roomId 
+                      << ", ignoring duplicate GAME_START" << std::endl;
+            return;
+        }
+        
+        // Check minimum player count (need at least 2 players in the room)
+        if (room->playerIds.size() < 2) {
+            std::cerr << "[GameServer] Cannot start game: only " << room->playerIds.size() 
+                      << " player(s) in room (need at least 2)" << std::endl;
+            return;
+        }
+        
+        // Change room state to PLAYING
+        room->state = RoomState::PLAYING;
+        
+        std::cout << "[GameServer] ========== GAME STARTING in room " << session->roomId 
+                  << " ==========" << std::endl;
+        std::cout << "[GameServer] Creating player entities for " << room->playerIds.size() 
+                  << " players..." << std::endl;
+        
+        // Create player entities for all players in the room
+        int playerIndex = 0;
+        for (uint8_t playerId : room->playerIds) {
+            // Create player entity
+            ServerEntity player;
+            player.id = nextEntityId_++;
+            player.type = EntityType::ENTITY_PLAYER;
+            player.x = 100.0f;
+            player.y = 200.0f + (playerIndex * 200.0f); // Offset players vertically
+            player.vx = 0.0f;
+            player.vy = 0.0f;
+            player.hp = 100;
+            player.playerId = playerId;
+            player.playerLine = playerIndex % 5; // Cycle through 5 different ship colors
+            
+            entities_[player.id] = player;
+            playerEntities_[playerId] = player.id;
+            
+            std::cout << "[GameServer]   Created player entity " << player.id 
+                      << " for player " << (int)playerId 
+                      << " (line " << (int)player.playerLine << ") at (" 
+                      << player.x << ", " << player.y << ")" << std::endl;
+            
+            playerIndex++;
+        }
+        
+        // Broadcast GAME_START to all players in the room
+        NetworkPacket gameStartPacket(static_cast<uint16_t>(GamePacketType::GAME_START));
+        gameStartPacket.header.timestamp = getCurrentTimestamp();
+        
+        broadcastToRoom(session->roomId, gameStartPacket);
+        
+        // Send initial world snapshot to all players in the room
+        // This ensures all players see each other from the start
+        std::cout << "[GameServer] Sending initial world snapshot to all players..." << std::endl;
+        sendWorldSnapshot();
+        
+        // Mark server as running game logic
+        gameRunning_ = true;
+    }
+    
+    void broadcastToRoom(uint32_t roomId, const NetworkPacket& packet) {
+        auto room = server_.getRoomManager().getRoom(roomId);
+        if (!room) {
+            std::cerr << "[GameServer] broadcastToRoom: room " << roomId << " not found" << std::endl;
+            return;
+        }
+        
+        int sentCount = 0;
+        // Use server's session list to find active clients
+        auto sessions = server_.getActiveSessions();
+        for (const auto& session : sessions) {
+            // Check if this session's player is in the room
+            if (std::find(room->playerIds.begin(), room->playerIds.end(), session.playerId) != room->playerIds.end()) {
+                server_.sendTo(packet, session.endpoint);
+                sentCount++;
+            }
+        }
+        
+        std::cout << "[GameServer] Broadcast to room " << roomId << ": sent to " 
+                  << sentCount << "/" << room->playerIds.size() << " players" << std::endl;
+    }
+    
+    // NOUVEAU: Broadcast la liste des joueurs dans une room (Problème 2)
+    void broadcastRoomPlayers(uint32_t roomId) {
+        auto room = server_.getRoomManager().getRoom(roomId);
+        if (!room) return;
+        
+        RoomPlayersPayload payload;
+        payload.roomId = roomId;
+        
+        int playerIndex = 1;
+        for (uint8_t playerId : room->playerIds) {
+            PlayerInRoomInfo info;
+            info.playerId = playerId;
+            info.playerName = "Player " + std::to_string(playerIndex);
+            info.isHost = (playerId == room->hostPlayerId);
+            info.isReady = false;  // TODO: ajouter système de ready
+            payload.players.push_back(info);
+            playerIndex++;
+        }
+        
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ROOM_PLAYERS_UPDATE));
+        packet.setPayload(payload.serialize());
+        packet.header.timestamp = getCurrentTimestamp();
+        
+        broadcastToRoom(roomId, packet);
+        
+        std::cout << "[GameServer] Broadcasted player list to room " << roomId 
+                  << " (" << payload.players.size() << " players)" << std::endl;
+    }
+    
+    // NOUVEAU: Handler pour les messages de chat (Problème 4)
+    void handleChatMessage(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        try {
+            auto session = server_.getSession(sender);
+            if (!session || session->roomId == 0) {
+                std::cerr << "[GameServer] CHAT_MESSAGE from player not in a room" << std::endl;
+                return;
+            }
+            
+            ChatMessagePayload payload = ChatMessagePayload::deserialize(packet.payload);
+            payload.senderId = session->playerId;
+            payload.senderName = "Player " + std::to_string(session->playerId);
+            payload.roomId = session->roomId;
+            
+            std::cout << "[GameServer] Chat message from Player " << static_cast<int>(session->playerId) 
+                      << " in room " << session->roomId << ": " << payload.message << std::endl;
+            
+            // Broadcast to all players in the room
+            NetworkPacket broadcastPacket(static_cast<uint16_t>(GamePacketType::CHAT_MESSAGE));
+            broadcastPacket.setPayload(payload.serialize());
+            broadcastPacket.header.timestamp = getCurrentTimestamp();
+            broadcastToRoom(session->roomId, broadcastPacket);
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[GameServer] Error handling chat message: " << e.what() << std::endl;
+        }
+    }
+
     uint32_t getCurrentTimestamp() {
         auto now = std::chrono::steady_clock::now();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -542,6 +918,7 @@ private:
     std::unordered_map<uint32_t, ServerEntity> entities_;
     std::unordered_map<uint8_t, uint32_t> playerEntities_; // playerId -> entityId
     std::unordered_map<asio::ip::udp::endpoint, uint8_t> endpointToPlayerId_; // endpoint -> playerId
+    std::unordered_map<uint8_t, uint32_t> playerToRoom_;  // playerId -> roomId (NEW for rooming)
     uint32_t nextEntityId_;
     uint8_t nextPlayerId_ = 1;
     bool gameRunning_;

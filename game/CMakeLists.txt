@@ -13,6 +13,7 @@ file(GLOB_RECURSE GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/components/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/network/*.cpp"
 )
 
 if(GAME_SOURCES)

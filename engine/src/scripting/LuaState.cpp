@@ -12,7 +12,8 @@ void LuaState::Init() {
         sol::lib::math,
         sol::lib::string,
         sol::lib::table,
-        sol::lib::package
+        sol::lib::package,
+        sol::lib::os
     );
 
     // Set default error handler

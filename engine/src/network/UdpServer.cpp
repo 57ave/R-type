@@ -146,3 +146,17 @@ bool UdpServer::removeSession(const udp::endpoint& endpoint) {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
     return sessions_.erase(key) > 0;
 }
+
+std::vector<ClientSession> UdpServer::getActiveSessions() const {
+    std::lock_guard<std::mutex> lock(sessionsMutex_);
+    std::vector<ClientSession> result;
+    result.reserve(sessions_.size());
+    
+    for (const auto& pair : sessions_) {
+        if (pair.second && pair.second->isConnected) {
+            result.push_back(*pair.second);
+        }
+    }
+    
+    return result;
+}

@@ -148,3 +148,7 @@ void NetworkServer::removeClient(const asio::ip::udp::endpoint& endpoint) {
 std::shared_ptr<ClientSession> NetworkServer::getSession(const asio::ip::udp::endpoint& endpoint) {
     return server_.getSession(endpoint);
 }
+
+std::vector<ClientSession> NetworkServer::getActiveSessions() const {
+    return server_.getActiveSessions();
+}
