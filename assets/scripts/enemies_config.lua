@@ -133,7 +133,8 @@ EnemiesConfig = {
             frameHeight = 18,
             scale = 2.0,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
@@ -178,7 +179,8 @@ EnemiesConfig = {
             frameHeight = 32,
             scale = 2.0,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
@@ -221,23 +223,26 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet12.png",
+            texture = "enemies/r-typesheet5.png",
             frameWidth = 33,
-            frameHeight = 30,
+            frameHeight = 36,
             scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 2,
-            frameTime = 0.15,
+            frameCount = 8,
+            frameTime = 0.1,
             loop = true
         },
 
         hitbox = {
             width = 33,
-            height = 30
+            height = 32,
+            offsetX = 0,
+            offsetY = 0
         },
 
         -- Combat
@@ -269,23 +274,26 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet14.png",
-            frameWidth = 46,
-            frameHeight = 44,
+            texture = "enemies/r-typesheet5.png",
+            frameWidth = 33,
+            frameHeight = 36,
             scale = 2.0,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 3,
-            frameTime = 0.12,
+            frameCount = 8,
+            frameTime = 0.1,
             loop = true
         },
 
         hitbox = {
-            width = 42,
-            height = 40
+            width = 33,
+            height = 32,
+            offsetX = 0,
+            offsetY = 0
         },
 
         weapon = "enemy_spread",
@@ -318,23 +326,24 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet17.png",
-            frameWidth = 64,
-            frameHeight = 48,
-            scale = 2.0,
+            texture = "enemies/r-typesheet3.png",
+            frameWidth = 17,
+            frameHeight = 18,
+            scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 2,
-            frameTime = 0.2,
+            frameCount = 12,
+            frameTime = 0.08,
             loop = true
         },
 
         hitbox = {
-            width = 60,
-            height = 44
+            width = 33,
+            height = 32
         },
 
         weapon = "enemy_aimed",
@@ -367,23 +376,26 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet21.png",
-            frameWidth = 32,
-            frameHeight = 32,
-            scale = 2.5,
+            texture = "enemies/r-typesheet5.png",
+            frameWidth = 33,
+            frameHeight = 36,
+            scale = 2.0,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 4,
-            frameTime = 0.2,
+            frameCount = 8,
+            frameTime = 0.1,
             loop = true
         },
 
         hitbox = {
-            width = 28,
-            height = 28
+            width = 33,
+            height = 32,
+            offsetX = 0,
+            offsetY = 0
         },
 
         weapon = "enemy_aimed",
@@ -415,23 +427,24 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet24.png",
-            frameWidth = 48,
-            frameHeight = 32,
-            scale = 2.0,
+            texture = "enemies/r-typesheet3.png",
+            frameWidth = 17,
+            frameHeight = 18,
+            scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 4,
+            frameCount = 12,
             frameTime = 0.08,
             loop = true
         },
 
         hitbox = {
-            width = 44,
-            height = 28
+            width = 33,
+            height = 32
         },
 
         weapon = "enemy_bullet",
@@ -471,23 +484,26 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet26.png",
-            frameWidth = 64,
-            frameHeight = 64,
-            scale = 2.0,
+            texture = "enemies/r-typesheet5.png",
+            frameWidth = 33,
+            frameHeight = 36,
+            scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 4,
-            frameTime = 0.15,
+            frameCount = 8,
+            frameTime = 0.1,
             loop = true
         },
 
         hitbox = {
             width = 56,
-            height = 56
+            height = 56,
+            offsetX = 0,
+            offsetY = 0
         },
 
         weapon = "enemy_spread",
@@ -520,23 +536,26 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet28.png",
-            frameWidth = 32,
-            frameHeight = 32,
-            scale = 2.0,
+            texture = "enemies/r-typesheet5.png",
+            frameWidth = 33,
+            frameHeight = 36,
+            scale = 2.5,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
-            frameCount = 4,
-            frameTime = 0.15,
+            frameCount = 8,
+            frameTime = 0.1,
             loop = true
         },
 
         hitbox = {
-            width = 30,
-            height = 30
+            width = 33,
+            height = 32,
+            offsetX = 0,
+            offsetY = 0
         },
 
     weapon = "enemy_bullet",
@@ -574,23 +593,24 @@ EnemiesConfig = {
         },
 
         sprite = {
-            texture = "enemies/r-typesheet30.png",
-            frameWidth = 48,
-            frameHeight = 48,
+            texture = "enemies/r-typesheet8.png",
+            frameWidth = 32,
+            frameHeight = 32,
             scale = 2.0,
             startX = 0,
-            startY = 0
+            startY = 0,
+            spacing = 0
         },
 
         animation = {
             frameCount = 4,
-            frameTime = 0.12,
+            frameTime = 0.05,
             loop = true
         },
 
         hitbox = {
-            width = 44,
-            height = 44
+            width = 28,
+            height = 28
         },
 
         weapon = "enemy_bullet",
