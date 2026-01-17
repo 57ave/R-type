@@ -6,6 +6,10 @@
 // Cache for the resolved base path
 static std::string g_basePath = "";
 
+// Static pointers for menu music control from Lua
+static eng::engine::Sound* g_menuMusic = nullptr;
+static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
+
 // Helper function to resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
     // If we already found the base path, use it
@@ -599,6 +603,10 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<Damage>();
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
+    
+    // Register Audio components
+    gCoordinator.RegisterComponent<AudioSource>();
+    gCoordinator.RegisterComponent<SoundEffect>();
 
     // Register UI components
     gCoordinator.RegisterComponent<Components::UIElement>();
@@ -636,6 +644,8 @@ int Game::Run(int argc, char* argv[])
     gameStateManager.SetState(GameState::MainMenu);  // Start at main menu
 
     std::cout << "[Game] Game State Manager initialized" << std::endl;
+
+    // NOTE: Menu music will be started AFTER it is loaded (see below)
 
     // ========================================
     // INITIALIZE ALL SYSTEMS
@@ -1097,6 +1107,48 @@ int Game::Run(int argc, char* argv[])
 
     // Set window for UISystem
     uiSystem->SetWindow(&window);
+    
+    // Store window pointer for resolution changes
+    m_window = &window;
+    
+    // Register resolution/fullscreen change callbacks to Lua
+    // Static variables to prevent applying the same resolution repeatedly
+    static int lastAppliedResolution = -1;
+    static bool lastAppliedFullscreen = false;
+    
+    luaState.GetState()["ApplyResolution"] = [this](int resolutionIndex, bool fullscreen) {
+        if (!m_window) return;
+        
+        // Prevent applying the same resolution repeatedly (fixes infinite loop)
+        if (resolutionIndex == lastAppliedResolution && fullscreen == lastAppliedFullscreen) {
+            std::cout << "[Game] Resolution unchanged, skipping apply" << std::endl;
+            return;
+        }
+        
+        std::vector<std::pair<uint32_t, uint32_t>> resolutions = {
+            {1920, 1080},
+            {1280, 720},
+            {1600, 900}
+        };
+        
+        if (resolutionIndex >= 0 && resolutionIndex < static_cast<int>(resolutions.size())) {
+            auto [width, height] = resolutions[resolutionIndex];
+            
+            if (fullscreen) {
+                m_window->setFullscreen(true);
+                std::cout << "[Game] Applied fullscreen mode" << std::endl;
+            } else {
+                // First set the target size, then exit fullscreen
+                m_window->setSize(width, height);
+                m_window->setFullscreen(false);
+                std::cout << "[Game] Applied resolution: " << width << "x" << height << std::endl;
+            }
+            
+            // Remember what we applied to prevent duplicates
+            lastAppliedResolution = resolutionIndex;
+            lastAppliedFullscreen = fullscreen;
+        }
+    };
 
     // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
@@ -1144,6 +1196,32 @@ int Game::Run(int argc, char* argv[])
     } else {
         shootSound.setBuffer(shootBuffer);
         shootSound.setVolume(80.f);
+    }
+
+    // Load menu music
+    std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
+    std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
+    
+    if (!menuMusicBuffer.loadFromFile(menuMusicPath)) {
+        std::cerr << "ERROR: Could not load menu music from: " << menuMusicPath << std::endl;
+        std::cerr << "       Please verify the file exists and is readable." << std::endl;
+    } else {
+        menuMusic.setBuffer(menuMusicBuffer);
+        menuMusic.setVolume(70.f);  // Set to match default in Lua (70%)
+        menuMusic.setLoop(true);  // Loop continuously
+        
+        // Set static pointers for Lua access
+        g_menuMusic = &menuMusic;
+        g_menuMusicBuffer = &menuMusicBuffer;
+        
+        std::cout << "[Game] ✓ Menu music loaded successfully from: " << menuMusicPath << std::endl;
+        std::cout << "[Game]   Volume: 70%, Loop: enabled" << std::endl;
+        
+        // Start menu music immediately since we're in MainMenu state
+        if (GameStateManager::Instance().GetState() == GameState::MainMenu) {
+            menuMusic.play();
+            std::cout << "[Game] ♪ Menu music started!" << std::endl;
+        }
     }
 
     // ========================================
@@ -1241,6 +1319,131 @@ int Game::Run(int argc, char* argv[])
     // Pass base path to Lua for asset resolution
     luaState.GetState()["ASSET_BASE_PATH"] = g_basePath;
     std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
+
+    // ========================================
+    // LOAD AUDIO CONFIGURATION
+    // ========================================
+    std::cout << "🎵 Loading Audio Configuration..." << std::endl;
+    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/config/audio_config.lua"))) {
+        std::cerr << "[Audio] Warning: Could not load audio_config.lua" << std::endl;
+    } else {
+        std::cout << "[Audio] Audio configuration loaded" << std::endl;
+    }
+
+    // Load user settings (volumes)
+    LoadUserSettings();
+    
+    // Apply loaded settings to existing music
+    menuMusic.setVolume(currentMusicVolume);
+    shootSound.setVolume(currentSFXVolume);
+
+    // ========================================
+    // REGISTER AUDIO CALLBACKS FOR LUA
+    // ========================================
+    
+    // Legacy menu music control (backwards compatibility)
+    luaState.GetState()["SetMenuMusicVolume"] = [this](float volume) {
+        SetMusicVolume(volume);
+    };
+    
+    luaState.GetState()["GetMenuMusicVolume"] = [this]() -> float {
+        return GetMusicVolume();
+    };
+    
+    // New audio control callbacks
+    luaState.GetState()["OnMusicVolumeChanged"] = [this](float value) {
+        SetMusicVolume(value);
+    };
+    
+    luaState.GetState()["OnSFXVolumeChanged"] = [this](float value) {
+        SetSFXVolume(value);
+    };
+    
+    // Save settings callback (called from Lua OnApplySettings)
+    luaState.GetState()["SaveUserSettingsToFile"] = [this]() {
+        SaveUserSettings();
+    };
+    
+    luaState.GetState()["OnDifficultyChanged"] = [this](int index) {
+        std::vector<std::string> difficulties = {"easy", "normal", "hard"};
+        if (index >= 0 && index < 3) {
+            LoadDifficulty(difficulties[index]);
+        }
+    };
+    
+    // Audio namespace for Lua
+    auto audioNamespace = luaState.GetState()["Audio"].get_or_create<sol::table>();
+    
+    audioNamespace["PlayMusic"] = [this](const std::string& name, bool loop) {
+        PlayMusic(name, loop);
+    };
+    
+    audioNamespace["FadeToMusic"] = [this](const std::string& name, float duration) {
+        FadeToMusic(name, duration);
+    };
+    
+    audioNamespace["StopMusic"] = [this]() {
+        StopMusic();
+    };
+    
+    audioNamespace["PauseMusic"] = [this]() {
+        PauseMusic();
+    };
+    
+    audioNamespace["ResumeMusic"] = [this]() {
+        ResumeMusic();
+    };
+    
+    audioNamespace["SetMusicVolume"] = [this](float volume) {
+        SetMusicVolume(volume);
+    };
+    
+    audioNamespace["SetSFXVolume"] = [this](float volume) {
+        SetSFXVolume(volume);
+    };
+    
+    audioNamespace["GetMusicVolume"] = [this]() -> float {
+        return GetMusicVolume();
+    };
+    
+    audioNamespace["GetSFXVolume"] = [this]() -> float {
+        return GetSFXVolume();
+    };
+    
+    // Stage/Boss music control
+    audioNamespace["SetStage"] = [this](int stage) {
+        SetCurrentStage(stage);
+    };
+    
+    audioNamespace["OnBossSpawned"] = [this]() {
+        OnBossSpawned();
+    };
+    
+    audioNamespace["OnBossDefeated"] = [this]() {
+        OnBossDefeated();
+    };
+    
+    audioNamespace["OnGameOver"] = [this]() {
+        OnGameOver();
+    };
+    
+    audioNamespace["OnVictory"] = [this]() {
+        OnAllStagesClear();
+    };
+    
+    // SFX playback (via AudioSystem)
+    audioNamespace["PlaySFX"] = [this](const std::string& name, float volumeMult) {
+        if (audioSystem) {
+            audioSystem->PlaySFX(name, volumeMult);
+        } else {
+            // Fallback: play shoot sound for now
+            if (name == "shoot.ogg" || name == "playerShoot") {
+                shootSound.play();
+            }
+        }
+    };
+    
+    std::cout << "[Game] Audio control bindings registered to Lua" << std::endl;
 
     // Load UI scripts
     std::cout << "🎨 Loading UI scripts..." << std::endl;
@@ -1340,6 +1543,51 @@ int Game::Run(int argc, char* argv[])
                        currentState == GameState::Options ||
                        currentState == GameState::Lobby ||
                        currentState == GameState::Credits);
+
+        // Manage menu music based on game state
+        static GameState previousState = GameState::MainMenu;
+        static bool stageOneMusicStarted = false;
+        if (currentState != previousState) {
+            // When entering menu states
+            if (inMenu) {
+                // Special case: Pause menu - pause game music, don't play menu music
+                if (currentState == GameState::Paused) {
+                    PauseMusic();
+                    std::cout << "[Game] Game music paused (entering pause menu)" << std::endl;
+                } else {
+                    // For other menus (MainMenu, Options, etc.), play menu music
+                    if (menuMusic.getStatus() != eng::engine::Sound::Playing) {
+                        menuMusic.play();
+                        std::cout << "[Game] Menu music started" << std::endl;
+                    }
+                    stageOneMusicStarted = false; // Reset for next game
+                }
+            } 
+            // When leaving menu to game
+            else {
+                // Leaving pause menu - resume game music
+                if (previousState == GameState::Paused) {
+                    ResumeMusic();
+                    std::cout << "[Game] Game music resumed (leaving pause menu)" << std::endl;
+                } else {
+                    // Leaving main menu to start game - stop menu music
+                    if (menuMusic.getStatus() == eng::engine::Sound::Playing) {
+                        menuMusic.stop();
+                        std::cout << "[Game] Menu music stopped" << std::endl;
+                    }
+                    // Start stage 1 music when entering gameplay
+                    if (!stageOneMusicStarted && currentState == GameState::Playing) {
+                        SetCurrentStage(1); // This will start stage 1 music
+                        stageOneMusicStarted = true;
+                        std::cout << "[Game] Starting Stage 1 music!" << std::endl;
+                    }
+                }
+            }
+            previousState = currentState;
+        }
+
+        // Update music fade (for smooth transitions)
+        UpdateMusicFade(deltaTime);
 
         // Find local player entity in network mode
         if (networkMode && player == 0 && networkSystem) {
@@ -2008,4 +2256,300 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "Game shutdown complete." << std::endl;
     return 0;
+}
+
+// ============================================
+// AUDIO SYSTEM IMPLEMENTATION
+// ============================================
+
+void Game::PlayMusic(const std::string& musicName, bool loop) {
+    std::string musicPath = ResolveAssetPath("game/assets/sounds/" + musicName);
+    
+    // Check if we need to load the buffer
+    if (musicBuffers.find(musicName) == musicBuffers.end()) {
+        auto buffer = std::make_unique<eng::engine::SoundBuffer>();
+        if (!buffer->loadFromFile(musicPath)) {
+            std::cerr << "[Audio] Failed to load music: " << musicPath << std::endl;
+            return;
+        }
+        musicBuffers[musicName] = std::move(buffer);
+        std::cout << "[Audio] Loaded music: " << musicName << std::endl;
+    }
+    
+    // Stop current music
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        currentMusicSound->stop();
+    }
+    
+    // Create and play new music
+    currentMusicSound = std::make_unique<eng::engine::Sound>();
+    currentMusicSound->setBuffer(*musicBuffers[musicName]);
+    currentMusicSound->setVolume(currentMusicVolume);
+    currentMusicSound->setLoop(loop);
+    currentMusicSound->play();
+    currentMusicName = musicName;
+    
+    std::cout << "[Audio] ♪ Playing: " << musicName << " (Volume: " << currentMusicVolume << "%, Loop: " << (loop ? "yes" : "no") << ")" << std::endl;
+}
+
+void Game::FadeToMusic(const std::string& musicName, float duration) {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        // Start fade
+        isFadingMusic = true;
+        fadeTimer = 0.0f;
+        fadeDuration = duration;
+        nextMusicName = musicName;
+        fadeOutComplete = false;
+        std::cout << "[Audio] Starting fade to: " << musicName << " (duration: " << duration << "s)" << std::endl;
+    } else {
+        // No current music, just play the new one
+        PlayMusic(musicName);
+    }
+}
+
+void Game::UpdateMusicFade(float deltaTime) {
+    if (!isFadingMusic) return;
+    
+    fadeTimer += deltaTime;
+    float halfDuration = fadeDuration / 2.0f;
+    
+    if (fadeTimer < halfDuration) {
+        // Fade out phase (first half)
+        if (currentMusicSound) {
+            float fadeProgress = fadeTimer / halfDuration;
+            float volume = currentMusicVolume * (1.0f - fadeProgress);
+            currentMusicSound->setVolume(std::max(0.0f, volume));
+        }
+    } else if (!fadeOutComplete) {
+        // Switch music at midpoint
+        if (currentMusicSound) {
+            currentMusicSound->stop();
+        }
+        PlayMusic(nextMusicName);
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(0.0f); // Start at 0 for fade in
+        }
+        fadeOutComplete = true;
+    } else if (fadeTimer < fadeDuration) {
+        // Fade in phase (second half)
+        float fadeInProgress = (fadeTimer - halfDuration) / halfDuration;
+        float volume = currentMusicVolume * fadeInProgress;
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(std::min(currentMusicVolume, volume));
+        }
+    } else {
+        // Fade complete
+        if (currentMusicSound) {
+            currentMusicSound->setVolume(currentMusicVolume);
+        }
+        isFadingMusic = false;
+        std::cout << "[Audio] Fade complete - now playing: " << currentMusicName << std::endl;
+    }
+}
+
+void Game::StopMusic() {
+    if (currentMusicSound) {
+        currentMusicSound->stop();
+        std::cout << "[Audio] Music stopped" << std::endl;
+    }
+    isFadingMusic = false;
+}
+
+void Game::PauseMusic() {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Playing) {
+        currentMusicSound->pause();
+        std::cout << "[Audio] Music paused" << std::endl;
+    }
+}
+
+void Game::ResumeMusic() {
+    if (currentMusicSound && currentMusicSound->getStatus() == eng::engine::Sound::Paused) {
+        currentMusicSound->play();
+        std::cout << "[Audio] Music resumed" << std::endl;
+    }
+}
+
+void Game::SetMusicVolume(float volume) {
+    currentMusicVolume = std::clamp(volume, 0.0f, 100.0f);
+    
+    // Apply to current music (if not fading)
+    if (currentMusicSound && !isFadingMusic) {
+        currentMusicSound->setVolume(currentMusicVolume);
+    }
+    
+    // Also update the old menu music (for backwards compatibility)
+    menuMusic.setVolume(currentMusicVolume);
+    
+    std::cout << "[Audio] Music volume set to: " << currentMusicVolume << "%" << std::endl;
+}
+
+void Game::SetSFXVolume(float volume) {
+    currentSFXVolume = std::clamp(volume, 0.0f, 100.0f);
+    
+    // Update shoot sound volume
+    shootSound.setVolume(currentSFXVolume);
+    
+    // Update AudioSystem if available
+    if (audioSystem) {
+        audioSystem->SetSFXVolume(currentSFXVolume);
+    }
+    
+    std::cout << "[Audio] SFX volume set to: " << currentSFXVolume << "%" << std::endl;
+}
+
+void Game::SetCurrentStage(int stage) {
+    currentStage = std::clamp(stage, 1, 8);
+    isBossFight = false;
+    
+    // Get stage music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::function getStageMusicPath = lua["GetStageMusicPath"];
+    
+    if (getStageMusicPath.valid()) {
+        std::string stageMusic = getStageMusicPath(currentStage);
+        FadeToMusic(stageMusic, 1.0f);
+        std::cout << "[Audio] Stage " << currentStage << " - Music: " << stageMusic << std::endl;
+    } else {
+        std::cerr << "[Audio] GetStageMusicPath function not found in Lua!" << std::endl;
+    }
+}
+
+void Game::OnBossSpawned() {
+    isBossFight = true;
+    
+    // Get boss music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string bossMusic = audioConfig["music"]["boss"];
+        FadeToMusic(bossMusic, 1.0f);
+        std::cout << "[Audio] ⚔️ BOSS FIGHT - Stage " << currentStage << std::endl;
+    } else {
+        FadeToMusic("BOSS THEME.ogg", 1.0f);
+    }
+}
+
+void Game::OnBossDefeated() {
+    isBossFight = false;
+    
+    // Get stage clear music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string clearMusic = audioConfig["music"]["stageClear"];
+        PlayMusic(clearMusic, false); // Play once, no loop
+        std::cout << "[Audio] 🎉 Stage " << currentStage << " Clear!" << std::endl;
+    } else {
+        PlayMusic("RETURN IN TRIUMPH (STAGE CLEAR).ogg", false);
+    }
+}
+
+void Game::OnGameOver() {
+    // Get game over music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string gameOverMusic = audioConfig["music"]["gameOver"];
+        FadeToMusic(gameOverMusic, 0.5f); // Fast fade for game over
+        std::cout << "[Audio] 💀 GAME OVER" << std::endl;
+    } else {
+        FadeToMusic("THE END OF WAR (GAME OVER).ogg", 0.5f);
+    }
+}
+
+void Game::OnAllStagesClear() {
+    // Get all clear music from Lua config
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    sol::table audioConfig = lua["AudioConfig"];
+    
+    if (audioConfig.valid()) {
+        std::string allClearMusic = audioConfig["music"]["allClear"];
+        FadeToMusic(allClearMusic, 1.0f);
+        std::cout << "[Audio] 🏆 ALL STAGES CLEAR!" << std::endl;
+    } else {
+        FadeToMusic("LIKE A HERO (ALL STAGE CLEAR).ogg", 1.0f);
+    }
+}
+
+void Game::LoadDifficulty(const std::string& difficulty) {
+    std::string diffPath = ResolveAssetPath("game/assets/scripts/difficulty_game/difficulty_" + difficulty + ".lua");
+    
+    auto& lua = Scripting::LuaState::Instance().GetState();
+    
+    try {
+        lua.script_file(diffPath);
+        
+        sol::table diffSettings = lua["DifficultySettings"];
+        if (diffSettings.valid()) {
+            std::cout << "[Game] Loaded difficulty: " << difficulty << std::endl;
+            
+            // Log some settings
+            std::string name = diffSettings["displayName"];
+            sol::table enemies = diffSettings["enemies"];
+            float healthMult = enemies["healthMultiplier"];
+            float speedMult = enemies["speedMultiplier"];
+            
+            std::cout << "[Game]   Enemy Health: x" << healthMult << std::endl;
+            std::cout << "[Game]   Enemy Speed: x" << speedMult << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Game] Failed to load difficulty: " << e.what() << std::endl;
+    }
+}
+
+void Game::SaveUserSettings() {
+    std::string settingsPath = ResolveAssetPath("game/assets/config/user_settings.json");
+    
+    std::ofstream file(settingsPath);
+    if (file.is_open()) {
+        file << "{\n";
+        file << "    \"audio\": {\n";
+        file << "        \"musicVolume\": " << currentMusicVolume << ",\n";
+        file << "        \"sfxVolume\": " << currentSFXVolume << "\n";
+        file << "    },\n";
+        file << "    \"gameplay\": {\n";
+        file << "        \"difficulty\": \"normal\"\n";
+        file << "    }\n";
+        file << "}\n";
+        file.close();
+        std::cout << "[Settings] ✓ Saved to: " << settingsPath << std::endl;
+    } else {
+        std::cerr << "[Settings] Failed to save settings to: " << settingsPath << std::endl;
+    }
+}
+
+void Game::LoadUserSettings() {
+    std::string settingsPath = ResolveAssetPath("game/assets/config/user_settings.json");
+    
+    std::ifstream file(settingsPath);
+    if (file.is_open()) {
+        std::string content((std::istreambuf_iterator<char>(file)),
+                            std::istreambuf_iterator<char>());
+        file.close();
+        
+        // Simple JSON parsing for our specific format
+        // Look for musicVolume
+        size_t pos = content.find("\"musicVolume\":");
+        if (pos != std::string::npos) {
+            pos += 14; // Skip past "musicVolume":
+            float value = std::stof(content.substr(pos));
+            currentMusicVolume = std::clamp(value, 0.0f, 100.0f);
+        }
+        
+        // Look for sfxVolume
+        pos = content.find("\"sfxVolume\":");
+        if (pos != std::string::npos) {
+            pos += 12; // Skip past "sfxVolume":
+            float value = std::stof(content.substr(pos));
+            currentSFXVolume = std::clamp(value, 0.0f, 100.0f);
+        }
+        
+        std::cout << "[Settings] ✓ Loaded from: " << settingsPath << std::endl;
+        std::cout << "[Settings]   Music: " << currentMusicVolume << "%, SFX: " << currentSFXVolume << "%" << std::endl;
+    } else {
+        std::cout << "[Settings] No saved settings found, using defaults" << std::endl;
+    }
 }
