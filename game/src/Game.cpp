@@ -1348,7 +1348,6 @@ int Game::Run(int argc, char* argv[])
     std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
 
     // ========================================
-<<<<<<< HEAD
     // LOAD AUDIO CONFIGURATION
     // ========================================
     std::cout << "🎵 Loading Audio Configuration..." << std::endl;
