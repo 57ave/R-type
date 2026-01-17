@@ -273,6 +273,17 @@ target_include_directories(UISystem PUBLIC
 
 target_link_libraries(UISystem PUBLIC ecs rendering scripting)
 
+# Audio System - for sound effects and music management
+add_library(AudioSystem SHARED
+    src/systems/AudioSystem.cpp
+)
+
+target_include_directories(AudioSystem PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(AudioSystem PUBLIC ecs core)
+
 # Installation
 install(TARGETS ecs rendering core scripting network
     LIBRARY DESTINATION lib
