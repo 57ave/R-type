@@ -713,40 +713,51 @@ end
 function CreatePauseMenu(centerX, centerY, width, height)
     local menuGroup = "pause_menu"
     
-    -- Semi-transparent overlay
+    -- Semi-transparent overlay (more opaque for better visibility)
     pauseElements.overlay = UI.CreatePanel({
         x = 0,
         y = 0,
         width = width,
         height = height,
-        backgroundColor = 0x000000AA,
+        backgroundColor = 0x000000CC,
         modal = true,
         menuGroup = menuGroup
     })
     
-    -- Center panel
+    -- Center panel (larger to accommodate new elements)
     pauseElements.panel = UI.CreatePanel({
-        x = centerX - 200,
-        y = centerY - 180,
-        width = 400,
-        height = 360,
+        x = centerX - 250,
+        y = centerY - 250,
+        width = 500,
+        height = 500,
         backgroundColor = COLORS.PANEL_BG,
         modal = false,
         menuGroup = menuGroup
     })
     
-    -- Title
-    pauseElements.title = UI.CreateText({
+    -- BIG PAUSED Title
+    pauseElements.bigTitle = UI.CreateText({
         x = centerX,
-        y = centerY - 140,
-        text = "PAUSED",
-        fontSize = 50,
+        y = centerY - 200,
+        text = "GAME PAUSED",
+        fontSize = 72,
         color = COLORS.PRIMARY_BLUE,
         menuGroup = menuGroup
     })
     
+    -- Subtitle with instruction
+    pauseElements.subtitle = UI.CreateText({
+        x = centerX,
+        y = centerY - 120,
+        text = "Press ESC to resume",
+        fontSize = 24,
+        color = COLORS.LIGHT_GRAY,
+        menuGroup = menuGroup
+    })
+    
     -- Buttons
-    local buttonStartY = centerY - 50
+    local buttonStartY = centerY - 40
+    local buttonSpacing = BUTTON.HEIGHT + BUTTON.SPACING
     
     pauseElements.resumeBtn = UI.CreateButton({
         x = centerX,
@@ -760,7 +771,7 @@ function CreatePauseMenu(centerX, centerY, width, height)
     
     pauseElements.settingsBtn = UI.CreateButton({
         x = centerX,
-        y = buttonStartY + BUTTON.HEIGHT + BUTTON.SPACING,
+        y = buttonStartY + buttonSpacing,
         width = BUTTON.WIDTH,
         height = BUTTON.HEIGHT,
         text = "SETTINGS",
@@ -768,13 +779,24 @@ function CreatePauseMenu(centerX, centerY, width, height)
         menuGroup = menuGroup
     })
     
-    pauseElements.mainMenuBtn = UI.CreateButton({
+    -- Quit to menu button (abandon game)
+    pauseElements.quitGameBtn = UI.CreateButton({
         x = centerX,
-        y = buttonStartY + (BUTTON.HEIGHT + BUTTON.SPACING) * 2,
+        y = buttonStartY + buttonSpacing * 2,
         width = BUTTON.WIDTH,
         height = BUTTON.HEIGHT,
-        text = "MAIN MENU",
-        onClick = "OnPauseMainMenuClicked",
+        text = "QUIT TO MENU",
+        onClick = "OnQuitToMenuClicked",
+        menuGroup = menuGroup
+    })
+    
+    -- Warning text for quit button
+    pauseElements.quitWarning = UI.CreateText({
+        x = centerX,
+        y = buttonStartY + buttonSpacing * 2 + 60,
+        text = "(Progress will be lost)",
+        fontSize = 16,
+        color = 0xFF6666FF,
         menuGroup = menuGroup
     })
 end
@@ -966,42 +988,169 @@ end
 -- ============================================
 -- SETTINGS CALLBACKS
 -- ============================================
+
+-- Flags to prevent recursive/infinite calls
+local isUpdatingMusicVolume = false
+local isUpdatingSFXVolume = false
+
 function OnMusicVolumeChanged(value)
-    settingsData.musicVolume = math.floor(value)
+    -- Prevent infinite loop from recursive calls
+    if isUpdatingMusicVolume then return end
+    
+    local newVolume = math.floor(value)
+    -- Only update if value actually changed
+    if newVolume == settingsData.musicVolume then return end
+    
+    isUpdatingMusicVolume = true
+    settingsData.musicVolume = newVolume
     UI.SetText(settingsElements.musicValue, tostring(settingsData.musicVolume) .. "%")
-    print("[UI] Music volume: " .. settingsData.musicVolume)
+    
+    -- Update actual music volume in C++ (new audio system)
+    if Audio and Audio.SetMusicVolume then
+        Audio.SetMusicVolume(settingsData.musicVolume)
+        print("[UI] 🎵 Music volume: " .. settingsData.musicVolume .. "%")
+    elseif SetMenuMusicVolume ~= nil then
+        -- Fallback to legacy function
+        SetMenuMusicVolume(settingsData.musicVolume)
+        print("[UI] Music volume changed to: " .. settingsData.musicVolume .. "%")
+    else
+        print("[UI] WARNING: No music volume function available!")
+    end
+    
+    isUpdatingMusicVolume = false
 end
 
 function OnSFXVolumeChanged(value)
-    settingsData.sfxVolume = math.floor(value)
+    -- Prevent infinite loop from recursive calls
+    if isUpdatingSFXVolume then return end
+    
+    local newVolume = math.floor(value)
+    -- Only update if value actually changed
+    if newVolume == settingsData.sfxVolume then return end
+    
+    isUpdatingSFXVolume = true
+    settingsData.sfxVolume = newVolume
     UI.SetText(settingsElements.sfxValue, tostring(settingsData.sfxVolume) .. "%")
-    print("[UI] SFX volume: " .. settingsData.sfxVolume)
+    
+    -- Update actual SFX volume in C++ (new audio system)
+    if Audio and Audio.SetSFXVolume then
+        Audio.SetSFXVolume(settingsData.sfxVolume)
+        print("[UI] 🔊 SFX volume: " .. settingsData.sfxVolume .. "%")
+    else
+        print("[UI] SFX volume: " .. settingsData.sfxVolume .. "%")
+    end
+    
+    isUpdatingSFXVolume = false
 end
+
+-- Flag to prevent resolution change loops
+local isUpdatingResolution = false
 
 function OnResolutionChanged(index)
     if index == nil then return end
-    settingsData.resolution = index
+    
+    -- Prevent infinite loop from recursive calls
+    if isUpdatingResolution then return end
+    
+    local newIndex = math.floor(index)
+    -- Only update if value actually changed
+    if newIndex == settingsData.resolution then return end
+    
+    isUpdatingResolution = true
+    settingsData.resolution = newIndex
+    
     local resolutions = {"1920x1080", "1280x720", "1600x900"}
-    local resIndex = math.floor(index) + 1
+    local resIndex = newIndex + 1
     if resIndex >= 1 and resIndex <= #resolutions then
-        print("[UI] Resolution: " .. resolutions[resIndex])
+        print("[UI] Resolution changed to: " .. resolutions[resIndex])
+        
+        -- Auto-enable fullscreen for 1920x1080 (index 0)
+        if newIndex == 0 then
+            settingsData.fullscreen = true
+            print("[UI] Auto-enabled fullscreen for 1920x1080")
+            -- Update checkbox visual if it exists
+            if settingsElements and settingsElements.fullscreenCheckbox then
+                UI.SetCheckboxChecked(settingsElements.fullscreenCheckbox, true)
+            end
+        end
     end
+    
+    isUpdatingResolution = false
 end
+
+-- Flag to prevent fullscreen change loops
+local isUpdatingFullscreen = false
 
 function OnFullscreenChanged(checked)
-    if checked ~= nil then
-        settingsData.fullscreen = (checked == true or checked == 1 or checked == 1.0)
-    end
-    print("[UI] Fullscreen: " .. tostring(settingsData.fullscreen))
+    if checked == nil then return end
+    
+    -- Prevent infinite loop from recursive calls
+    if isUpdatingFullscreen then return end
+    
+    local newValue = (checked == true or checked == 1 or checked == 1.0)
+    -- Only update if value actually changed
+    if newValue == settingsData.fullscreen then return end
+    
+    isUpdatingFullscreen = true
+    settingsData.fullscreen = newValue
+    print("[UI] Fullscreen changed to: " .. tostring(settingsData.fullscreen))
+    isUpdatingFullscreen = false
 end
 
+-- Flags to prevent infinite loop in OnApplySettings
+local isApplyingSettings = false
+local lastAppliedResolution = -1
+local lastAppliedFullscreen = nil
+
 function OnApplySettings()
-    print("[UI] Applying settings...")
-    -- Settings will be applied by C++ callbacks
-    print("  Music: " .. tostring(settingsData.musicVolume or 70))
-    print("  SFX: " .. tostring(settingsData.sfxVolume or 80))
-    print("  Resolution: " .. tostring(settingsData.resolution or 0))
-    print("  Fullscreen: " .. tostring(settingsData.fullscreen or false))
+    -- Prevent infinite loop
+    if isApplyingSettings then 
+        print("[UI] OnApplySettings already in progress, skipping")
+        return 
+    end
+    
+    -- Check if resolution/fullscreen actually changed
+    local resIndex = settingsData.resolution or 0
+    local fullscreen = settingsData.fullscreen or false
+    
+    if resIndex == lastAppliedResolution and fullscreen == lastAppliedFullscreen then
+        print("[UI] Settings unchanged, only saving to file")
+        -- Still save other settings (volume, etc.)
+        if SaveUserSettingsToFile ~= nil then
+            SaveUserSettingsToFile()
+        end
+        return
+    end
+    
+    isApplyingSettings = true
+    
+    print("[UI] 💾 Applying settings...")
+    print("  Music: " .. tostring(settingsData.musicVolume or 70) .. "%")
+    print("  SFX: " .. tostring(settingsData.sfxVolume or 80) .. "%")
+    print("  Resolution: " .. tostring(resIndex))
+    print("  Fullscreen: " .. tostring(fullscreen))
+    
+    -- Apply resolution and fullscreen changes
+    if ApplyResolution ~= nil then
+        ApplyResolution(resIndex, fullscreen)
+        
+        -- Remember what we applied to prevent duplicates
+        lastAppliedResolution = resIndex
+        lastAppliedFullscreen = fullscreen
+        
+        print("[UI] ✓ Resolution applied!")
+    else
+        print("[UI] Warning: ApplyResolution not available")
+    end
+    
+    -- Call C++ to save settings to user_settings.json
+    if SaveUserSettingsToFile ~= nil then
+        SaveUserSettingsToFile()
+    end
+    
+    print("[UI] ✓ Settings saved!")
+    
+    isApplyingSettings = false
 end
 
 function OnSettingsBack()
@@ -1037,6 +1186,21 @@ end
 function OnPauseMainMenuClicked()
     print("[UI] Returning to main menu from pause")
     UI.HideAllMenus()
+    UI.ShowMenu("main_menu")
+    UI.SetActiveMenu("main_menu")
+    GameState.Set("MainMenu")
+end
+
+-- New callback for quitting to menu (abandoning game)
+function OnQuitToMenuClicked()
+    print("[UI] Quitting game and returning to main menu")
+    UI.HideAllMenus()
+    
+    -- Stop game music
+    if Audio and Audio.StopMusic then
+        Audio.StopMusic()
+    end
+    
     UI.ShowMenu("main_menu")
     UI.SetActiveMenu("main_menu")
     GameState.Set("MainMenu")
