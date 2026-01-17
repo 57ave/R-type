@@ -120,7 +120,7 @@ private:
         }
     }
 
-    void handleClientHello(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+    void handleClientHello(const NetworkPacket&, const asio::ip::udp::endpoint& sender) {
         // Create player entity
         uint8_t playerId = nextPlayerId_++;
         
@@ -153,7 +153,7 @@ private:
         broadcastEntitySpawn(player);
     }
 
-    void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+    void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint&) {
         if (packet.payload.size() < sizeof(ClientInput)) {
             return;
         }
@@ -194,36 +194,45 @@ private:
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
         std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
         
-        // Find player ID from endpoint
-        auto epIt = endpointToPlayerId_.find(sender);
-        if (epIt == endpointToPlayerId_.end()) {
-            return; // Unknown endpoint
+        // Try to get session first (from room-system-improvements)
+        auto session = server_.getSession(sender);
+        uint8_t playerId = 0;
+        
+        if (session) {
+            // Use session-based approach (preferred method from room-system-improvements)
+            playerId = session->playerId;
+            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from session" << std::endl;
+        } else {
+            // Fallback to endpoint mapping (from game_menu)
+            auto epIt = endpointToPlayerId_.find(sender);
+            if (epIt == endpointToPlayerId_.end()) {
+                std::cout << "[GameServer] Unknown endpoint, cannot cleanup" << std::endl;
+                return; // Unknown endpoint
+            }
+            playerId = epIt->second;
+            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from endpoint mapping" << std::endl;
         }
         
-        uint8_t playerId = epIt->second;
-        
-        // Find player entity
+        // Remove player entity
         auto playerIt = playerEntities_.find(playerId);
         if (playerIt != playerEntities_.end()) {
             uint32_t entityId = playerIt->second;
             
-            // Remove entity
-            entities_.erase(entityId);
-            
-            // Broadcast entity destroy
-            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_DESTROY));
-            packet.header.timestamp = getCurrentTimestamp();
-            uint32_t networkId = entityId;
-            packet.payload.resize(sizeof(uint32_t));
-            std::memcpy(packet.payload.data(), &networkId, sizeof(uint32_t));
-            server_.broadcast(packet);
-            
-            std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
+            // Remove from entities map
+            if (entities_.erase(entityId)) {
+                // Use the improved broadcastEntityDestroy method
+                broadcastEntityDestroy(entityId);
+                std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
+            }
             
             playerEntities_.erase(playerIt);
         }
         
-        endpointToPlayerId_.erase(epIt);
+        // Clean up endpoint mapping (from game_menu)
+        endpointToPlayerId_.erase(sender);
+        
+        // Remove the session from UDP server (from room-system-improvements)
+        server_.removeClient(sender);
     }
 
     void updateEntities(float deltaTime) {

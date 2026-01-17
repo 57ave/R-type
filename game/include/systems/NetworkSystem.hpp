@@ -158,11 +158,11 @@ private:
         }
     }
 
-    void handlePlayerDied(const NetworkPacket& packet) {
+    void handlePlayerDied(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Player died" << std::endl;
     }
 
-    void handleClientLeft(const NetworkPacket& packet) {
+    void handleClientLeft(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Client left" << std::endl;
     }
 
@@ -204,10 +204,10 @@ private:
         coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_, state.playerLine));
         
         // Add Position
-        coordinator_->AddComponent(entity, Position{state.x, state.y});
+        coordinator_->AddComponent(entity, Position{static_cast<float>(state.x), static_cast<float>(state.y)});
         
         // Add Velocity
-        coordinator_->AddComponent(entity, Velocity{state.vx, state.vy});
+        coordinator_->AddComponent(entity, Velocity{static_cast<float>(state.vx), static_cast<float>(state.vy)});
         
         // Add Health
         coordinator_->AddComponent(entity, Health{state.hp, state.hp});
@@ -265,7 +265,7 @@ private:
         std::cout << "[NetworkSystem] Created entity " << entity << " for network ID " << state.id << std::endl;
     }
 
-    void sendLocalPlayerInput(float dt) {
+    void sendLocalPlayerInput(float) {
         // This will be called by the game to send input
         // The actual input gathering happens in the game code
     }

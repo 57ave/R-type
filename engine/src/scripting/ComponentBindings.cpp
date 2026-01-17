@@ -24,37 +24,37 @@ void ComponentBindings::RegisterAll(sol::state& lua) {
 void ComponentBindings::RegisterTransform(sol::state& lua) {
     lua.new_usertype<Transform>("Transform",
         sol::constructors<Transform(), Transform(float, float, float)>(),
-        "x", &Transform::x,
-        "y", &Transform::y,
-        "rotation", &Transform::rotation
+        "x", sol::property([](Transform& t) { return t.x; }, [](Transform& t, float v) { t.x = v; }),
+        "y", sol::property([](Transform& t) { return t.y; }, [](Transform& t, float v) { t.y = v; }),
+        "rotation", sol::property([](Transform& t) { return t.rotation; }, [](Transform& t, float v) { t.rotation = v; })
     );
 }
 
 void ComponentBindings::RegisterVelocity(sol::state& lua) {
     lua.new_usertype<Velocity>("Velocity",
         sol::constructors<Velocity(), Velocity(float, float, float)>(),
-        "dx", &Velocity::dx,
-        "dy", &Velocity::dy,
-        "maxSpeed", &Velocity::maxSpeed
+        "dx", sol::property([](Velocity& v) { return v.dx; }, [](Velocity& v, float val) { v.dx = val; }),
+        "dy", sol::property([](Velocity& v) { return v.dy; }, [](Velocity& v, float val) { v.dy = val; }),
+        "maxSpeed", sol::property([](Velocity& v) { return v.maxSpeed; }, [](Velocity& v, float val) { v.maxSpeed = val; })
     );
 }
 
 void ComponentBindings::RegisterSprite(sol::state& lua) {
     lua.new_usertype<Sprite>("Sprite",
         sol::constructors<Sprite(), Sprite(const std::string&, int, int)>(),
-        "texturePath", &Sprite::texturePath,
-        "width", &Sprite::width,
-        "height", &Sprite::height,
-        "layer", &Sprite::layer,
-        "visible", &Sprite::visible
+        "texturePath", sol::property([](Sprite& s) { return s.texturePath; }, [](Sprite& s, const std::string& v) { s.texturePath = v; }),
+        "width", sol::property([](Sprite& s) { return s.width; }, [](Sprite& s, int v) { s.width = v; }),
+        "height", sol::property([](Sprite& s) { return s.height; }, [](Sprite& s, int v) { s.height = v; }),
+        "layer", sol::property([](Sprite& s) { return s.layer; }, [](Sprite& s, int v) { s.layer = v; }),
+        "visible", sol::property([](Sprite& s) { return s.visible; }, [](Sprite& s, bool v) { s.visible = v; })
     );
 }
 
 void ComponentBindings::RegisterHealth(sol::state& lua) {
     lua.new_usertype<Health>("Health",
         sol::constructors<Health(), Health(int, int)>(),
-        "current", &Health::current,
-        "maximum", &Health::maximum,
+        "current", sol::property([](Health& h) { return h.current; }, [](Health& h, int v) { h.current = v; }),
+        "maximum", sol::property([](Health& h) { return h.maximum; }, [](Health& h, int v) { h.maximum = v; }),
         "IsAlive", &Health::IsAlive,
         "TakeDamage", &Health::TakeDamage,
         "Heal", &Health::Heal
@@ -64,22 +64,22 @@ void ComponentBindings::RegisterHealth(sol::state& lua) {
 void ComponentBindings::RegisterDamage(sol::state& lua) {
     lua.new_usertype<Damage>("Damage",
         sol::constructors<Damage(), Damage(int)>(),
-        "value", &Damage::value
+        "value", sol::property([](Damage& d) { return d.value; }, [](Damage& d, int v) { d.value = v; })
     );
 }
 
 void ComponentBindings::RegisterCollider(sol::state& lua) {
     lua.new_usertype<Collider>("Collider",
         sol::constructors<Collider(), Collider(float, bool)>(),
-        "radius", &Collider::radius,
-        "isTrigger", &Collider::isTrigger
+        "radius", sol::property([](Collider& c) { return c.radius; }, [](Collider& c, float v) { c.radius = v; }),
+        "isTrigger", sol::property([](Collider& c) { return c.isTrigger; }, [](Collider& c, bool v) { c.isTrigger = v; })
     );
 }
 
 void ComponentBindings::RegisterTag(sol::state& lua) {
     lua.new_usertype<Tag>("Tag",
         sol::constructors<Tag(), Tag(const std::string&)>(),
-        "value", &Tag::value
+        "value", sol::property([](Tag& t) { return t.value; }, [](Tag& t, const std::string& v) { t.value = v; })
     );
 }
 

@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
-project(RType VERSION 1.0.0 LANGUAGES CXX)
+
+# On macOS, SFML requires Objective-C/C++ support
+if(APPLE)
+    project(RType VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(RType VERSION 1.0.0 LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,10 +27,14 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find SFML (required by all sub-projects)
-find_package(SFML 2.5 COMPONENTS system window graphics audio network REQUIRED)
+# Include CPM
+include(cmake/CPM.cmake)
 
-# Build engine library
+# Find SFML (required by all sub-projects)
+find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)
+if(NOT SFML_FOUND)
+    CPMAddPackage("gh:SFML/SFML#2.6.1")
+endif()
 add_subdirectory(engine)
 
 # Build client if requested
