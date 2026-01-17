@@ -1,0 +1,31 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mingw-w64 cmake
+
+    - name: Build and Package
+      run: |
+        chmod +x cross_compile_windows.sh package_windows.sh
+        ./cross_compile_windows.sh
+        ./package_windows.sh
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: r-type-windows-release.tar.gz

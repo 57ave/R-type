@@ -50,5 +50,10 @@ if [ -d "client/assets" ]; then
     cp -r "client/assets/"* "$RELEASE_DIR/assets/"
 fi
 
+
+# 5. Compress Release
+echo "Compressing release..."
+tar -czvf "r-type-windows-release.tar.gz" -C "$RELEASE_DIR" .
+
 echo "Packaging complete!"
-echo "Please transfer the contents of '$RELEASE_DIR' to your Windows machine."
+echo "Generated: r-type-windows-release.tar.gz"
