@@ -90,3 +90,11 @@ CPack*
 build
 .vscode/
 engine/build
+build-windows/
+release-windows/
+*.tar.gz
+*_log.txt
+network_check.cpp
+r-type_server.exe
+r-type_client.exe
+r-type_game.exe

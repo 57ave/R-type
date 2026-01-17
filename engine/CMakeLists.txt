@@ -62,6 +62,9 @@ target_include_directories(network PUBLIC
 )
 
 target_link_libraries(network PUBLIC ecs)
+if(WIN32)
+    target_link_libraries(network PUBLIC ws2_32 wsock32)
+endif()
 
 set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
