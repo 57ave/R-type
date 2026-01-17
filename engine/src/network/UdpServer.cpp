@@ -92,7 +92,7 @@ void UdpServer::sendTo(const NetworkPacket& packet, const udp::endpoint& endpoin
     auto buffer = packet.serialize();
     socket_.async_send_to(asio::buffer(buffer), endpoint,
         [](const std::error_code& /*error*/, std::size_t /*bytes_transferred*/) {
-            // Handle send error if needed
+
         });
 }
 
@@ -110,7 +110,6 @@ void UdpServer::broadcast(const NetworkPacket& packet) {
 
 void UdpServer::checkTimeouts() {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
-    auto now = std::chrono::steady_clock::now();
     
     // timeout threshold (e.g., 5 seconds)
     auto timeout = std::chrono::seconds(5);
@@ -124,4 +123,26 @@ void UdpServer::checkTimeouts() {
             ++it;
         }
     }
+}
+
+std::shared_ptr<ClientSession> UdpServer::getSession(const udp::endpoint& endpoint) {
+    std::stringstream ss;
+    ss << endpoint;
+    std::string key = ss.str();
+
+    std::lock_guard<std::mutex> lock(sessionsMutex_);
+    auto it = sessions_.find(key);
+    if (it != sessions_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+bool UdpServer::removeSession(const udp::endpoint& endpoint) {
+    std::stringstream ss;
+    ss << endpoint;
+    std::string key = ss.str();
+
+    std::lock_guard<std::mutex> lock(sessionsMutex_);
+    return sessions_.erase(key) > 0;
 }

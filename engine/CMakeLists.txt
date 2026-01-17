@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
-project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+
+# Conditionally enable Objective-C/C++ only on macOS
+if(APPLE)
+    project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(RTypeEngine VERSION 1.0.0 LANGUAGES CXX C)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,10 +17,13 @@ if(MSVC)
 else()
     # Use generator expressions to apply warnings only to CXX
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wall> $<$<COMPILE_LANGUAGE:CXX>:-Wextra>)
-    # Remove -Werror for Objective-C files (SFML macOS issue)
+    # Remove -Werror for C files
     add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wno-error>)
-    add_compile_options($<$<COMPILE_LANGUAGE:OBJC>:-Wno-error>)
-    add_compile_options($<$<COMPILE_LANGUAGE:OBJCXX>:-Wno-error>)
+    # Only add Objective-C flags on macOS
+    if(APPLE)
+        add_compile_options($<$<COMPILE_LANGUAGE:OBJC>:-Wno-error>)
+        add_compile_options($<$<COMPILE_LANGUAGE:OBJCXX>:-Wno-error>)
+    endif()
 endif()
 
 # ========================================
@@ -23,8 +32,8 @@ endif()
 option(ENABLE_SCRIPTING "Enable Lua/Sol3 scripting support" ON)
 
 if(ENABLE_SCRIPTING)
-    # Sol3 header-only library
-    set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3" CACHE PATH "Path to Sol3 include directory")
+    # Sol3 header-only library - use include/ subdirectory
+    set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "Path to Sol3 include directory")
     if(NOT EXISTS "${SOL3_INCLUDE_DIR}/sol/sol.hpp")
         message(WARNING "Sol3 not found at ${SOL3_INCLUDE_DIR}. Scripting features will be disabled.")
         set(ENABLE_SCRIPTING OFF)
@@ -457,6 +466,17 @@ if(LUA_FOUND)
 else()
     message(STATUS "UISystem disabled - requires Lua/Sol3")
 endif()
+
+# Audio System - for sound effects and music management
+add_library(AudioSystem SHARED
+    src/systems/AudioSystem.cpp
+)
+
+target_include_directories(AudioSystem PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(AudioSystem PUBLIC ecs core)
 
 # Installation
 install(TARGETS ecs rendering core scripting network

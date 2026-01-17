@@ -151,3 +151,47 @@ function ApplyDifficultyScale(baseValue, statType)
 end
 
 print("[GameConfig] Loaded - Difficulty: " .. GameConfig.currentDifficulty)
+
+-- ==========================================================================
+-- ASSETS PATHS (used by C++ to load textures/sounds/fonts)
+-- Put all asset relative paths here so C++ is fully data-driven
+-- ==========================================================================
+
+Assets = {
+    background = "game/assets/background.png",
+    base = "game/assets/",
+    players = {
+        player = "game/assets/players/r-typesheet42.png",
+        missile = "game/assets/players/r-typesheet1.png"
+    },
+    enemies = {
+        bullets = "game/assets/enemies/enemy_bullets.png",
+        explosion = "game/assets/enemies/r-typesheet44.png"
+    },
+    fonts = {
+        default = "game/assets/fonts/Roboto-Regular.ttf"
+    },
+    sounds = {
+        base = "game/assets/sounds/",
+        shoot = "game/assets/vfx/shoot.ogg",
+        menu = "game/assets/sounds/Title.ogg"
+    }
+}
+
+-- Optional: script paths and other assets
+Assets.scripts = {
+    init = "assets/scripts/init.lua",
+    audio_config = "game/assets/scripts/config/audio_config.lua",
+    ui_init = "game/assets/scripts/ui_init.lua"
+}
+-- spawn system script used by the engine (path provided here so C++ doesn't hardcode it)
+Assets.scripts.spawn_system = "assets/scripts/systems/spawn_system.lua"
+
+-- Additional paths
+Assets.config = {
+    user_settings = "game/assets/config/user_settings.json"
+}
+
+Assets.scripts.difficulty_base = "game/assets/scripts/difficulty_game/"
+
+print("[Assets] Loaded asset paths from game_config.lua")

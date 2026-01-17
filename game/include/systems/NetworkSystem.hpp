@@ -158,11 +158,11 @@ private:
         }
     }
 
-    void handlePlayerDied(const NetworkPacket& packet) {
+    void handlePlayerDied(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Player died" << std::endl;
     }
 
-    void handleClientLeft(const NetworkPacket& packet) {
+    void handleClientLeft(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Client left" << std::endl;
     }
 
@@ -265,7 +265,7 @@ private:
         std::cout << "[NetworkSystem] Created entity " << entity << " for network ID " << state.id << std::endl;
     }
 
-    void sendLocalPlayerInput(float dt) {
+    void sendLocalPlayerInput(float) {
         // This will be called by the game to send input
         // The actual input gathering happens in the game code
     }

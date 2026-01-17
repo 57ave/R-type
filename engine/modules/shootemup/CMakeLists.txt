@@ -21,6 +21,10 @@ set(SHOOTEMUP_COMPONENT_HEADERS
     include/components/ShootEmUpTags.hpp
     include/components/PowerUp.hpp
     include/components/AIController.hpp
+    include/components/Boss.hpp
+    include/components/ForcePod.hpp
+    include/components/Wave.hpp
+    include/components/Effect.hpp
 )
 
 # Systems
@@ -28,12 +32,18 @@ set(SHOOTEMUP_SYSTEM_HEADERS
     include/systems/WeaponSystem.hpp
     include/systems/MovementPatternSystem.hpp
     include/systems/EnemySpawnSystem.hpp
+    include/systems/WaveSystem.hpp
+    include/systems/BossSystem.hpp
+    include/systems/AttachmentSystem.hpp
 )
 
 set(SHOOTEMUP_SYSTEM_SOURCES
     src/systems/WeaponSystem.cpp
     src/systems/MovementPatternSystem.cpp
     src/systems/EnemySpawnSystem.cpp
+    src/systems/WaveSystem.cpp
+    src/systems/BossSystem.cpp
+    src/systems/AttachmentSystem.cpp
 )
 
 # Factories
@@ -72,6 +82,8 @@ target_include_directories(shootemup PUBLIC
 # Link to engine core components
 target_include_directories(shootemup PUBLIC
     ${CMAKE_SOURCE_DIR}/engine/include
+    ${LUA_INCLUDE_DIR}
+    ${SOL3_INCLUDE_DIR}
 )
 
 # ========================================

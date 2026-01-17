@@ -13,13 +13,16 @@
 #include <components/Tag.hpp>
 #include <components/MovementPattern.hpp>
 #include <components/ShootEmUpTags.hpp>
+#include <string>
 #include <vector>
+#include <unordered_map>
+#include <sol/sol.hpp>
 
 using namespace eng::engine::rendering::sfml;
 
 /**
  * @brief Factory pour créer différents types d'ennemis
- * 
+ *
  * Centralise la création des ennemis avec leurs configurations spécifiques
  */
 class EnemyFactory {
@@ -94,6 +97,17 @@ public:
         float x, float y,
         SFMLTexture* texture,
         std::vector<SFMLSprite*>& spriteList
+    );
+
+    /**
+     * @brief Crée un ennemi à partir d'une configuration Lua (table)
+     */
+    static ECS::Entity CreateEnemyFromLuaConfig(
+        ECS::Coordinator& coordinator,
+        float x, float y,
+        sol::table config,
+        std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*>& textures,
+        std::vector<eng::engine::rendering::sfml::SFMLSprite*>& spriteList
     );
 
 private:

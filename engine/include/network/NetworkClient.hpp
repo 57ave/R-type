@@ -29,6 +29,8 @@ public:
     bool hasReceivedPackets();
     NetworkPacket getNextReceivedPacket();
 
+    void update(float dt);
+
     // Connection status
     bool isConnected() const { return connected_; }
     uint8_t getPlayerId() const { return playerId_; }

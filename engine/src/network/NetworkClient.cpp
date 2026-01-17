@@ -88,3 +88,17 @@ NetworkPacket NetworkClient::getNextReceivedPacket() {
     receivedPackets_.pop();
     return packet;
 }
+
+void NetworkClient::update(float) {
+    if (!connected_) return;
+
+    auto now = std::chrono::steady_clock::now();
+    auto timeSinceLastInput = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInputSent_).count();
+
+    // Keep-alive: send empty packet if no input for 1 second
+    if (timeSinceLastInput > 1000) {
+        // Send a ping/keep-alive packet (type 0x03 is CLIENT_PING)
+        NetworkPacket pingPacket(0x03);
+        sendPacket(pingPacket);
+    }
+}

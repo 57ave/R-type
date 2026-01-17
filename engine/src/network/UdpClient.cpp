@@ -85,7 +85,7 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
     startReceive();
 }
 
-void UdpClient::handleSend(const std::error_code& error, std::size_t bytes_transferred) {
+void UdpClient::handleSend(const std::error_code& error, std::size_t) {
     if (error) {
         std::cerr << "[UdpClient] Send error: " << error.message() << std::endl;
     }

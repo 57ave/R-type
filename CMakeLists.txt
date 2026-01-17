@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
-project(RType VERSION 1.0.0 LANGUAGES CXX)
+
+# On macOS, SFML requires Objective-C/C++ support
+if(APPLE)
+    project(RType VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(RType VERSION 1.0.0 LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,6 +18,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BUILD_CLIENT "Build client executable" ON)
 option(BUILD_SERVER "Build server executable" ON)
 option(BUILD_GAME "Build game executable" ON)
+option(BUILD_GAME2 "Build Flappy Bird game executable" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
 # Compiler warnings
@@ -21,9 +28,14 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# SFML is handled by engine/CMakeLists.txt via CPM
+# Include CPM
+include(cmake/CPM.cmake)
 
-# Build engine library
+# Find SFML (required by all sub-projects)
+find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)
+if(NOT SFML_FOUND)
+    CPMAddPackage("gh:SFML/SFML#2.6.1")
+endif()
 add_subdirectory(engine)
 
 # Build client if requested
@@ -39,4 +51,9 @@ endif()
 # Build game if requested
 if(BUILD_GAME)
     add_subdirectory(game)
+endif()
+
+# Build Flappy Bird (game2) if requested
+if(BUILD_GAME2)
+    add_subdirectory(game2)
 endif()

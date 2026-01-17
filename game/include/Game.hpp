@@ -6,8 +6,10 @@
     #include <vector>
     #include <algorithm>
     #include <string>
+    #include <unordered_map>
     #include <set>
     #include <functional>
+    #include <map>
 
     // Engine includes - Core
     #include <ecs/ECS.hpp>
@@ -60,6 +62,9 @@
 
     // UI System
     #include <systems/UISystem.hpp>
+    
+    // Audio System
+    #include <systems/AudioSystem.hpp>
 
     // Game State Management
     #include "GameStateManager.hpp"
@@ -87,6 +92,7 @@
     #include <components/Lifetime.hpp>
     #include <components/NetworkId.hpp>
     #include <components/Boundary.hpp>
+    #include <components/AudioSource.hpp>
 
     // UI Components
     #include <components/UIElement.hpp>
@@ -118,6 +124,38 @@
             void RegisterEntity(ECS::Entity entity);
             void DestroyEntityDeferred(ECS::Entity entity);
             void ProcessDestroyedEntities();
+            
+            // ========================================
+            // AUDIO SYSTEM - PUBLIC METHODS
+            // ========================================
+            
+            // Music control
+            void PlayMusic(const std::string& musicName, bool loop = true);
+            void FadeToMusic(const std::string& musicName, float duration = 1.0f);
+            void StopMusic();
+            void PauseMusic();
+            void ResumeMusic();
+            
+            // Volume control
+            void SetMusicVolume(float volume);
+            void SetSFXVolume(float volume);
+            float GetMusicVolume() const { return currentMusicVolume; }
+            float GetSFXVolume() const { return currentSFXVolume; }
+            
+            // Stage/Boss management
+            void SetCurrentStage(int stage);
+            void OnBossSpawned();
+            void OnBossDefeated();
+            void OnGameOver();
+            void OnAllStagesClear();
+            
+            // Settings persistence
+            void SaveUserSettings();
+            void LoadUserSettings();
+            
+            // Difficulty management
+            void LoadDifficulty(const std::string& difficulty);
+
         private:
             ECS::Coordinator gCoordinator;
 
@@ -133,16 +171,79 @@
             std::unique_ptr<SFMLTexture> enemyBulletTexture;  // Texture for enemy bullets
             std::unique_ptr<SFMLTexture> explosionTexture;
 
+            // Map of preloaded textures by key (background, player, missile, enemy_bullets, enemies/..., etc.)
+            std::unordered_map<std::string, SFMLTexture*> textureMap;
+
             std::vector<SFMLSprite*> allSprites;
 
             eng::engine::SoundBuffer shootBuffer;
             eng::engine::Sound shootSound;
+
+            // Menu music
+            eng::engine::SoundBuffer menuMusicBuffer;
+            eng::engine::Sound menuMusic;
+
+            // ========================================
+            // AUDIO SYSTEM - PRIVATE MEMBERS
+            // ========================================
+            
+            // Music management
+            std::map<std::string, std::unique_ptr<eng::engine::SoundBuffer>> musicBuffers;
+            std::unique_ptr<eng::engine::Sound> currentMusicSound;
+            std::string currentMusicName;
+            
+            // Volume settings
+            float currentMusicVolume = 70.0f;
+            float currentSFXVolume = 80.0f;
+            
+            // Fade system
+            bool isFadingMusic = false;
+            float fadeTimer = 0.0f;
+            float fadeDuration = 1.0f;
+            std::string nextMusicName;
+            bool fadeOutComplete = false;
+            
+            // Stage/Boss tracking
+            int currentStage = 1;
+            bool isBossFight = false;
+            
+            // Audio System ECS
+            std::shared_ptr<eng::engine::systems::AudioSystem> audioSystem;
+            
+            // Helper for music fade
+            void UpdateMusicFade(float deltaTime);
 
             // UI System
             std::shared_ptr<UISystem> uiSystem;
 
             // Scripting systems
             std::shared_ptr<Scripting::ScriptSystem> spawnScriptSystem;
+            
+            // Window pointer for resolution changes from Lua
+            SFMLWindow* m_window = nullptr;
+
+            // Asset paths (populated from Lua Assets table)
+            std::string backgroundPath;
+            std::string baseAssetsDir;
+            std::string playerPath;
+            std::string missilePath;
+            std::string enemyBulletsPath;
+            std::string explosionPath;
+            std::string shootSfxPath;
+            std::string menuMusicPath;
+            std::string defaultFontPath;
+            std::string soundsBase;
+            std::string difficultyScriptsBase;
+            std::string settingsJsonPath;
+
+            // Script paths
+            std::string initScriptPath;
+            std::string audioConfigPath;
+            std::string uiInitPath;
+            std::string spawnScriptPath;
+
+            // Load asset/script paths from the Lua state. Returns true on success.
+            bool LoadAssetsFromLua();
     };
 
 #endif // GAME_HPP
