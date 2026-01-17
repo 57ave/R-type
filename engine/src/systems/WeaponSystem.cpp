@@ -46,7 +46,7 @@ void WeaponSystem::Update(float dt)
     }
 }
 
-void WeaponSystem::CreateProjectile(ECS::Entity owner, bool charged, int chargeLevel)
+void WeaponSystem::CreateProjectile(ECS::Entity owner, bool charged, int /*chargeLevel*/)
 {
     if (!coordinator_) return;
     if (!coordinator_->HasComponent<Position>(owner)) return;

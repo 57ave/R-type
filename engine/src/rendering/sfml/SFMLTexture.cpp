@@ -20,6 +20,11 @@ namespace rtype
                     return texture_.loadFromFile(path);
                 }
 
+                void SFMLTexture::loadFromImage(const sf::Image &image)
+                {
+                    texture_.loadFromImage(image);
+                }
+
             }
         }
     }

@@ -18,7 +18,7 @@ void BoundarySystem::Shutdown()
 {
 }
 
-void BoundarySystem::Update(float dt)
+void BoundarySystem::Update(float /*dt*/)
 {
     if (!coordinator_) return;
 

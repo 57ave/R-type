@@ -16,7 +16,7 @@ void CollisionSystem::Init() {
     std::cout << "[CollisionSystem] Initialized" << std::endl;
 }
 
-void CollisionSystem::Update(float dt) {
+void CollisionSystem::Update(float /*dt*/) {
     if (!m_Coordinator) return;
 
     // Convert set to vector for indexing

@@ -21,6 +21,7 @@ namespace rtype
                         // ITexture implementation
                         Vector2u getSize() const override;
                         bool loadFromFile(const std::string &path) override;
+                        void loadFromImage(const sf::Image &image); // Added for fallback support
                         // SFML-specific: get native texture
                         const sf::Texture &getNativeTexture() const { return texture_; }
                     private:

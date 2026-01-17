@@ -45,8 +45,8 @@ void RenderSystem::Update(float /*dt*/)
         t.position.x = pos.x;
         t.position.y = pos.y;
         t.rotation = 0.0f;
-        t.scale.x = 1.0f;
-        t.scale.y = 1.0f;
+        t.scale.x = spr.scaleX;
+        t.scale.y = spr.scaleY;
 
         // Apply texture rect if needed on the sprite instance
         if (spr.textureRect.width != 0 || spr.textureRect.height != 0) {

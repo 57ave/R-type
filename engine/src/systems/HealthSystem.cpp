@@ -16,7 +16,7 @@ void HealthSystem::Shutdown()
 {
 }
 
-void HealthSystem::Update(float dt)
+void HealthSystem::Update(float /*dt*/)
 {
     if (!coordinator_) return;
 

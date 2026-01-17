@@ -1,5 +1,9 @@
 #include <core/SystemLoader.hpp>
-#include <dlfcn.h>
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <dlfcn.h>
+#endif
 #include <iostream>
 #include <stdexcept>
 
@@ -23,14 +27,31 @@ std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath
     }
     
     // Open shared library
+#if defined(_WIN32)
+    void* handle = LoadLibraryA(libPath.c_str());
+    if (!handle) {
+        throw std::runtime_error("[SystemLoader] Failed to load library: " + libPath + 
+                                 "\nError code: " + std::to_string(GetLastError()));
+    }
+#else
     void* handle = dlopen(libPath.c_str(), RTLD_LAZY);
     if (!handle) {
         throw std::runtime_error("[SystemLoader] Failed to load library: " + libPath + 
                                  "\nError: " + dlerror());
     }
+#endif
     
     // Get CreateSystem function
     typedef ECS::System* (*CreateSystemFunc)(ECS::Coordinator*);
+
+#if defined(_WIN32)
+    auto createFunc = reinterpret_cast<CreateSystemFunc>(reinterpret_cast<void*>(GetProcAddress((HMODULE)handle, "CreateSystem")));
+    if (!createFunc) {
+        FreeLibrary((HMODULE)handle);
+        throw std::runtime_error("[SystemLoader] Failed to find CreateSystem (Error " + 
+                                 std::to_string(GetLastError()) + ")");
+    }
+#else
     auto createFunc = (CreateSystemFunc)dlsym(handle, "CreateSystem");
     
     const char* dlsym_error = dlerror();
@@ -39,11 +60,16 @@ std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath
         throw std::runtime_error("[SystemLoader] Failed to find CreateSystem: " + 
                                  std::string(dlsym_error));
     }
+#endif
     
     // Create system instance (raw pointer from factory)
     ECS::System* rawSystem = createFunc(m_Coordinator);
     if (!rawSystem) {
+#if defined(_WIN32)
+        FreeLibrary((HMODULE)handle);
+#else
         dlclose(handle);
+#endif
         throw std::runtime_error("[SystemLoader] CreateSystem returned null");
     }
     
@@ -53,7 +79,11 @@ std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath
     std::shared_ptr<ECS::System> system(rawSystem, [handle](ECS::System* sys) {
         // Get DestroySystem function
         typedef void (*DestroySystemFunc)(ECS::System*);
+#if defined(_WIN32)
+        auto destroyFunc = reinterpret_cast<DestroySystemFunc>(reinterpret_cast<void*>(GetProcAddress((HMODULE)handle, "DestroySystem")));
+#else
         auto destroyFunc = (DestroySystemFunc)dlsym(handle, "DestroySystem");
+#endif
         
         if (destroyFunc) {
             destroyFunc(sys);
@@ -89,7 +119,11 @@ void SystemLoader::UnloadSystem(const std::string& systemName) {
     m_LoadedSystems.erase(it);
     
     // Now that the system is destroyed, we can safely close the library
+#if defined(_WIN32)
+    FreeLibrary((HMODULE)handle);
+#else
     dlclose(handle);
+#endif
     
     std::cout << "[SystemLoader] Unloaded system: " << systemName << std::endl;
 }
