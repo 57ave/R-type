@@ -205,7 +205,7 @@ ECS::Entity Game::CreateEnemy(float x, float y, std::string patternType) {
     // Sprite
     auto* sprite = new SFMLSprite();
     allSprites.push_back(sprite);
-    sprite->setTexture(enemyTexture.get());
+    sprite->setTexture(textureMap["enemy"]);
     IntRect rect(0, 0, 33, 32);
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
@@ -792,13 +792,43 @@ int Game::Run(int argc, char* argv[])
             return;  // Projectiles don't collide with each other
         }
 
-        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
+        // Check if both entities are enemies - ignore enemy vs enemy collisions
+        bool aIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(a);
+        bool bIsEnemy = gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(b);
+        if (aIsEnemy && bIsEnemy) {
+            return;  // Enemies don't collide with each other
+        }
 
-        // Check for damage components
-        bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
-        bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
-        bool aHasHealth = gCoordinator.HasComponent<Health>(a);
-        bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+        // Check if enemy projectile hits another enemy - ignore
+        if (aIsProjectile && bIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(a);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+        if (bIsProjectile && aIsEnemy) {
+            auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(b);
+            if (!projTag.isPlayerProjectile) {
+                return;  // Enemy projectile doesn't hit other enemies
+            }
+        }
+
+        // Check for damage/health components. Only log collisions that are gameplay-relevant:
+        // - a has Damage and b has Health
+        // - b has Damage and a has Health
+        // - OR either entity is the player (we want to always surface player hits)
+    bool aHasDamage = gCoordinator.HasComponent<Damage>(a);
+    bool bHasDamage = gCoordinator.HasComponent<Damage>(b);
+    bool aHasHealth = gCoordinator.HasComponent<Health>(a);
+    bool bHasHealth = gCoordinator.HasComponent<Health>(b);
+
+        bool significant = (aHasDamage && bHasHealth) || (bHasDamage && aHasHealth) || aIsPlayer || bIsPlayer;
+        if (!significant) {
+            // Not relevant for damage flow/logging: skip verbose output
+            return;
+        }
+
+        std::cout << "[Collision] Entity " << a << " <-> Entity " << b << std::endl;
 
         // Apply damage: B damages A
         if (aHasHealth && bHasDamage) {
@@ -945,7 +975,7 @@ int Game::Run(int argc, char* argv[])
                     // Create enemy sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
-                    sprite->setTexture(enemyTexture.get());
+                    sprite->setTexture(textureMap["enemy"]);
                     IntRect rect(0, 0, 33, 36);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
@@ -1169,13 +1199,7 @@ int Game::Run(int argc, char* argv[])
         return 1;
     }
 
-    enemyTexture = std::make_unique<SFMLTexture>();
-    if (!enemyTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet5.png"))) {
-        std::cerr << "Error: Could not load enemy sprite" << std::endl;
-        return 1;
-    }
-    std::cout << "[Game] ✅ Enemy texture loaded: " << enemyTexture->getSize().x << "x" << enemyTexture->getSize().y << std::endl;
-
+    // Note: enemy textures are loaded per-enemy from Lua config later
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
     if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
@@ -1198,7 +1222,7 @@ int Game::Run(int argc, char* argv[])
         shootSound.setVolume(80.f);
     }
 
-    // Load menu music
+    // Load menu music (from feature/game_menu)
     std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
     std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
     
@@ -1224,32 +1248,35 @@ int Game::Run(int argc, char* argv[])
         }
     }
 
-    // ========================================
-    // REGISTER FACTORIES TO LUA
-    // ========================================
-    std::cout << "🏭 Registering Factories to Lua..." << std::endl;
-
-    // Prepare texture map for factories
-    std::unordered_map<std::string, SFMLTexture*> textureMap;
-    textureMap["enemy"] = enemyTexture.get();
-    textureMap["missile"] = missileTexture.get();
-    textureMap["player"] = playerTexture.get();
-    textureMap["background"] = backgroundTexture.get();
-    textureMap["explosion"] = explosionTexture.get();
-
-    RType::Scripting::FactoryBindings::RegisterFactories(
-        luaState.GetState(),
-        &gCoordinator,
-        textureMap,
-        &allSprites
-    );
+    // NOTE: Factory registration moved later after texture preloading (from feature/game_features)
 
     // Load Lua scripts
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
-    // Load configuration
-    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
-        std::cerr << "Warning: Could not load game_config.lua" << std::endl;
+    // Load main initialization script (which loads all configs)
+    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/init.lua"))) {
+        std::cerr << "Warning: Could not load init.lua, trying fallback..." << std::endl;
+        // Fallback to old config if init.lua doesn't exist
+        if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
+            std::cerr << "Warning: Could not load game_config.lua either" << std::endl;
+        }
+    } else {
+        std::cout << "[Game] ✓ init.lua loaded - All configurations initialized" << std::endl;
+        
+        // Initialize mode based on network setting
+        sol::state& lua = luaState.GetState();
+        if (networkMode) {
+            sol::protected_function initNetwork = lua["InitNetworkMode"];
+            if (initNetwork.valid()) {
+                initNetwork();
+            }
+        } else {
+            sol::protected_function initSolo = lua["InitSoloMode"];
+            if (initSolo.valid()) {
+                initSolo();
+                std::cout << "[Game] Solo mode initialized - Enemy showcase may be active" << std::endl;
+            }
+        }
     }
 
     // Set up game state callbacks for the engine (keeps engine abstract)
@@ -1321,6 +1348,7 @@ int Game::Run(int argc, char* argv[])
     std::cout << "[Game] Asset base path set for Lua: " << (g_basePath.empty() ? "(current dir)" : g_basePath) << std::endl;
 
     // ========================================
+<<<<<<< HEAD
     // LOAD AUDIO CONFIGURATION
     // ========================================
     std::cout << "🎵 Loading Audio Configuration..." << std::endl;
@@ -1444,6 +1472,85 @@ int Game::Run(int argc, char* argv[])
     };
     
     std::cout << "[Game] Audio control bindings registered to Lua" << std::endl;
+
+    // ========================================
+    // PRELOAD TEXTURES (including per-enemy textures from Lua config) - from feature/game_features
+    // ========================================
+    // Use Game::textureMap member so other Game methods (CreateEnemy, CreateEnemyMissile, etc.)
+    // can access preloaded textures.
+    // Keep ownership of dynamically loaded textures so they live for game lifetime
+    std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
+
+    // Core textures we already loaded earlier
+    textureMap["background"] = backgroundTexture.get();
+    textureMap["player"] = playerTexture.get();
+    textureMap["missile"] = missileTexture.get();
+    textureMap["explosion"] = explosionTexture.get();
+    textureMap["enemy_bullets"] = enemyBulletTexture.get();
+
+    // Load enemy-specific textures referenced in EnemiesConfig (if available)
+    try {
+        sol::state& lua = luaState.GetState();
+        sol::table enemiesConfig = lua["EnemiesConfig"];
+        if (enemiesConfig.valid()) {
+            for (auto& kv : enemiesConfig) {
+                // kv.first = key, kv.second = value
+                sol::object key = kv.first;
+                sol::object val = kv.second;
+                if (val.is<sol::table>()) {
+                    sol::table cfg = val.as<sol::table>();
+                    sol::table spriteTbl = cfg["sprite"];
+                    if (spriteTbl.valid()) {
+                        std::string texPath = spriteTbl["texture"].get_or(std::string());
+                        if (!texPath.empty() && textureMap.find(texPath) == textureMap.end()) {
+                            auto tex = std::make_unique<SFMLTexture>();
+                            bool loaded = false;
+                            // Try resolved candidate paths
+                            std::string candidate1 = ResolveAssetPath(std::string("game/assets/") + texPath);
+                            if (!candidate1.empty() && tex->loadFromFile(candidate1)) {
+                                loaded = true;
+                                std::cout << "[Game] Loaded enemy texture: " << candidate1 << std::endl;
+                            } else {
+                                std::string candidate2 = ResolveAssetPath(texPath);
+                                if (!candidate2.empty() && tex->loadFromFile(candidate2)) {
+                                    loaded = true;
+                                    std::cout << "[Game] Loaded enemy texture: " << candidate2 << std::endl;
+                                }
+                            }
+                            if (loaded) {
+                                textureMap[texPath] = tex.get();
+                                dynamicTextures.push_back(std::move(tex));
+                            } else {
+                                std::cerr << "[Game] Warning: could not load enemy texture '" << texPath << "'" << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[Game] Exception while preloading enemy textures: " << e.what() << std::endl;
+    }
+
+    // If no generic "enemy" key exists, use the first loaded enemies/* texture as a fallback
+    if (textureMap.find("enemy") == textureMap.end()) {
+        for (auto& kv : textureMap) {
+            if (kv.first.find("enemies/") == 0) {
+                textureMap["enemy"] = kv.second;
+                break;
+            }
+        }
+    }
+
+    // Register factories after textures are prepared so factories can use per-type textures
+    // Register factories and give them access to our textureMap
+    RType::Scripting::FactoryBindings::RegisterFactories(
+        luaState.GetState(),
+        &gCoordinator,
+        textureMap,
+        &allSprites,
+        [this](ECS::Entity e) { this->RegisterEntity(e); }
+    );
 
     // Load UI scripts
     std::cout << "🎨 Loading UI scripts..." << std::endl;
@@ -1605,6 +1712,21 @@ int Game::Run(int argc, char* argv[])
         }
 
         // ========================================
+        // UPDATE GAME LOGIC (Lua callbacks, showcase, etc.)
+        // ========================================
+        if (!inMenu) {
+            sol::state& lua = luaState.GetState();
+            sol::protected_function updateGame = lua["UpdateGame"];
+            if (updateGame.valid()) {
+                sol::protected_function_result result = updateGame(deltaTime);
+                if (!result.valid()) {
+                    sol::error err = result;
+                    // Silently fail - don't spam console with errors
+                }
+            }
+        }
+
+        // ========================================
         // 1. NETWORK UPDATE (Receives server state)
         // ========================================
         if (networkMode && networkSystem) {
@@ -1678,7 +1800,7 @@ int Game::Run(int argc, char* argv[])
 
                     } else if (tag.name == "Enemy") {
                         // Enemy sprite - r-typesheet5.png is a single horizontal line (533x36)
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
 
                         // Test: Use frame 10 (330 pixels) which should show enemy pointing left
                         IntRect rect(0, 0, 33, 32);  // Frame 0 - match CreateEnemy exactly
@@ -1818,7 +1940,7 @@ int Game::Run(int argc, char* argv[])
                     } else {
                         // Unknown entity type - log warning and use default enemy appearance
                         std::cerr << "[Game] WARNING: Unknown entity tag '" << tag.name << "' for entity " << entity << std::endl;
-                        sprite->setTexture(enemyTexture.get());
+                        sprite->setTexture(textureMap["enemy"]);
                         IntRect rect(0, 0, 32, 32);
                         sprite->setTextureRect(rect);
                         spriteComp.textureRect = rect;
@@ -2096,6 +2218,8 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         if (!inMenu && !networkMode) {
             enemySpawnTimer += deltaTime;
+            // Local Lua state reference for config/factory access
+            sol::state& lua = luaState.GetState();
             
             if (enemySpawnTimer >= enemySpawnInterval) {
                 enemySpawnTimer = 0.0f;
@@ -2103,15 +2227,27 @@ int Game::Run(int argc, char* argv[])
                 // Random Y position
                 float randomY = 100.0f + static_cast<float>(rand() % 800);
                 
-                // Random pattern type
-                std::vector<std::string> patterns = {"straight", "zigzag", "sinewave"};
-                std::string pattern = patterns[rand() % patterns.size()];
+                // Random enemy type - use proper Lua configs
+                std::vector<std::string> enemyTypes = {"basic", "zigzag", "sinewave", "kamikaze"};
+                std::string enemyType = enemyTypes[rand() % enemyTypes.size()];
                 
-                // Create enemy using the Game::CreateEnemy method (which has proper sprites & animations)
-                ECS::Entity enemy = CreateEnemy(1920.0f, randomY, pattern);
-                
-                if (enemy != 0) {
-                    std::cout << "[Game] Spawned " << pattern << " enemy at Y=" << randomY << std::endl;
+                // Create enemy using Lua factory
+                sol::table enemiesConfig = lua["EnemiesConfig"];
+                if (enemiesConfig.valid()) {
+                    sol::table enemyConfig = enemiesConfig[enemyType];
+                    if (enemyConfig.valid()) {
+                        sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
+                        if (createEnemy.valid()) {
+                            auto result = createEnemy(1920.0f, randomY, enemyConfig);
+                            if (result.valid()) {
+                                ECS::Entity enemy = result;
+                                if (enemy != 0) {
+                                    std::string enemyName = enemyConfig.get_or("name", enemyType);
+                                    std::cout << "[Game] Spawned " << enemyName << " at Y=" << randomY << std::endl;
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 // Vary spawn interval for unpredictability
@@ -2121,37 +2257,118 @@ int Game::Run(int argc, char* argv[])
             // ========================================
             // 4b. ENEMY SHOOTING
             // ========================================
-            enemyShootTimer += deltaTime;
+            // Each enemy manages its own fire timer independently
+            int shotsCreated = 0;
             
-            if (enemyShootTimer >= enemyShootInterval) {
-                enemyShootTimer = 0.0f;
+            for (auto entity : allEntities) {
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) ||
+                    !gCoordinator.HasComponent<Position>(entity)) {
+                    continue;
+                }
+
+                // Only consider enemies that actually have a Weapon component
+                if (!gCoordinator.HasComponent<ShootEmUp::Components::Weapon>(entity)) {
+                    continue;
+                }
+
+                auto& weapon = gCoordinator.GetComponent<ShootEmUp::Components::Weapon>(entity);
+                auto& pos = gCoordinator.GetComponent<Position>(entity);
                 
-                int enemyCount = 0;
-                int shotsCreated = 0;
-                
-                // Make each enemy shoot
-                for (auto entity : allEntities) {
-                    if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(entity) &&
-                        gCoordinator.HasComponent<Position>(entity)) {
-                        
-                        enemyCount++;
-                        auto& pos = gCoordinator.GetComponent<Position>(entity);
-                        
-                        // Only shoot if enemy is on screen (X < 1920 and X > 0)
-                        if (pos.x > 50.0f && pos.x < 1800.0f) {
-                            // 50% chance for each enemy to shoot
-                            if (rand() % 2 == 0) {
-                                CreateEnemyMissile(pos.x - 30.0f, pos.y + 20.0f);
-                                shotsCreated++;
+                // Update fire timer every frame
+                weapon.lastFireTime += deltaTime;
+
+                // Only shoot if enemy is on screen and fire timer is ready
+                if (pos.x > 50.0f && pos.x < 1800.0f && weapon.lastFireTime >= weapon.fireRate) {
+                    weapon.lastFireTime = 0.0f;
+                    
+                    // Get weapon config from Lua
+                    sol::table weaponsConfig = lua["WeaponsConfig"];
+                    if (weaponsConfig.valid()) {
+                        sol::table weaponTable = weaponsConfig[weapon.weaponType];
+                        if (weaponTable.valid()) {
+                            // Check if weapon is aimed at player
+                            bool isAimed = weaponTable.get_or("aimed", false);
+                            int projCount = weapon.projectileCount;
+                            float spreadAngle = weapon.spreadAngle;
+                            
+                            if (isAimed) {
+                                // Aimed shot - calculate direction towards player
+                                float targetX = 100.0f;
+                                float targetY = static_cast<float>(window.getSize().y) / 2.0f;
+                                
+                                // Find player position
+                                if (player != 0 && gCoordinator.HasComponent<Position>(player)) {
+                                    auto& playerPos = gCoordinator.GetComponent<Position>(player);
+                                    targetX = playerPos.x;
+                                    targetY = playerPos.y;
+                                }
+                                
+                                // Calculate angle to player
+                                float dx = targetX - pos.x;
+                                float dy = targetY - pos.y;
+                                float angleRad = std::atan2(dy, dx);
+                                
+                                // Call Lua factory to create aimed projectile
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        ECS::Entity proj = result;
+                                        if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                            auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                            float speed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                            vel.dx = std::cos(angleRad) * speed;
+                                            vel.dy = std::sin(angleRad) * speed;
+                                        }
+                                        shotsCreated++;
+                                    }
+                                }
+                            } else if (projCount > 1 || spreadAngle > 0.0f) {
+                                // Spread shot
+                                float startAngle = -spreadAngle / 2.0f;
+                                float angleStep = (projCount > 1) ? (spreadAngle / (projCount - 1)) : 0.0f;
+                                
+                                for (int i = 0; i < projCount; i++) {
+                                    float angle = startAngle + (angleStep * i);
+                                    float angleRad = angle * 3.14159f / 180.0f;
+                                    
+                                    // Call Lua factory
+                                    sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                    if (createProj.valid()) {
+                                        auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                        if (result.valid()) {
+                                            ECS::Entity proj = result;
+                                            if (proj != 0 && gCoordinator.HasComponent<Velocity>(proj)) {
+                                                auto& vel = gCoordinator.GetComponent<Velocity>(proj);
+                                                float baseSpeed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                                                vel.dx = std::cos(angleRad) * baseSpeed;
+                                                vel.dy = std::sin(angleRad) * baseSpeed;
+                                            }
+                                            shotsCreated++;
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Normal straight shot
+                                sol::protected_function createProj = lua["Factory"]["CreateProjectileFromWeapon"];
+                                if (createProj.valid()) {
+                                    auto result = createProj(weapon.weaponType, pos.x - 30.0f, pos.y, false, static_cast<int>(entity), 1);
+                                    if (result.valid()) {
+                                        shotsCreated++;
+                                    }
+                                }
                             }
+                        } else {
+                            // Fallback to simple bullet if weapon config not found
+                            CreateEnemyMissile(pos.x - 30.0f, pos.y);
+                            shotsCreated++;
                         }
+                    } else {
+                        // Fallback if WeaponsConfig not loaded
+                        CreateEnemyMissile(pos.x - 30.0f, pos.y);
+                        shotsCreated++;
                     }
                 }
-                
-                std::cout << "[Enemy Shoot] Enemies: " << enemyCount << ", Shots: " << shotsCreated << std::endl;
-                
-                // Vary shoot interval
-                enemyShootInterval = 1.0f + static_cast<float>(rand() % 15) / 10.0f; // 1.0 to 2.5 seconds
             }
         }
 
@@ -2205,6 +2422,7 @@ int Game::Run(int argc, char* argv[])
                 lifetimeSystem->Update(deltaTime);
             } else {
                 // Local mode: Full simulation
+                movementPatternSystem->SetPlayerEntity(player);  // Update player reference for chase patterns
                 movementPatternSystem->Update(deltaTime);
                 movementSystem->Update(deltaTime);
                 boundarySystem->Update(deltaTime);

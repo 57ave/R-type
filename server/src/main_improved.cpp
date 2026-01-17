@@ -8,6 +8,17 @@
 #include "network/RTypeProtocol.hpp"
 #include "engine/Clock.hpp"
 
+// Hash function for asio::ip::udp::endpoint to use in unordered_map
+namespace std {
+    template<>
+    struct hash<asio::ip::udp::endpoint> {
+        size_t operator()(const asio::ip::udp::endpoint& ep) const {
+            std::hash<std::string> hasher;
+            return hasher(ep.address().to_string() + ":" + std::to_string(ep.port()));
+        }
+    };
+}
+
 // Simple game entity for server
 struct ServerEntity {
     uint32_t id;
@@ -18,6 +29,7 @@ struct ServerEntity {
     uint8_t playerId; // For player entities
     uint8_t playerLine; // For player ship color (spritesheet line)
     float fireTimer = 0.0f; // For rate limiting
+    float lifetime = -1.0f; // For temporary entities like explosions (-1 = permanent)
     
     // Extended fields for variety
     uint8_t chargeLevel = 0;    // For missiles (0 = normal, 1-5 = charge levels)
@@ -125,6 +137,7 @@ private:
         
         entities_[player.id] = player;
         playerEntities_[playerId] = player.id;
+        endpointToPlayerId_[sender] = playerId; // Map endpoint to playerId for disconnect handling
         
         std::cout << "[GameServer] Client connected. Player ID: " << (int)playerId 
                   << " Entity ID: " << player.id << std::endl;
@@ -180,12 +193,52 @@ private:
 
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
         std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
+        
+        // Find player ID from endpoint
+        auto epIt = endpointToPlayerId_.find(sender);
+        if (epIt == endpointToPlayerId_.end()) {
+            return; // Unknown endpoint
+        }
+        
+        uint8_t playerId = epIt->second;
+        
+        // Find player entity
+        auto playerIt = playerEntities_.find(playerId);
+        if (playerIt != playerEntities_.end()) {
+            uint32_t entityId = playerIt->second;
+            
+            // Remove entity
+            entities_.erase(entityId);
+            
+            // Broadcast entity destroy
+            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_DESTROY));
+            packet.header.timestamp = getCurrentTimestamp();
+            uint32_t networkId = entityId;
+            packet.payload.resize(sizeof(uint32_t));
+            std::memcpy(packet.payload.data(), &networkId, sizeof(uint32_t));
+            server_.broadcast(packet);
+            
+            std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
+            
+            playerEntities_.erase(playerIt);
+        }
+        
+        endpointToPlayerId_.erase(epIt);
     }
 
     void updateEntities(float deltaTime) {
         std::vector<uint32_t> toRemove;
         
         for (auto& [id, entity] : entities_) {
+            // Update lifetime for temporary entities
+            if (entity.lifetime > 0.0f) {
+                entity.lifetime -= deltaTime;
+                if (entity.lifetime <= 0.0f) {
+                    toRemove.push_back(id);
+                    continue; // Skip rest of update for this entity
+                }
+            }
+            
             // Update position
             entity.x += entity.vx * deltaTime;
             entity.y += entity.vy * deltaTime;
@@ -390,17 +443,27 @@ private:
         explosion.hp = 1;
         explosion.playerId = 0;
         explosion.playerLine = 0;
+        explosion.lifetime = 0.5f; // Explosions disappear after 0.5 seconds
         
         entities_[explosion.id] = explosion;
         broadcastEntitySpawn(explosion);
         
-        std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ")" << std::endl;
+        std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ") with lifetime " << explosion.lifetime << "s" << std::endl;
     }
 
     void sendWorldSnapshot() {
-        // Build snapshot
+        // Build snapshot (exclude temporary entities like explosions)
+        std::vector<const ServerEntity*> snapshotEntities;
+        for (const auto& [id, entity] : entities_) {
+            // Skip explosions and other temporary effects in snapshots
+            if (entity.type == EntityType::ENTITY_EXPLOSION) {
+                continue;
+            }
+            snapshotEntities.push_back(&entity);
+        }
+        
         SnapshotHeader header;
-        header.entityCount = entities_.size();
+        header.entityCount = snapshotEntities.size();
         
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
         packet.header.timestamp = getCurrentTimestamp();
@@ -409,17 +472,17 @@ private:
         auto headerData = header.serialize();
         packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
         
-        // Add entities
-        for (const auto& [id, entity] : entities_) {
+        // Add entities (excluding explosions)
+        for (const auto* entity : snapshotEntities) {
             EntityState state;
-            state.id = entity.id;
-            state.type = entity.type;
-            state.x = entity.x;
-            state.y = entity.y;
-            state.vx = entity.vx;
-            state.vy = entity.vy;
-            state.hp = entity.hp;
-            state.playerLine = entity.playerLine;
+            state.id = entity->id;
+            state.type = entity->type;
+            state.x = entity->x;
+            state.y = entity->y;
+            state.vx = entity->vx;
+            state.vy = entity->vy;
+            state.hp = entity->hp;
+            state.playerLine = entity->playerLine;
             
             auto stateData = state.serialize();
             packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
@@ -469,6 +532,7 @@ private:
     NetworkServer server_;
     std::unordered_map<uint32_t, ServerEntity> entities_;
     std::unordered_map<uint8_t, uint32_t> playerEntities_; // playerId -> entityId
+    std::unordered_map<asio::ip::udp::endpoint, uint8_t> endpointToPlayerId_; // endpoint -> playerId
     uint32_t nextEntityId_;
     uint8_t nextPlayerId_ = 1;
     bool gameRunning_;

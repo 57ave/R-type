@@ -8,6 +8,7 @@
 #include <components/UIPanel.hpp>
 #include <components/UICheckbox.hpp>
 #include <components/UIDropdown.hpp>
+#include <iostream>
 
 // ============================================
 // ENTITY CREATION METHODS
@@ -37,6 +38,11 @@ ECS::Entity UISystem::CreateButton(float x, float y, float width, float height,
 
     mEntities.insert(entity);
     m_navigationDirty = true;
+
+    std::cout << "[UISystem] Created Button entity " << entity
+              << " text='" << text << "' callback='" << callback
+              << "' menu='" << menuGroup << "' at (" << element.x << "," << element.y
+              << ") size(" << width << "," << height << ")" << std::endl;
 
     return entity;
 }

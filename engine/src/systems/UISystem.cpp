@@ -393,6 +393,7 @@ void UISystem::HandleMouseInput()
     bool clicked = m_mousePressed && !m_mousePreviouslyPressed;
     if (clicked)
     {
+        std::cout << "[UISystem] Mouse click at (" << m_mouseX << "," << m_mouseY << ") entityUnderMouse=" << entityUnderMouse << std::endl;
         // 1. Dropdown: priorité à la sélection d'option si un dropdown est ouvert
         if (m_openDropdown != 0)
         {
@@ -429,6 +430,15 @@ void UISystem::HandleMouseInput()
             if (m_coordinator->HasComponent<Components::UIButton>(entityUnderMouse))
             {
                 auto &button = m_coordinator->GetComponent<Components::UIButton>(entityUnderMouse);
+                // Log element/menu/callback info for debugging
+                if (m_coordinator->HasComponent<Components::UIElement>(entityUnderMouse)) {
+                    const auto &elem = m_coordinator->GetComponent<Components::UIElement>(entityUnderMouse);
+                    std::cout << "[UISystem] Click on entity " << entityUnderMouse
+                              << " menu='" << elem.menuGroup << "' visible=" << elem.visible
+                              << " interactable=" << elem.interactable << std::endl;
+                }
+                std::cout << "[UISystem] UIButton callback='" << button.onClickCallback << "' enabled=" << button.enabled << std::endl;
+
                 if (button.enabled)
                 {
                     button.state = Components::UIButton::State::Pressed;
@@ -627,10 +637,12 @@ std::vector<ECS::Entity> UISystem::GetNavigableEntities() const
 void UISystem::CallLuaCallback(const std::string& callbackName)
 {
     if (!m_lua || callbackName.empty()) return;
-
+    std::cout << "[UISystem] Attempting to call Lua callback '" << callbackName << "'" << std::endl;
+    
     try {
         sol::protected_function func = (*m_lua)[callbackName];
         if (func.valid()) {
+            std::cout << "[UISystem] Lua function '" << callbackName << "' found, invoking..." << std::endl;
             auto result = func();
             if (!result.valid()) {
                 sol::error err = result;

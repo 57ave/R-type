@@ -6,6 +6,7 @@
     #include <vector>
     #include <algorithm>
     #include <string>
+    #include <unordered_map>
     #include <set>
     #include <functional>
     #include <map>
@@ -169,6 +170,9 @@
             std::unique_ptr<SFMLTexture> enemyTexture;
             std::unique_ptr<SFMLTexture> enemyBulletTexture;  // Texture for enemy bullets
             std::unique_ptr<SFMLTexture> explosionTexture;
+
+            // Map of preloaded textures by key (background, player, missile, enemy_bullets, enemies/..., etc.)
+            std::unordered_map<std::string, SFMLTexture*> textureMap;
 
             std::vector<SFMLSprite*> allSprites;
 
