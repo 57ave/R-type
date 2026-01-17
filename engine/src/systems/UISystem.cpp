@@ -91,11 +91,11 @@ void UISystem::HandleEvent(const eng::engine::InputEvent& event)
             // Find entity at click position
             m_hoveredEntity = GetEntityAtPosition(static_cast<float>(m_mouseX), static_cast<float>(m_mouseY));
             
-            // Handle click immediately
+            // Selection is updated, but click handling is done in HandleMouseInput()
+            // to avoid double-triggering callbacks
             if (m_hoveredEntity != 0) {
                 m_selectedEntity = m_hoveredEntity;
                 std::cout << "[UISystem] Click on entity " << m_hoveredEntity << std::endl;
-                ActivateSelected();
             }
         }
     }
@@ -507,54 +507,68 @@ void UISystem::HandleMouseInput()
                 }
             }
         }
+    }
 
-        // Handle slider dragging
-        if (m_mousePressed && entityUnderMouse != 0)
+    // Handle slider dragging (fonctionne même sans dropdown ouvert)
+    if (m_mousePressed)
+    {
+        for (auto entity : mEntities)
         {
-            if (m_coordinator->HasComponent<Components::UISlider>(entityUnderMouse))
+            if (m_coordinator->HasComponent<Components::UISlider>(entity))
             {
-                auto &slider = m_coordinator->GetComponent<Components::UISlider>(entityUnderMouse);
-                auto &element = m_coordinator->GetComponent<Components::UIElement>(entityUnderMouse);
+                auto &slider = m_coordinator->GetComponent<Components::UISlider>(entity);
+                auto &element = m_coordinator->GetComponent<Components::UIElement>(entity);
+                
+                // Check visibility
+                if (!element.visible) continue;
+                if (!element.menuGroup.empty() && !IsMenuVisible(element.menuGroup)) continue;
 
-                slider.isDragging = true;
-
-                // Calculate new value based on mouse position
-                float relativeX = static_cast<float>(m_mouseX) - element.x;
-                float normalized = relativeX / element.width;
-                normalized = std::max(0.0f, std::min(1.0f, normalized));
-                slider.setFromNormalized(normalized);
-
-                if (!slider.onChangeCallback.empty())
+                // Start dragging on click, or continue if already dragging
+                bool isUnderMouse = IsPointInRect(static_cast<float>(m_mouseX), static_cast<float>(m_mouseY),
+                                                   element.x, element.y, element.width, element.height);
+                
+                if ((clicked && isUnderMouse) || slider.isDragging)
                 {
-                    CallLuaValueCallback(slider.onChangeCallback, slider.currentValue);
-                    CallCppValueCallback(slider.onChangeCallback, slider.currentValue);
+                    slider.isDragging = true;
+
+                    // Calculate new value based on mouse position
+                    float relativeX = static_cast<float>(m_mouseX) - element.x;
+                    float normalized = relativeX / element.width;
+                    normalized = std::max(0.0f, std::min(1.0f, normalized));
+                    slider.setFromNormalized(normalized);
+
+                    if (!slider.onChangeCallback.empty())
+                    {
+                        CallLuaValueCallback(slider.onChangeCallback, slider.currentValue);
+                        CallCppValueCallback(slider.onChangeCallback, slider.currentValue);
+                    }
                 }
             }
         }
+    }
 
-        // Handle button release
-        if (!m_mousePressed && m_mousePreviouslyPressed)
+    // Handle button release and slider release (fonctionne même sans dropdown ouvert)
+    if (!m_mousePressed && m_mousePreviouslyPressed)
+    {
+        for (auto entity : mEntities)
         {
-            for (auto entity : mEntities)
+            if (m_coordinator->HasComponent<Components::UIButton>(entity))
             {
-                if (m_coordinator->HasComponent<Components::UIButton>(entity))
+                auto &button = m_coordinator->GetComponent<Components::UIButton>(entity);
+                if (button.state == Components::UIButton::State::Pressed)
                 {
-                    auto &button = m_coordinator->GetComponent<Components::UIButton>(entity);
-                    if (button.state == Components::UIButton::State::Pressed)
-                    {
-                        button.state = (entity == m_hoveredEntity) ? Components::UIButton::State::Hovered : Components::UIButton::State::Normal;
-                    }
+                    button.state = (entity == m_hoveredEntity) ? Components::UIButton::State::Hovered : Components::UIButton::State::Normal;
                 }
-                if (m_coordinator->HasComponent<Components::UISlider>(entity))
+            }
+            if (m_coordinator->HasComponent<Components::UISlider>(entity))
+            {
+                auto &slider = m_coordinator->GetComponent<Components::UISlider>(entity);
+                if (slider.isDragging)
                 {
-                    auto &slider = m_coordinator->GetComponent<Components::UISlider>(entity);
-                    if (slider.isDragging)
+                    slider.isDragging = false;
+                    if (!slider.onReleaseCallback.empty())
                     {
-                        slider.isDragging = false;
-                        if (!slider.onReleaseCallback.empty())
-                        {
-                            CallLuaValueCallback(slider.onReleaseCallback, slider.currentValue);
-                        }
+                        CallLuaValueCallback(slider.onReleaseCallback, slider.currentValue);
                     }
                 }
             }
