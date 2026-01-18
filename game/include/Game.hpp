@@ -238,6 +238,29 @@
             std::unordered_map<ECS::Entity, ScoreUI> otherPlayersScoreUIs;
             sf::Font gameFont;
             bool gameFontLoaded = false;
+
+            // Asset paths (populated from Lua Assets table)
+            std::string backgroundPath;
+            std::string baseAssetsDir;
+            std::string playerPath;
+            std::string missilePath;
+            std::string enemyBulletsPath;
+            std::string explosionPath;
+            std::string shootSfxPath;
+            std::string menuMusicPath;
+            std::string defaultFontPath;
+            std::string soundsBase;
+            std::string difficultyScriptsBase;
+            std::string settingsJsonPath;
+
+            // Script paths
+            std::string initScriptPath;
+            std::string audioConfigPath;
+            std::string uiInitPath;
+            std::string spawnScriptPath;
+
+            // Load asset/script paths from the Lua state. Returns true on success.
+            bool LoadAssetsFromLua();
     };
 
 #endif // GAME_HPP

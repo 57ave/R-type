@@ -92,3 +92,4 @@ CPack*
 build
 .vscode/
 engine/build
+engine/external
