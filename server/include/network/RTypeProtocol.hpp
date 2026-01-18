@@ -240,6 +240,8 @@ enum class GamePacketType : uint16_t {
     ROOM_LIST_REPLY = 0x31,
     ROOM_CREATED = 0x32,
     ROOM_PLAYERS_UPDATE = 0x33,  // Nouveau: mise à jour de la liste des joueurs
+    CLIENT_TOGGLE_PAUSE = 0x34,  // Client requests server to toggle pause for the room (host-only)
+    SERVER_SET_PAUSE = 0x35,     // Server informs clients that the room is paused or resumed
     CHAT_MESSAGE = 0x40          // Nouveau: messages de chat
 };
 
@@ -303,6 +305,7 @@ struct EntityState {
     int16_t vy;
     uint8_t hp;
     uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
+    uint8_t playerId; // Player ID for player-associated entities (0 = none)
     
     // Extended fields for variety
     uint8_t chargeLevel;    // For missiles (0 = normal, 1-5 = charge levels)
@@ -310,7 +313,7 @@ struct EntityState {
     uint8_t projectileType; // For projectiles (0 = normal, 1 = charged, etc.)
 
     EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0), y(0), vx(0), vy(0), hp(0), playerLine(0), 
-                    chargeLevel(0), enemyType(0), projectileType(0) {}
+                    playerId(0), chargeLevel(0), enemyType(0), projectileType(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;

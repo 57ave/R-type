@@ -6,6 +6,7 @@
 #include "network/NetworkClient.hpp"
 #include "network/RTypeProtocol.hpp"
 #include "network/NetworkBindings.hpp"
+#include "GameStateManager.hpp"
 #include <components/NetworkId.hpp>
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
@@ -99,6 +100,15 @@ public:
         }
     }
 
+    // Request server to toggle pause for the room (server will validate host)
+    void sendTogglePause() {
+        if (!networkClient_ || !networkClient_->isConnected()) return;
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_TOGGLE_PAUSE));
+        packet.header.timestamp = 0;
+        networkClient_->sendPacket(packet);
+        std::cout << "[NetworkSystem] Sent CLIENT_TOGGLE_PAUSE request to server" << std::endl;
+    }
+
 private:
     void handlePacket(const NetworkPacket& packet) {
         auto type = static_cast<GamePacketType>(packet.header.type);
@@ -134,9 +144,25 @@ private:
             case GamePacketType::GAME_START:
                 handleGameStart(packet);
                 break;
+            case GamePacketType::SERVER_SET_PAUSE:
+                handleServerSetPause(packet);
+                break;
             default:
                 std::cout << "[NetworkSystem] Unknown packet type: " << packet.header.type << std::endl;
                 break;
+        }
+    }
+
+
+    void handleServerSetPause(const NetworkPacket& packet) {
+        if (packet.payload.size() < 1) return;
+        uint8_t paused = static_cast<uint8_t>(packet.payload[0]);
+        if (paused) {
+            std::cout << "[NetworkSystem] Server requested PAUSE" << std::endl;
+            GameStateManager::Instance().SetState(GameState::Paused);
+        } else {
+            std::cout << "[NetworkSystem] Server requested RESUME" << std::endl;
+            GameStateManager::Instance().SetState(GameState::Playing);
         }
     }
 
@@ -331,10 +357,10 @@ private:
     void createEntityFromState(const EntityState& state) {
         ECS::Entity entity = coordinator_->CreateEntity();
         
-        // Add NetworkId component
+        // Add NetworkId component. Use state.playerId to determine ownership
         bool isLocal = (state.type == EntityType::ENTITY_PLAYER && 
-                       state.id == localPlayerId_);
-        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_, state.playerLine));
+                   state.playerId == localPlayerId_);
+        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, state.playerId, state.playerLine));
         
         // Add Position
         coordinator_->AddComponent(entity, Position{static_cast<float>(state.x), static_cast<float>(state.y)});

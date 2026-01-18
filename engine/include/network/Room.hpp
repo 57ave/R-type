@@ -7,7 +7,8 @@
 
 enum class RoomState {
     WAITING,
-    PLAYING
+    PLAYING,
+    PAUSED
 };
 
 class Room {

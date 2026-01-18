@@ -119,8 +119,14 @@ private:
                 case GamePacketType::CLIENT_HELLO:
                     handleClientHello(packet, sender);
                     break;
+                case GamePacketType::CLIENT_TOGGLE_PAUSE:
+                    handleClientTogglePause(packet, sender);
+                    break;
                 case GamePacketType::CLIENT_INPUT:
                     handleClientInput(packet, sender);
+                    break;
+                case GamePacketType::CLIENT_PING:
+                    handleClientPing(packet, sender);
                     break;
                 case GamePacketType::CLIENT_DISCONNECT:
                     handleClientDisconnect(sender);
@@ -210,17 +216,33 @@ private:
         }
     }
 
+    // ✅ NOUVEAU: Handler pour CLIENT_PING
+    void handleClientPing(const NetworkPacket&, const asio::ip::udp::endpoint& sender) {
+        auto session = server_.getSession(sender);
+        if (session) {
+            // Update last packet time to prevent timeout
+            session->updateLastPacketTime();
+            
+            // Send PING_REPLY
+            NetworkPacket reply(static_cast<uint16_t>(GamePacketType::SERVER_PING_REPLY));
+            reply.header.timestamp = getCurrentTimestamp();
+            server_.sendTo(reply, sender);
+        }
+    }
+
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
         std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
         
         // Try to get session first (from room-system-improvements)
         auto session = server_.getSession(sender);
         uint8_t playerId = 0;
+        uint32_t roomId = 0;
         
         if (session) {
             // Use session-based approach (preferred method from room-system-improvements)
             playerId = session->playerId;
-            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from session" << std::endl;
+            roomId = session->roomId;
+            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from session (room: " << roomId << ")" << std::endl;
         } else {
             // Fallback to endpoint mapping (from game_menu)
             auto epIt = endpointToPlayerId_.find(sender);
@@ -232,10 +254,18 @@ private:
             std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from endpoint mapping" << std::endl;
         }
         
-        // Remove player entity
+        // ✅ NOUVEAU: Remove player entity with explosion
         auto playerIt = playerEntities_.find(playerId);
         if (playerIt != playerEntities_.end()) {
             uint32_t entityId = playerIt->second;
+            
+            // Create explosion at player position before destroying
+            auto entityIt = entities_.find(entityId);
+            if (entityIt != entities_.end()) {
+                spawnExplosion(entityIt->second.x, entityIt->second.y);
+                std::cout << "[GameServer] Created explosion at player " << (int)playerId << " position (" 
+                          << entityIt->second.x << ", " << entityIt->second.y << ")" << std::endl;
+            }
             
             // Remove from entities map
             if (entities_.erase(entityId)) {
@@ -245,6 +275,26 @@ private:
             }
             
             playerEntities_.erase(playerIt);
+        }
+        
+        // ✅ NOUVEAU: Clean up room membership and transfer ownership if needed
+        if (roomId != 0) {
+            auto& roomManager = server_.getRoomManager();
+            auto room = roomManager.getRoom(roomId);
+            if (room) {
+                room->removePlayer(playerId);
+                std::cout << "[GameServer] Removed player " << (int)playerId << " from room " << roomId << std::endl;
+                
+                // ✅ If this was the host, transfer ownership to another player
+                if (room->hostPlayerId == playerId && !room->playerIds.empty()) {
+                    room->hostPlayerId = *room->playerIds.begin();
+                    std::cout << "[GameServer] ⚡ Transferred host ownership of room " << roomId 
+                              << " to player " << (int)room->hostPlayerId << std::endl;
+                }
+                
+                // Broadcast updated player list
+                broadcastRoomPlayers(roomId);
+            }
         }
         
         // Clean up endpoint mapping (from game_menu)
@@ -258,13 +308,19 @@ private:
         std::vector<uint32_t> toRemove;
         
         for (auto& [id, entity] : entities_) {
-            // Update lifetime for temporary entities
+            // ✅ Update lifetime for temporary entities (explosions, etc.)
             if (entity.lifetime > 0.0f) {
                 entity.lifetime -= deltaTime;
                 if (entity.lifetime <= 0.0f) {
                     toRemove.push_back(id);
+                    std::cout << "[GameServer] Entity " << id << " (type: " << (int)entity.type << ") lifetime expired" << std::endl;
                     continue; // Skip rest of update for this entity
                 }
+            }
+            
+            // ✅ Explosions don't move, skip movement logic
+            if (entity.type == EntityType::ENTITY_EXPLOSION) {
+                continue;
             }
             
             // Update position
@@ -537,6 +593,7 @@ private:
                     state.vy = entity->vy;
                     state.hp = entity->hp;
                     state.playerLine = entity->playerLine;
+                    state.playerId = entity->playerId; // include server-side playerId mapping
                     state.chargeLevel = entity->chargeLevel;
                     state.enemyType = entity->enemyType;
                     state.projectileType = entity->projectileType;
@@ -573,6 +630,7 @@ private:
                 state.vy = entity->vy;
                 state.hp = entity->hp;
                 state.playerLine = entity->playerLine;
+                state.playerId = entity->playerId;
                 state.chargeLevel = entity->chargeLevel;
                 state.enemyType = entity->enemyType;
                 state.projectileType = entity->projectileType;
@@ -595,6 +653,7 @@ private:
         state.vy = entity.vy;
         state.hp = entity.hp;
         state.playerLine = entity.playerLine;
+        state.playerId = entity.playerId;
         state.chargeLevel = entity.chargeLevel;
         state.enemyType = entity.enemyType;
         state.projectileType = entity.projectileType;
@@ -844,6 +903,45 @@ private:
         
         // Mark server as running game logic
         gameRunning_ = true;
+    }
+
+    void handleClientTogglePause(const NetworkPacket& /*packet*/, const asio::ip::udp::endpoint& sender) {
+        auto session = server_.getSession(sender);
+        if (!session || session->roomId == 0) {
+            std::cerr << "[GameServer] CLIENT_TOGGLE_PAUSE from player not in a room" << std::endl;
+            return;
+        }
+
+        auto room = server_.getRoomManager().getRoom(session->roomId);
+        if (!room) return;
+
+        // Only host can toggle pause
+        if (room->hostPlayerId != session->playerId) {
+            std::cerr << "[GameServer] Non-host player " << (int)session->playerId << " tried to toggle pause" << std::endl;
+            return;
+        }
+
+        // Toggle between PLAYING and PAUSED
+        if (room->state == RoomState::PLAYING) {
+            room->state = RoomState::PAUSED;
+            std::cout << "[GameServer] Room " << room->id << " paused by host " << (int)session->playerId << std::endl;
+        } else if (room->state == RoomState::PAUSED) {
+            room->state = RoomState::PLAYING;
+            std::cout << "[GameServer] Room " << room->id << " resumed by host " << (int)session->playerId << std::endl;
+        } else {
+            // If not playing, ignore
+            std::cout << "[GameServer] TogglePause ignored - room not playing" << std::endl;
+            return;
+        }
+
+        // Broadcast SERVER_SET_PAUSE with payload (uint8_t paused)
+        uint8_t pausedFlag = (room->state == RoomState::PAUSED) ? 1 : 0;
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::SERVER_SET_PAUSE));
+        std::vector<char> payload(sizeof(uint8_t));
+        std::memcpy(payload.data(), &pausedFlag, sizeof(uint8_t));
+        packet.setPayload(payload);
+        packet.header.timestamp = getCurrentTimestamp();
+        broadcastToRoom(room->id, packet);
     }
     
     void broadcastToRoom(uint32_t roomId, const NetworkPacket& packet) {

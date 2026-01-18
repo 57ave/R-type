@@ -778,7 +778,20 @@ int Game::Run(int argc, char* argv[])
     }
 
     // Setup collision callback after collision system is created
-    collisionSystem->SetCollisionCallback([this](ECS::Entity a, ECS::Entity b) {
+    collisionSystem->SetCollisionCallback([this, networkMode](ECS::Entity a, ECS::Entity b) {
+        // ✅ EN MODE RÉSEAU: Le serveur gère TOUTES les collisions
+        // Le client ne fait que du feedback visuel (sons, particules)
+        if (networkMode) {
+            // Feedback visuel/audio uniquement - PAS de logique de gameplay
+            std::cout << "[Client] Visual collision detected: " << a << " <-> " << b << " (server authoritative)" << std::endl;
+            // TODO: Jouer un son de collision ou afficher des particules
+            return; // ❌ PAS de destruction, PAS de dégâts en mode réseau
+        }
+        
+        // ========================================
+        // MODE LOCAL SEULEMENT: Collision autoritaire
+        // ========================================
+        
         // Check if entities still exist (might have been destroyed)
         bool aExists = std::find(allEntities.begin(), allEntities.end(), a) != allEntities.end();
         bool bExists = std::find(allEntities.begin(), allEntities.end(), b) != allEntities.end();
@@ -1402,7 +1415,13 @@ int Game::Run(int argc, char* argv[])
     gameStateCallbacks.isPlaying = []() -> bool {
         return GameStateManager::Instance().GetState() == GameState::Playing;
     };
-    gameStateCallbacks.togglePause = []() {
+    gameStateCallbacks.togglePause = [&networkSystem]() {
+        // If networked, ask server to toggle pause (server will validate host)
+        if (networkSystem) {
+            networkSystem->sendTogglePause();
+            return;
+        }
+
         auto& gsm = GameStateManager::Instance();
         if (gsm.GetState() == GameState::Playing) {
             gsm.SetState(GameState::Paused);
@@ -1752,11 +1771,15 @@ int Game::Run(int argc, char* argv[])
         if (currentState != previousState) {
             // When entering menu states
             if (inMenu) {
-                // Special case: Pause menu - pause game music, don't play menu music
+                // Special case: Pause menu - pause game music, stop SFX, don't play menu music
                 if (currentState == GameState::Paused) {
                     PauseMusic();
+                    // Stop all playing sound effects while paused
+                    if (audioSystem) {
+                        audioSystem->StopAllSounds();
+                    }
                     // should pause the game also
-                    std::cout << "[Game] Game music paused (entering pause menu)" << std::endl;
+                    std::cout << "[Game] Game paused - music and SFX stopped" << std::endl;
                 } else {
                     // For other menus (MainMenu, Options, etc.), play menu music
                     if (menuMusic.getStatus() != eng::engine::Sound::Playing) {
@@ -2459,16 +2482,26 @@ int Game::Run(int argc, char* argv[])
                     sol::table enemyConfig = enemiesConfig[enemyType];
                     if (enemyConfig.valid()) {
                         sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
-                        if (createEnemy.valid()) {
-                            auto result = createEnemy(1920.0f, randomY, enemyConfig);
-                            if (result.valid()) {
-                                ECS::Entity enemy = result;
-                                if (enemy != 0) {
-                                    std::string enemyName = enemyConfig.get_or("name", enemyType);
-                                    std::cout << "[Game] Spawned " << enemyName << " at Y=" << randomY << std::endl;
+                                if (createEnemy.valid()) {
+                                    auto result = createEnemy(1920.0f, randomY, enemyConfig);
+                                    if (result.valid()) {
+                                        ECS::Entity enemy = result;
+                                        if (enemy != 0) {
+                                            std::string enemyName = enemyConfig.get_or("name", enemyType);
+                                            std::cout << "[Game] Spawned " << enemyName << " at Y=" << randomY << std::endl;
+                                        }
+                                    } else {
+                                        // Lua factory failed at runtime - fallback to C++ CreateEnemy
+                                        std::cerr << "[Game] WARNING: Lua CreateEnemy failed, using C++ fallback" << std::endl;
+                                        ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
+                                        (void)fallback;
+                                    }
+                                } else {
+                                    // Factory function missing - fallback to C++ CreateEnemy
+                                    std::cerr << "[Game] WARNING: Lua factory not available, using C++ fallback for enemy spawn" << std::endl;
+                                    ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
+                                    (void)fallback;
                                 }
-                            }
-                        }
                     }
                 }
                 
@@ -2637,13 +2670,18 @@ int Game::Run(int argc, char* argv[])
 
         // Only update game systems during gameplay
         if (!inMenu) {
-            // In network mode, server handles physics - only update animations/visuals
+            // ✅ MODE RÉSEAU: Le serveur a l'autorité - client = rendu uniquement
             if (networkMode) {
+                // ❌ PAS de MovementSystem, CollisionSystem, HealthSystem
+                // ✅ Seulement rendu et animations
                 stateMachineAnimSystem->Update(deltaTime);
                 animationSystem->Update(deltaTime);
                 lifetimeSystem->Update(deltaTime);
+                
+                // Note: NetworkSystem->Update() est appelé plus tôt dans la boucle
+                // pour recevoir les positions du serveur
             } else {
-                // Local mode: Full simulation
+                // ✅ MODE LOCAL: Simulation complète (le client est autoritaire)
                 movementPatternSystem->SetPlayerEntity(player);  // Update player reference for chase patterns
                 movementPatternSystem->Update(deltaTime);
                 movementSystem->Update(deltaTime);
@@ -2700,16 +2738,17 @@ int Game::Run(int argc, char* argv[])
         
         // ========================================
         // RENDER GAMEPLAY UI (Health Bar & Score)
+        // Health bar must remain visible even during pause
         // ========================================
-        if (!inMenu && playerCreated && player != 0) {
-            // Render player health bar and score
+        if (playerCreated && player != 0) {
+            // Render player health bar and score (visible in pause)
             if (playerHealthBar.IsInitialized()) {
                 playerHealthBar.Render(window.getSFMLWindow());
             }
             if (gameFontLoaded && playerScoreUI.IsInitialized()) {
                 playerScoreUI.Render(window.getSFMLWindow());
             }
-            
+
             // TODO: Render other players' health bars in network mode
             // for (auto& [entity, healthBar] : otherPlayersHealthBars) {
             //     healthBar.Render(window.getSFMLWindow());
