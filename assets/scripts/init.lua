@@ -70,26 +70,20 @@ GameMode = {
 -- FONCTIONS D'INITIALISATION DU GAMEPLAY
 -- ============================================================================
 
--- Fonction appelée quand le jeu démarre en mode solo
+-- Fonction appelée quand le jeu démarre en mode solo (DEPRECATED - redirige vers network)
 function InitSoloMode()
-    print("[GAME] Initialisation du mode SOLO")
-    GameMode.current = "solo"
-    
-    -- En mode solo, activer le showcase automatiquement si demandé
-    if AUTO_START_SHOWCASE then
-        print("[GAME] AUTO_START_SHOWCASE activé - Lancement du showcase")
-        if ToggleShowcaseMode then
-            ToggleShowcaseMode()
-            GameMode.showcaseEnabled = true
-        end
-    end
+    print("[GAME] Solo mode is DEPRECATED - redirecting to network mode")
+    InitNetworkMode()  -- Redirige vers le mode réseau
 end
 
--- Fonction appelée quand le jeu démarre en mode réseau
+-- Fonction appelée quand le jeu démarre en mode réseau (toujours le cas maintenant)
 function InitNetworkMode()
-    print("[GAME] Initialisation du mode RÉSEAU")
+    print("[GAME] Initialisation du mode RÉSEAU (mode par défaut)")
     GameMode.current = "network"
     GameMode.showcaseEnabled = false
+    
+    -- Note: Le showcase est désactivé en mode réseau
+    print("[GAME] Showcase désactivé (mode réseau actif)")
 end
 
 -- Fonction de mise à jour appelée chaque frame
@@ -104,11 +98,12 @@ end
 -- CONFIGURATION PAR DÉFAUT
 -- ============================================================================
 
--- Active ou désactive le showcase automatique au démarrage en solo
-AUTO_START_SHOWCASE = false  -- Mettre à false pour désactiver
+-- Le showcase automatique est toujours désactivé en mode réseau
+AUTO_START_SHOWCASE = false
 
 print("Configuration:")
-print("  • Auto-start showcase: " .. tostring(AUTO_START_SHOWCASE))
+print("  • Mode: NETWORK ONLY (par défaut)")
+print("  • Auto-start showcase: DISABLED (mode réseau)")
 print("")
 
 -- ============================================================================

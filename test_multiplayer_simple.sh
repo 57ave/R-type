@@ -16,15 +16,15 @@ echo "   Serveur lancé (PID: $SERVER_PID)"
 sleep 2
 
 echo ""
-echo "2️⃣  Lancement du client 1 (Player 1) avec --network..."
-./build/game/r-type_game --network 127.0.0.1 12345 > output_test/player1.log 2>&1 &
+echo "2️⃣  Lancement du client 1 (Player 1) - mode réseau par défaut..."
+./build/game/r-type_game > output_test/player1.log 2>&1 &
 CLIENT1_PID=$!
 echo "   Client 1 lancé (PID: $CLIENT1_PID)"
 sleep 2
 
 echo ""
-echo "3️⃣  Lancement du client 2 (Player 2) avec --network..."
-./build/game/r-type_game --network 127.0.0.1 12345 > output_test/player2.log 2>&1 &
+echo "3️⃣  Lancement du client 2 (Player 2) - mode réseau par défaut..."
+./build/game/r-type_game > output_test/player2.log 2>&1 &
 CLIENT2_PID=$!
 echo "   Client 2 lancé (PID: $CLIENT2_PID)"
 
