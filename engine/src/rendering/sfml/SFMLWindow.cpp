@@ -1,7 +1,7 @@
 #include <rendering/sfml/SFMLWindow.hpp>
 #include <SFML/Window/Mouse.hpp>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -22,6 +22,34 @@ namespace rtype
                     m_window.setFramerateLimit(60);
                 }
 
+                void SFMLWindow::setSize(uint32_t width, uint32_t height)
+                {
+                    m_width = width;
+                    m_height = height;
+                    m_window.setSize(sf::Vector2u(width, height));
+                    
+                    // Update the view to match new size
+                    sf::View view(sf::FloatRect(0, 0, static_cast<float>(width), static_cast<float>(height)));
+                    m_window.setView(view);
+                }
+
+                void SFMLWindow::setFullscreen(bool fullscreen)
+                {
+                    if (fullscreen) {
+                        sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
+                        m_window.create(desktopMode, m_title, sf::Style::Fullscreen);
+                        // Update view to match fullscreen resolution
+                        sf::View view(sf::FloatRect(0, 0, static_cast<float>(desktopMode.width), static_cast<float>(desktopMode.height)));
+                        m_window.setView(view);
+                    } else {
+                        m_window.create(sf::VideoMode(m_width, m_height), m_title, sf::Style::Default);
+                        // Update view to match window resolution
+                        sf::View view(sf::FloatRect(0, 0, static_cast<float>(m_width), static_cast<float>(m_height)));
+                        m_window.setView(view);
+                    }
+                    m_window.setFramerateLimit(60);
+                }
+
                 void SFMLWindow::close()
                 {
                     m_window.close();
@@ -32,7 +60,7 @@ namespace rtype
                     return m_window.isOpen();
                 }
 
-                bool SFMLWindow::pollEvent(rtype::engine::InputEvent &event)
+                bool SFMLWindow::pollEvent(eng::engine::InputEvent &event)
                 {
                     sf::Event sfEvent;
                     if (!m_window.pollEvent(sfEvent)) {
@@ -41,55 +69,59 @@ namespace rtype
 
                     // Convert SFML event to engine event
                     switch (sfEvent.type) {
+                        case sf::Event::TextEntered:
+                            event.type = eng::engine::EventType::TextEntered;
+                            event.text.unicode = sfEvent.text.unicode;
+                            break;
                         case sf::Event::Closed:
-                            event.type = rtype::engine::EventType::Closed;
+                            event.type = eng::engine::EventType::Closed;
                             break;
                         case sf::Event::Resized:
-                            event.type = rtype::engine::EventType::Resized;
+                            event.type = eng::engine::EventType::Resized;
                             event.size.width = sfEvent.size.width;
                             event.size.height = sfEvent.size.height;
                             break;
                         case sf::Event::LostFocus:
-                            event.type = rtype::engine::EventType::LostFocus;
+                            event.type = eng::engine::EventType::LostFocus;
                             break;
                         case sf::Event::GainedFocus:
-                            event.type = rtype::engine::EventType::GainedFocus;
+                            event.type = eng::engine::EventType::GainedFocus;
                             break;
                         case sf::Event::KeyPressed:
-                            event.type = rtype::engine::EventType::KeyPressed;
-                            event.key.code = rtype::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
+                            event.type = eng::engine::EventType::KeyPressed;
+                            event.key.code = eng::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
                             event.key.alt = sfEvent.key.alt;
                             event.key.control = sfEvent.key.control;
                             event.key.shift = sfEvent.key.shift;
                             event.key.system = sfEvent.key.system;
                             break;
                         case sf::Event::KeyReleased:
-                            event.type = rtype::engine::EventType::KeyReleased;
-                            event.key.code = rtype::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
+                            event.type = eng::engine::EventType::KeyReleased;
+                            event.key.code = eng::engine::internal::sfmlKeyToEngineKey(sfEvent.key.code);
                             event.key.alt = sfEvent.key.alt;
                             event.key.control = sfEvent.key.control;
                             event.key.shift = sfEvent.key.shift;
                             event.key.system = sfEvent.key.system;
                             break;
                         case sf::Event::MouseMoved:
-                            event.type = rtype::engine::EventType::MouseMoved;
+                            event.type = eng::engine::EventType::MouseMoved;
                             event.mouseMove.x = sfEvent.mouseMove.x;
                             event.mouseMove.y = sfEvent.mouseMove.y;
                             break;
                         case sf::Event::MouseButtonPressed:
-                            event.type = rtype::engine::EventType::MouseButtonPressed;
+                            event.type = eng::engine::EventType::MouseButtonPressed;
                             event.mouseButton.button = sfEvent.mouseButton.button;
                             event.mouseButton.x = sfEvent.mouseButton.x;
                             event.mouseButton.y = sfEvent.mouseButton.y;
                             break;
                         case sf::Event::MouseButtonReleased:
-                            event.type = rtype::engine::EventType::MouseButtonReleased;
+                            event.type = eng::engine::EventType::MouseButtonReleased;
                             event.mouseButton.button = sfEvent.mouseButton.button;
                             event.mouseButton.x = sfEvent.mouseButton.x;
                             event.mouseButton.y = sfEvent.mouseButton.y;
                             break;
                         case sf::Event::MouseWheelScrolled:
-                            event.type = rtype::engine::EventType::MouseWheelScrolled;
+                            event.type = eng::engine::EventType::MouseWheelScrolled;
                             event.mouseWheelScroll.delta = sfEvent.mouseWheelScroll.delta;
                             event.mouseWheelScroll.x = sfEvent.mouseWheelScroll.x;
                             event.mouseWheelScroll.y = sfEvent.mouseWheelScroll.y;
@@ -127,15 +159,15 @@ namespace rtype
                     return m_window;
                 }
 
-                rtype::engine::rendering::Vector2i SFMLWindow::getMousePosition() const
+                eng::engine::rendering::Vector2i SFMLWindow::getMousePosition() const
                 {
                     sf::Vector2i pos = sf::Mouse::getPosition(m_window);
-                    return rtype::engine::rendering::Vector2i{pos.x, pos.y};
+                    return eng::engine::rendering::Vector2i{pos.x, pos.y};
                 }
 
-                rtype::engine::rendering::Vector2u SFMLWindow::getSize() const
+                eng::engine::rendering::Vector2u SFMLWindow::getSize() const
                 {
-                    return rtype::engine::rendering::Vector2u{m_width, m_height};
+                    return eng::engine::rendering::Vector2u{m_width, m_height};
                 }
 
             }

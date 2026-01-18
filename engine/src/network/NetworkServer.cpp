@@ -1,6 +1,10 @@
 #include "network/NetworkServer.hpp"
 #include <iostream>
 
+// R-Type specific protocol - TODO: This should be refactored to make engine protocol-agnostic
+// For now, include the game-specific protocol from the server
+#include "../../../server/include/network/RTypeProtocol.hpp"
+
 NetworkServer::NetworkServer(short port)
     : server_(io_context_, port) {
 }
@@ -24,9 +28,129 @@ void NetworkServer::process() {
     udp::endpoint sender;
 
     while (server_.popPacket(packet, sender)) {
-        // Buffer all packets for polling by the game server
-        std::lock_guard<std::mutex> lock(packetsMutex_);
-        receivedPackets_.push({packet, sender});
+        auto session = server_.getSession(sender);
+        if (!session) {
+            std::cerr << "[NetworkServer] WARNING: No session found for " << sender << " - skipping packet" << std::endl;
+            continue;
+        }
+
+        uint16_t type = packet.header.type;
+        
+        if (type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
+            std::cout << "[NetworkServer] Received CLIENT_HELLO from " << sender << std::endl;
+            NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
+            welcome.header.seq = packet.header.seq;
+            welcome.setPayload({(char)session->playerId});
+            server_.sendTo(welcome, sender);
+            std::cout << "[Network] Welcome sent to " << sender << std::endl;
+        } 
+        else if (type == static_cast<uint16_t>(GamePacketType::CREATE_ROOM)) {
+            try {
+                auto payload = CreateRoomPayload::deserialize(packet.payload);
+                uint32_t roomId = roomManager_.createRoom(payload.name, payload.maxPlayers, session->playerId);
+                roomManager_.joinRoom(roomId, session->playerId);
+                session->roomId = roomId;
+
+                NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_CREATED));
+                JoinRoomPayload replyPayload;
+                replyPayload.roomId = roomId;
+                reply.setPayload(replyPayload.serialize());
+                server_.sendTo(reply, sender);
+                std::cout << "[Room] Created room " << payload.name << " (ID: " << roomId << ") by player " << (int)session->playerId << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[Room] Error creating room: " << e.what() << std::endl;
+            }
+        }
+        else if (type == static_cast<uint16_t>(GamePacketType::RENAME_ROOM)) {
+             try {
+                auto payload = RenameRoomPayload::deserialize(packet.payload);
+                if (roomManager_.renameRoom(payload.roomId, session->playerId, payload.newName)) {
+                    std::cout << "[Room] Room " << payload.roomId << " renamed to " << payload.newName << std::endl;
+                } else {
+                    std::cerr << "[Room] Failed to rename room " << payload.roomId << " (Permission denied or not found)" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Room] Error renaming room: " << e.what() << std::endl;
+            }
+        }
+        else if (type == static_cast<uint16_t>(GamePacketType::JOIN_ROOM)) {
+            try {
+                auto payload = JoinRoomPayload::deserialize(packet.payload);
+                std::cout << "[NetworkServer] Received JOIN_ROOM request from " << sender << " for room " << payload.roomId << std::endl;
+                
+                if (roomManager_.joinRoom(payload.roomId, session->playerId)) {
+                    session->roomId = payload.roomId;
+                    
+                    // Get room details to send complete info to client
+                    auto room = roomManager_.getRoom(payload.roomId);
+                    if (room) {
+                        RoomJoinedPayload replyPayload;
+                        replyPayload.roomId = room->id;
+                        replyPayload.roomName = room->name;
+                        replyPayload.maxPlayers = room->maxPlayers;
+                        replyPayload.hostPlayerId = room->hostPlayerId;
+                        
+                        NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
+                        reply.setPayload(replyPayload.serialize());
+                        server_.sendTo(reply, sender);
+                        std::cout << "[Room] Player " << (int)session->playerId << " joined room " << payload.roomId 
+                                  << " (" << room->playerIds.size() << "/" << (int)room->maxPlayers << " players)" << std::endl;
+                        
+                        // Broadcast player list update to all players in the room
+                        RoomPlayersPayload playersUpdate;
+                        playersUpdate.roomId = room->id;
+                        for (uint32_t pid : room->playerIds) {
+                            PlayerInRoomInfo playerInfo;
+                            playerInfo.playerId = pid;
+                            playerInfo.playerName = "Player " + std::to_string(pid);
+                            playerInfo.isHost = (pid == room->hostPlayerId);
+                            playerInfo.isReady = false;
+                            playersUpdate.players.push_back(playerInfo);
+                        }
+                        
+                        NetworkPacket updatePacket(static_cast<uint16_t>(GamePacketType::ROOM_PLAYERS_UPDATE));
+                        updatePacket.setPayload(playersUpdate.serialize());
+                        
+                        // Send to all players in the room
+                        auto sessions = server_.getActiveSessions();
+                        for (const auto& s : sessions) {
+                            if (s.roomId == room->id) {
+                                server_.sendTo(updatePacket, s.endpoint);
+                            }
+                        }
+                        std::cout << "[Room] Sent player list update to all players in room " << room->id << std::endl;
+                    } else {
+                        std::cerr << "[Room] Room " << payload.roomId << " not found after join" << std::endl;
+                    }
+                } else {
+                    std::cerr << "[Room] Failed to join room " << payload.roomId << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Room] Error joining room: " << e.what() << std::endl;
+            }
+        }
+        else if (type == static_cast<uint16_t>(GamePacketType::ROOM_LIST)) {
+            std::cout << "[NetworkServer] Received ROOM_LIST request from " << sender << std::endl;
+            auto rooms = roomManager_.getRooms();
+            RoomListPayload listPayload;
+            for (const auto& room : rooms) {
+                RoomInfo info;
+                info.id = room.id;
+                info.name = room.name;
+                info.currentPlayers = (uint8_t)room.playerIds.size();
+                info.maxPlayers = room.maxPlayers;
+                listPayload.rooms.push_back(info);
+            }
+            std::cout << "[NetworkServer] Sending ROOM_LIST_REPLY with " << listPayload.rooms.size() << " rooms to " << sender << std::endl;
+            NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));
+            reply.setPayload(listPayload.serialize());
+            server_.sendTo(reply, sender);
+            std::cout << "[NetworkServer] ROOM_LIST_REPLY sent" << std::endl;
+        }
+        else {
+            std::lock_guard<std::mutex> lock(packetsMutex_);
+            receivedPackets_.push({packet, sender});
+        }
     }
 
     server_.checkTimeouts();
@@ -57,4 +181,16 @@ void NetworkServer::sendTo(const NetworkPacket& packet, const asio::ip::udp::end
 
 void NetworkServer::checkTimeouts() {
     server_.checkTimeouts();
+}
+
+void NetworkServer::removeClient(const asio::ip::udp::endpoint& endpoint) {
+    server_.removeSession(endpoint);
+}
+
+std::shared_ptr<ClientSession> NetworkServer::getSession(const asio::ip::udp::endpoint& endpoint) {
+    return server_.getSession(endpoint);
+}
+
+std::vector<ClientSession> NetworkServer::getActiveSessions() const {
+    return server_.getActiveSessions();
 }

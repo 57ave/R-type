@@ -1,11 +1,12 @@
 #pragma once
 
-// This file is kept for backward compatibility and convenience.
-// It includes the concrete R-Type protocol implementation.
+// This file is kept for backward compatibility.
+// Game specific protocol has been moved to server/include/network/GameProtocol.hpp
 // For generic engine usage, include "Packet.hpp" directly.
 
-#include "RTypeProtocol.hpp"
+#include "Packet.hpp"
 
-// Typedef for ease of use if you want to keep using "RTypePacket" name in legacy code, 
-// though we encourage switching to NetworkPacket + RTypeProtocol helpers.
-using RTypePacket = NetworkPacket; 
+// Note: GameProtocol.hpp is no longer in the engine.
+// Games should include their own protocol definition from their game/server directories.
+// Example: #include "network/GameProtocol.hpp" (from game or server include paths)
+ 

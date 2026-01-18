@@ -9,7 +9,7 @@
 #include <SFML/Audio.hpp>
 #include <iostream>
 
-namespace rtype {
+namespace eng {
     namespace engine {
         namespace internal {
 
@@ -151,4 +151,4 @@ namespace rtype {
         }
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng

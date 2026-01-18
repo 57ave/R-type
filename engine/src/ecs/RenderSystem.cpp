@@ -21,8 +21,8 @@ namespace ECS {
         
         // Render each entity
         for (auto entity : sortedEntities) {
-            auto& transform = m_Coordinator->GetComponent<rtype::engine::ECS::Transform>(entity);
-            auto& sprite = m_Coordinator->GetComponent<rtype::engine::ECS::Sprite>(entity);
+            auto& transform = m_Coordinator->GetComponent<eng::engine::ECS::Transform>(entity);
+            auto& sprite = m_Coordinator->GetComponent<eng::engine::ECS::Sprite>(entity);
             
             // Skip invisible sprites
             if (!sprite.visible) {
@@ -49,11 +49,11 @@ namespace ECS {
         std::cout << "[RenderSystem] Shutdown" << std::endl;
     }
 
-    void RenderSystem::SetRenderer(rtype::engine::rendering::IRenderer* renderer) {
+    void RenderSystem::SetRenderer(eng::engine::rendering::IRenderer* renderer) {
         m_Renderer = renderer;
     }
 
-    void RenderSystem::SetResourceManager(rtype::core::ResourceManager* resourceManager) {
+    void RenderSystem::SetResourceManager(eng::core::ResourceManager* resourceManager) {
         m_ResourceManager = resourceManager;
     }
 
@@ -61,15 +61,15 @@ namespace ECS {
         m_Coordinator = coordinator;
     }
 
-    rtype::engine::rendering::Transform RenderSystem::ToRenderingTransform(const rtype::engine::ECS::Transform& ecsTransform) {
-        rtype::engine::rendering::Transform renderTransform;
+    eng::engine::rendering::Transform RenderSystem::ToRenderingTransform(const eng::engine::ECS::Transform& ecsTransform) {
+        eng::engine::rendering::Transform renderTransform;
         renderTransform.position = {ecsTransform.x, ecsTransform.y};
         renderTransform.rotation = ecsTransform.rotation;
         renderTransform.scale = {1.0f, 1.0f};  // Default scale
         return renderTransform;
     }
 
-    void RenderSystem::EnsureSpriteLoaded(rtype::engine::ECS::Sprite& sprite) {
+    void RenderSystem::EnsureSpriteLoaded(eng::engine::ECS::Sprite& sprite) {
         // If sprite is already loaded, nothing to do
         if (sprite.sprite) {
             return;
@@ -106,8 +106,8 @@ namespace ECS {
         
         // Sort by layer (lower layer = drawn first = background)
         std::sort(entities.begin(), entities.end(), [this](Entity a, Entity b) {
-            const auto& spriteA = m_Coordinator->GetComponent<rtype::engine::ECS::Sprite>(a);
-            const auto& spriteB = m_Coordinator->GetComponent<rtype::engine::ECS::Sprite>(b);
+            const auto& spriteA = m_Coordinator->GetComponent<eng::engine::ECS::Sprite>(a);
+            const auto& spriteB = m_Coordinator->GetComponent<eng::engine::ECS::Sprite>(b);
             return spriteA.layer < spriteB.layer;
         });
         

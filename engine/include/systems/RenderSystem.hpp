@@ -1,10 +1,10 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_RENDERSYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_RENDERSYSTEM_HPP
+#ifndef ENG_ENGINE_SYSTEMS_RENDERSYSTEM_HPP
+#define ENG_ENGINE_SYSTEMS_RENDERSYSTEM_HPP
 
 #include <ecs/System.hpp>
 #include <memory>
 
-namespace rtype
+namespace eng
 {
     namespace engine
     {
@@ -29,12 +29,12 @@ class RenderSystem : public ECS::System {
         void Update(float dt) override;
         void Shutdown() override;
 
-        void SetRenderer(rtype::engine::rendering::IRenderer *renderer) { renderer_ = renderer; }
+        void SetRenderer(eng::engine::rendering::IRenderer *renderer) { renderer_ = renderer; }
         void SetCoordinator(ECS::Coordinator *coordinator) { coordinator_ = coordinator; }
 
     private:
-        rtype::engine::rendering::IRenderer *renderer_;
+        eng::engine::rendering::IRenderer *renderer_;
         ECS::Coordinator *coordinator_;
 };
 
-#endif // RTYPE_ENGINE_SYSTEMS_RENDERSYSTEM_HPP
+#endif // ENG_ENGINE_SYSTEMS_RENDERSYSTEM_HPP

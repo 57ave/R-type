@@ -1,12 +1,12 @@
 
-#ifndef RTYPE_CORE_CONFIG_HPP
-    #define RTYPE_CORE_CONFIG_HPP
+#ifndef ENG_CORE_CONFIG_HPP
+    #define ENG_CORE_CONFIG_HPP
     #include <iostream>
     #include <unordered_map>
     #include <string>
     #include <sstream>
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             // Configuration class to manage application settings
@@ -79,6 +79,6 @@
             }
 
         } // namespace core
-    } // namespace rtype
+    } // namespace eng
 
-#endif // RTYPE_CORE_CONFIG_HPP
+#endif // ENG_CORE_CONFIG_HPP

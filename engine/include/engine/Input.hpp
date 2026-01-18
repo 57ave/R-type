@@ -1,9 +1,9 @@
-#ifndef RTYPE_ENGINE_INPUT_HPP
-#define RTYPE_ENGINE_INPUT_HPP
+#ifndef ENG_ENGINE_INPUT_HPP
+#define ENG_ENGINE_INPUT_HPP
 
 #include <cstdint>
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         // Key codes (mapped to common keyboard keys)
@@ -38,13 +38,14 @@ namespace rtype {
             MouseMoved,
             MouseButtonPressed,
             MouseButtonReleased,
-            MouseWheelScrolled
+            MouseWheelScrolled,
+            TextEntered // Ajouté pour la saisie de texte
         };
 
         // Input event structure
         struct InputEvent {
             EventType type;
-            
+
             // Key event data
             struct KeyEvent {
                 Key code;
@@ -53,32 +54,37 @@ namespace rtype {
                 bool shift;
                 bool system;
             } key;
-            
+
             // Mouse move event data
             struct MouseMoveEvent {
                 int x;
                 int y;
             } mouseMove;
-            
+
             // Mouse button event data
             struct MouseButtonEvent {
                 int button; // 0 = left, 1 = right, 2 = middle
                 int x;
                 int y;
             } mouseButton;
-            
+
             // Mouse wheel event data
             struct MouseWheelScrollEvent {
                 float delta;
                 int x;
                 int y;
             } mouseWheelScroll;
-            
+
             // Size event data
             struct SizeEvent {
                 unsigned int width;
                 unsigned int height;
             } size;
+
+            // Text input event data
+            struct TextEvent {
+                unsigned int unicode; // UTF-32 codepoint
+            } text;
         };
 
         // Key mapping from SFML to engine (internal use)
@@ -88,6 +94,6 @@ namespace rtype {
         }
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng
 
-#endif // RTYPE_ENGINE_INPUT_HPP
+#endif // ENG_ENGINE_INPUT_HPP

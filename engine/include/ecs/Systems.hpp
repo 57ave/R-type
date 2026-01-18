@@ -4,9 +4,12 @@
 #include "Components.hpp"
 #include "Coordinator.hpp"
 #include "RenderSystem.hpp"
+#include <components/Collider.hpp>
+#include <components/Position.hpp>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <functional>
 
 namespace ECS {
 
@@ -37,19 +40,32 @@ namespace ECS {
     };
 
     /**
-     * @brief CollisionSystem - Handles collision detection and response
+     * @brief CollisionSystem - 100% Generic collision detection
+     * 
+     * This system detects collisions between ALL entities with Collider components.
+     * It does NOT know about game-specific entity types (player, enemy, projectile).
+     * All game-specific logic should be handled in the callback.
      */
     class CollisionSystem : public System {
     public:
+        using CollisionCallback = std::function<void(Entity, Entity)>;
+        
+        CollisionSystem() = default;
+        explicit CollisionSystem(Coordinator* coordinator) : m_Coordinator(coordinator) {}
+        ~CollisionSystem() override = default;
+        
         void Init() override {}
         void Shutdown() override {}
         
         void Update(float deltaTime) override {
             std::vector<Entity> entities(mEntities.begin(), mEntities.end());
             
+            // Check all pairs of entities
             for (size_t i = 0; i < entities.size(); ++i) {
                 for (size_t j = i + 1; j < entities.size(); ++j) {
-                    CheckCollision(entities[i], entities[j]);
+                    if (CheckCollisionAABB(entities[i], entities[j])) {
+                        OnCollision(entities[i], entities[j]);
+                    }
                 }
             }
         }
@@ -58,28 +74,60 @@ namespace ECS {
             m_Coordinator = coordinator;
         }
         
+        /**
+         * @brief Set the callback to be called when a collision is detected
+         * @param callback Function that receives both entities involved in the collision
+         */
+        void SetCollisionCallback(CollisionCallback callback) {
+            m_CollisionCallback = std::move(callback);
+        }
+        
     private:
         Coordinator* m_Coordinator = nullptr;
+        CollisionCallback m_CollisionCallback;
         
-        void CheckCollision(Entity a, Entity b) {
-            auto& transformA = m_Coordinator->GetComponent<Transform>(a);
-            auto& transformB = m_Coordinator->GetComponent<Transform>(b);
-            auto& colliderA = m_Coordinator->GetComponent<Collider>(a);
-            auto& colliderB = m_Coordinator->GetComponent<Collider>(b);
+        /**
+         * @brief Check AABB collision between two entities
+         * Uses Position and Collider components
+         */
+        bool CheckCollisionAABB(Entity a, Entity b) {
+            if (!m_Coordinator->HasComponent<Position>(a) || !m_Coordinator->HasComponent<Position>(b))
+                return false;
+            if (!m_Coordinator->HasComponent<Collider>(a) || !m_Coordinator->HasComponent<Collider>(b))
+                return false;
             
-            float dx = transformA.x - transformB.x;
-            float dy = transformA.y - transformB.y;
-            float distance = std::sqrt(dx * dx + dy * dy);
+            auto& posA = m_Coordinator->GetComponent<Position>(a);
+            auto& posB = m_Coordinator->GetComponent<Position>(b);
+            auto& colA = m_Coordinator->GetComponent<Collider>(a);
+            auto& colB = m_Coordinator->GetComponent<Collider>(b);
             
-            if (distance < (colliderA.radius + colliderB.radius)) {
-                OnCollision(a, b);
-            }
+            // Skip if either collider is disabled
+            if (!colA.enabled || !colB.enabled)
+                return false;
+            
+            // AABB (Axis-Aligned Bounding Box) collision
+            float aLeft = posA.x + colA.offsetX;
+            float aRight = aLeft + colA.width;
+            float aTop = posA.y + colA.offsetY;
+            float aBottom = aTop + colA.height;
+            
+            float bLeft = posB.x + colB.offsetX;
+            float bRight = bLeft + colB.width;
+            float bTop = posB.y + colB.offsetY;
+            float bBottom = bTop + colB.height;
+            
+            return (aLeft < bRight && aRight > bLeft &&
+                    aTop < bBottom && aBottom > bTop);
         }
         
         void OnCollision(Entity a, Entity b) {
-            // Handle collision response here
+            // Call game-specific callback if set
+            if (m_CollisionCallback) {
+                m_CollisionCallback(a, b);
+            }
         }
     };
+
 
     /**
      * @brief LifetimeSystem - Destroys entities after their lifetime expires

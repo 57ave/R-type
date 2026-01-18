@@ -1,8 +1,8 @@
-#ifndef RTYPE_CORE_TIME_HPP
-    #define RTYPE_CORE_TIME_HPP
+#ifndef ENG_CORE_TIME_HPP
+    #define ENG_CORE_TIME_HPP
     #include <chrono>
 
-    namespace rtype {
+    namespace eng {
         namespace core {
 
             // Time class to manage time-related functionalities
@@ -38,5 +38,5 @@
             };
 
         } // namespace core
-    } // namespace rtype
-#endif // RTYPE_CORE_TIME_HPP
+    } // namespace eng
+#endif // ENG_CORE_TIME_HPP

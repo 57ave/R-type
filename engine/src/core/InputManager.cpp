@@ -1,20 +1,20 @@
 /*
 ** EPITECH PROJECT, 2025
-** rtype
+** engine
 ** File description:
 ** InputManager
 */
 
 #include "core/InputManager.hpp"
 
-rtype::core::InputManager::InputManager() 
+eng::core::InputManager::InputManager() 
     : _mousePosition(0, 0) {
 }
 
-rtype::core::InputManager::~InputManager() {
+eng::core::InputManager::~InputManager() {
 }
 
-bool rtype::core::InputManager::isKeyPressed(int keyCode) {
+bool eng::core::InputManager::isKeyPressed(int keyCode) {
     auto it = _keyStates.find(keyCode);
     if (it == _keyStates.end()) {
         return false;
@@ -22,7 +22,7 @@ bool rtype::core::InputManager::isKeyPressed(int keyCode) {
     return it->second;
 }
 
-bool rtype::core::InputManager::isKeyJustPressed(int keyCode) {
+bool eng::core::InputManager::isKeyJustPressed(int keyCode) {
     // Retourne true seulement si :
     // - La touche est actuellement pressée
     // - ET n'était pas pressée à la frame précédente
@@ -32,11 +32,11 @@ bool rtype::core::InputManager::isKeyJustPressed(int keyCode) {
     return currentlyPressed && !previouslyPressed;
 }
 
-rtype::engine::Vector2i rtype::core::InputManager::getMousePosition() {
+eng::engine::Vector2i eng::core::InputManager::getMousePosition() {
     return _mousePosition;
 }
 
-void rtype::core::InputManager::update() {
+void eng::core::InputManager::update() {
     // Sauvegarder l'état actuel comme état précédent
     _previousKeyStates = _keyStates;
     
@@ -45,15 +45,15 @@ void rtype::core::InputManager::update() {
     // Celui-ci appellera setKeyState() et setMousePosition()
 }
 
-void rtype::core::InputManager::setKeyState(int keyCode, bool pressed) {
+void eng::core::InputManager::setKeyState(int keyCode, bool pressed) {
     _keyStates[keyCode] = pressed;
 }
 
-void rtype::core::InputManager::setMousePosition(int x, int y) {
+void eng::core::InputManager::setMousePosition(int x, int y) {
     _mousePosition.x = x;
     _mousePosition.y = y;
 }
 
-void rtype::core::InputManager::setMousePosition(const rtype::engine::Vector2i& pos) {
+void eng::core::InputManager::setMousePosition(const eng::engine::Vector2i& pos) {
     _mousePosition = pos;
 }

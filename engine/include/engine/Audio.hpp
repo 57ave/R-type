@@ -1,11 +1,11 @@
-#ifndef RTYPE_ENGINE_AUDIO_HPP
-#define RTYPE_ENGINE_AUDIO_HPP
+#ifndef ENG_ENGINE_AUDIO_HPP
+#define ENG_ENGINE_AUDIO_HPP
 
 #include <string>
 #include <memory>
 #include <unordered_map>
 
-namespace rtype {
+namespace eng {
     namespace engine {
 
         // Forward declarations for SFML types (hidden from client)
@@ -88,6 +88,6 @@ namespace rtype {
         };
 
     } // namespace engine
-} // namespace rtype
+} // namespace eng
 
-#endif // RTYPE_ENGINE_AUDIO_HPP
+#endif // ENG_ENGINE_AUDIO_HPP
