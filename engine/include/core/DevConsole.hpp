@@ -187,11 +187,12 @@ public:
     void setHeight(float height); // As percentage of window height (0.0-1.0)
     void setOpacity(float opacity);
     void setFontSize(unsigned int size);
+    void handleTextInput(uint32_t unicode);
+    void handleSpecialKey(sf::Keyboard::Key key);
+
     
 private:
     void registerBuiltinCommands();
-    void handleTextInput(uint32_t unicode);
-    void handleSpecialKey(sf::Keyboard::Key key);
     void submitCommand();
     void historyUp();
     void historyDown();
