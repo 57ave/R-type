@@ -35,6 +35,7 @@ public:
     
     std::shared_ptr<ClientSession> getSession(const udp::endpoint& endpoint);
     bool removeSession(const udp::endpoint& endpoint);
+    std::vector<ClientSession> getActiveSessions() const;
 
 private:
     void startReceive();
@@ -50,10 +51,10 @@ private:
 
     // Client management
     std::map<std::string, std::shared_ptr<ClientSession>> sessions_; // Key: "IP:Port"
-    std::mutex sessionsMutex_;
+    mutable std::mutex sessionsMutex_;  // mutable to allow const methods to lock
     uint8_t nextPlayerId_ = 1;
 
     // Packet queue for Game Engine
     std::queue<std::pair<NetworkPacket, udp::endpoint>> packetQueue_;
-    std::mutex queueMutex_;
+    mutable std::mutex queueMutex_;  // mutable to allow const methods to lock
 };

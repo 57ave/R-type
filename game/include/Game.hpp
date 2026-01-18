@@ -68,6 +68,13 @@
 
     // Game State Management
     #include "GameStateManager.hpp"
+    
+    // Custom UI Components
+    #include "ui/HealthBarUI.hpp"
+    #include "ui/ScoreUI.hpp"
+    
+    // ShootEmUp Score Component
+    #include <components/Score.hpp>
 
     // Generic Engine Systems
     #include <systems/MovementSystem.hpp>
@@ -221,29 +228,16 @@
             
             // Window pointer for resolution changes from Lua
             SFMLWindow* m_window = nullptr;
-
-            // Asset paths (populated from Lua Assets table)
-            std::string backgroundPath;
-            std::string baseAssetsDir;
-            std::string playerPath;
-            std::string missilePath;
-            std::string enemyBulletsPath;
-            std::string explosionPath;
-            std::string shootSfxPath;
-            std::string menuMusicPath;
-            std::string defaultFontPath;
-            std::string soundsBase;
-            std::string difficultyScriptsBase;
-            std::string settingsJsonPath;
-
-            // Script paths
-            std::string initScriptPath;
-            std::string audioConfigPath;
-            std::string uiInitPath;
-            std::string spawnScriptPath;
-
-            // Load asset/script paths from the Lua state. Returns true on success.
-            bool LoadAssetsFromLua();
+            
+            // ========================================
+            // GAMEPLAY UI - Health Bars and Scores
+            // ========================================
+            HealthBarUI playerHealthBar;
+            ScoreUI playerScoreUI;
+            std::unordered_map<ECS::Entity, HealthBarUI> otherPlayersHealthBars;
+            std::unordered_map<ECS::Entity, ScoreUI> otherPlayersScoreUIs;
+            sf::Font gameFont;
+            bool gameFontLoaded = false;
     };
 
 #endif // GAME_HPP

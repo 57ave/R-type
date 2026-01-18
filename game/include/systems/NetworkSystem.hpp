@@ -2,8 +2,11 @@
 
 #include "ecs/System.hpp"
 #include "ecs/Coordinator.hpp"
+#include "ecs/Types.hpp"
 #include "network/NetworkClient.hpp"
 #include "network/RTypeProtocol.hpp"
+#include "network/NetworkBindings.hpp"
+#include "GameStateManager.hpp"
 #include <components/NetworkId.hpp>
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
@@ -24,6 +27,7 @@ class NetworkSystem : public ECS::System {
 public:
     using EntityCallback = std::function<void(ECS::Entity)>;
     using EntityDestroyCallback = std::function<void(ECS::Entity, uint32_t)>; // entity, networkId
+    using GameStartCallback = std::function<void()>; // Called when GAME_START is received
     
     NetworkSystem(ECS::Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
         : coordinator_(coordinator), networkClient_(client), localPlayerId_(0) {}
@@ -34,6 +38,10 @@ public:
     
     void setEntityDestroyedCallback(EntityDestroyCallback callback) {
         entityDestroyedCallback_ = callback;
+    }
+    
+    void setGameStartCallback(GameStartCallback callback) {
+        gameStartCallback_ = callback;
     }
 
     void Init() override {
@@ -73,6 +81,34 @@ public:
         return localPlayerId_;
     }
 
+    // Called by game code to send input
+    void sendInput(uint8_t inputMask, uint8_t chargeLevel = 0) {
+        if (networkClient_ && networkClient_->isConnected()) {
+            // Build RType protocol packet
+            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
+            ClientInput input;
+            input.playerId = localPlayerId_;
+            input.inputMask = inputMask;
+            input.chargeLevel = chargeLevel;
+            
+            // Serialize input to payload
+            std::vector<char> payload(sizeof(ClientInput));
+            std::memcpy(payload.data(), &input, sizeof(ClientInput));
+            packet.setPayload(payload);
+            
+            networkClient_->sendPacket(packet);
+        }
+    }
+
+    // Request server to toggle pause for the room (server will validate host)
+    void sendTogglePause() {
+        if (!networkClient_ || !networkClient_->isConnected()) return;
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_TOGGLE_PAUSE));
+        packet.header.timestamp = 0;
+        networkClient_->sendPacket(packet);
+        std::cout << "[NetworkSystem] Sent CLIENT_TOGGLE_PAUSE request to server" << std::endl;
+    }
+
 private:
     void handlePacket(const NetworkPacket& packet) {
         auto type = static_cast<GamePacketType>(packet.header.type);
@@ -96,9 +132,37 @@ private:
             case GamePacketType::CLIENT_LEFT:
                 handleClientLeft(packet);
                 break;
+            case GamePacketType::ROOM_LIST_REPLY:
+                handleRoomListReply(packet);
+                break;
+            case GamePacketType::ROOM_CREATED:
+                handleRoomCreated(packet);
+                break;
+            case GamePacketType::ROOM_JOINED:
+                handleRoomJoined(packet);
+                break;
+            case GamePacketType::GAME_START:
+                handleGameStart(packet);
+                break;
+            case GamePacketType::SERVER_SET_PAUSE:
+                handleServerSetPause(packet);
+                break;
             default:
                 std::cout << "[NetworkSystem] Unknown packet type: " << packet.header.type << std::endl;
                 break;
+        }
+    }
+
+
+    void handleServerSetPause(const NetworkPacket& packet) {
+        if (packet.payload.size() < 1) return;
+        uint8_t paused = static_cast<uint8_t>(packet.payload[0]);
+        if (paused) {
+            std::cout << "[NetworkSystem] Server requested PAUSE" << std::endl;
+            GameStateManager::Instance().SetState(GameState::Paused);
+        } else {
+            std::cout << "[NetworkSystem] Server requested RESUME" << std::endl;
+            GameStateManager::Instance().SetState(GameState::Playing);
         }
     }
 
@@ -166,6 +230,101 @@ private:
         std::cout << "[NetworkSystem] Client left" << std::endl;
     }
 
+    void handleRoomListReply(const NetworkPacket& packet) {
+        std::cout << "[NetworkSystem] Received ROOM_LIST_REPLY" << std::endl;
+        
+        // Deserialize room list
+        if (packet.payload.size() < sizeof(uint32_t)) {
+            std::cout << "[NetworkSystem] Empty room list received" << std::endl;
+            RType::Network::NetworkBindings::OnRoomListReceived({});
+            return;
+        }
+        
+        try {
+            Network::Deserializer deserializer(packet.payload);
+            uint32_t roomCount = deserializer.read<uint32_t>();
+            
+            std::vector<RoomInfo> rooms;
+            for (uint32_t i = 0; i < roomCount; ++i) {
+                RoomInfo room;
+                room.id = deserializer.read<uint32_t>();
+                room.name = deserializer.readString();
+                room.currentPlayers = deserializer.read<uint8_t>();
+                room.maxPlayers = deserializer.read<uint8_t>();
+                rooms.push_back(room);
+            }
+            
+            // Forward to NetworkBindings
+            RType::Network::NetworkBindings::OnRoomListReceived(rooms);
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkSystem] Error deserializing ROOM_LIST_REPLY: " << e.what() << std::endl;
+            RType::Network::NetworkBindings::OnRoomListReceived({});
+        }
+    }
+
+    void handleRoomCreated(const NetworkPacket& packet) {
+        std::cout << "[NetworkSystem] Received ROOM_CREATED" << std::endl;
+        
+        if (packet.payload.size() < sizeof(uint32_t)) {
+            std::cerr << "[NetworkSystem] ROOM_CREATED payload too small" << std::endl;
+            return;
+        }
+        
+        try {
+            Network::Deserializer deserializer(packet.payload);
+            uint32_t roomId = deserializer.read<uint32_t>();
+            
+            std::cout << "[NetworkSystem] Room created with ID: " << roomId << std::endl;
+            
+            // Forward to NetworkBindings
+            RType::Network::NetworkBindings::OnRoomCreated(roomId);
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkSystem] Error deserializing ROOM_CREATED: " << e.what() << std::endl;
+        }
+    }
+
+    void handleRoomJoined(const NetworkPacket& packet) {
+        std::cout << "[NetworkSystem] Received ROOM_JOINED" << std::endl;
+        
+        // Check payload size (roomId + roomName + maxPlayers + hostPlayerId)
+        if (packet.payload.size() < sizeof(uint32_t) + 1) {
+            std::cerr << "[NetworkSystem] ROOM_JOINED payload too small: " << packet.payload.size() << " bytes" << std::endl;
+            return;
+        }
+        
+        // Deserialize room info
+        try {
+            Network::Deserializer deserializer(packet.payload);
+            uint32_t roomId = deserializer.read<uint32_t>();
+            std::string roomName = deserializer.readString();
+            uint8_t maxPlayers = deserializer.read<uint8_t>();
+            uint32_t hostPlayerId = deserializer.read<uint32_t>();
+            
+            bool isHost = (hostPlayerId == localPlayerId_);
+            
+            std::cout << "[NetworkSystem] Joined room " << roomId << ": " << roomName 
+                      << " (max: " << static_cast<int>(maxPlayers) << ", host: " 
+                      << (isHost ? "YES" : "NO") << ")" << std::endl;
+            
+            // Forward to NetworkBindings with all info
+            RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName, maxPlayers, isHost);
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkSystem] Error deserializing ROOM_JOINED: " << e.what() << std::endl;
+        }
+    }
+
+    void handleGameStart(const NetworkPacket&) {
+        std::cout << "[NetworkSystem] Received GAME_START - transitioning to Playing state" << std::endl;
+        
+        // Call game start callback if set
+        if (gameStartCallback_) {
+            gameStartCallback_();
+        }
+        
+        // Notify Lua if callback exists
+        RType::Network::NetworkBindings::OnGameStarting(0);
+    }
+
     void updateOrCreateEntity(const EntityState& state) {
         auto it = networkIdToEntity_.find(state.id);
         
@@ -198,10 +357,10 @@ private:
     void createEntityFromState(const EntityState& state) {
         ECS::Entity entity = coordinator_->CreateEntity();
         
-        // Add NetworkId component
+        // Add NetworkId component. Use state.playerId to determine ownership
         bool isLocal = (state.type == EntityType::ENTITY_PLAYER && 
-                       state.id == localPlayerId_);
-        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, localPlayerId_, state.playerLine));
+                   state.playerId == localPlayerId_);
+        coordinator_->AddComponent(entity, NetworkId(state.id, isLocal, state.playerId, state.playerLine));
         
         // Add Position
         coordinator_->AddComponent(entity, Position{static_cast<float>(state.x), static_cast<float>(state.y)});
@@ -222,10 +381,21 @@ private:
                 // Add EnemyTag with type from server
                 {
                     ShootEmUp::Components::EnemyTag enemyTag;
-                    enemyTag.enemyType = "basic"; // TODO: Map from state.enemyType
+                    // Map numeric enemy type to string name
+                    switch (state.enemyType) {
+                        case 0: enemyTag.enemyType = "basic"; break;
+                        case 1: enemyTag.enemyType = "zigzag"; break;
+                        case 2: enemyTag.enemyType = "sine"; break;
+                        case 3: enemyTag.enemyType = "kamikaze"; break;
+                        case 4: enemyTag.enemyType = "turret"; break;
+                        case 5: enemyTag.enemyType = "boss"; break;
+                        default: enemyTag.enemyType = "basic"; break;
+                    }
                     coordinator_->AddComponent(entity, enemyTag);
                 }
-                std::cout << "[NetworkSystem] Created Enemy entity " << entity << " at (" << state.x << ", " << state.y << ")" << std::endl;
+                std::cout << "[NetworkSystem] Created Enemy entity " << entity 
+                          << " (type: " << (int)state.enemyType << ") at (" 
+                          << state.x << ", " << state.y << ")" << std::endl;
                 break;
             case EntityType::ENTITY_PLAYER_MISSILE:
                 coordinator_->AddComponent(entity, Tag{"PlayerBullet"});
@@ -270,26 +440,6 @@ private:
         // The actual input gathering happens in the game code
     }
 
-public:
-    // Called by game code to send input
-    void sendInput(uint8_t inputMask, uint8_t chargeLevel = 0) {
-        if (networkClient_ && networkClient_->isConnected()) {
-            // Build RType protocol packet
-            NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
-            ClientInput input;
-            input.playerId = localPlayerId_;
-            input.inputMask = inputMask;
-            input.chargeLevel = chargeLevel;
-            
-            // Serialize input to payload
-            std::vector<char> payload(sizeof(ClientInput));
-            std::memcpy(payload.data(), &input, sizeof(ClientInput));
-            packet.setPayload(payload);
-            
-            networkClient_->sendPacket(packet);
-        }
-    }
-
 private:
     ECS::Coordinator* coordinator_;
     std::shared_ptr<NetworkClient> networkClient_;
@@ -297,6 +447,7 @@ private:
     uint8_t localPlayerId_;
     EntityCallback entityCreatedCallback_;
     EntityDestroyCallback entityDestroyedCallback_;
+    GameStartCallback gameStartCallback_;
 };
 
 } // namespace systems

@@ -28,6 +28,7 @@ public:
 
     void removeClient(const asio::ip::udp::endpoint& endpoint);
     std::shared_ptr<ClientSession> getSession(const asio::ip::udp::endpoint& endpoint);
+    std::vector<ClientSession> getActiveSessions() const;
 
 private:
     asio::io_context io_context_;

@@ -21,7 +21,8 @@ local lobbyData = {
     players = {},         -- Players in current room
     isHost = false,
     isReady = false,
-    selectedServerId = nil
+    selectedServerId = nil,
+    joiningRoom = false   -- NOUVEAU: Flag pour éviter les double-clics
 }
 
 -- Settings data
@@ -178,13 +179,23 @@ function CreateServerBrowser(centerX, centerY, width, height)
         menuGroup = menuGroup
     })
     
-    -- Server list header
+    -- Server list header (RENOMMÉ: SERVERS → ROOMS)
     serverBrowserElements.serverHeader = UI.CreateText({
         x = centerX,
         y = 170,
-        text = "AVAILABLE SERVERS",
+        text = "AVAILABLE ROOMS",
         fontSize = 24,
         color = COLORS.WHITE,
+        menuGroup = menuGroup
+    })
+    
+    -- Instructions pour l'utilisateur
+    serverBrowserElements.instructionsText = UI.CreateText({
+        x = centerX,
+        y = 210,
+        text = "Click on a room to join, or create your own",
+        fontSize = 16,
+        color = COLORS.LIGHT_GRAY,
         menuGroup = menuGroup
     })
     
@@ -192,7 +203,7 @@ function CreateServerBrowser(centerX, centerY, width, height)
     serverBrowserElements.noServersText = UI.CreateText({
         x = centerX,
         y = 350,
-        text = "No servers found. Click REFRESH or CREATE ROOM.",
+        text = "No rooms available. Click REFRESH to update or CREATE ROOM to start one.",
         fontSize = 18,
         color = COLORS.GRAY,
         menuGroup = menuGroup
@@ -217,6 +228,15 @@ function CreateServerBrowser(centerX, centerY, width, height)
         width = 250,
         height = 40,
         placeholder = "IP:PORT (e.g. 127.0.0.1:12345)",
+        menuGroup = menuGroup
+    })
+
+    serverBrowserElements.connectedText = UI.CreateText({
+        x = centerX,
+        y = 640,
+        text = "Not connected",
+        fontSize = 16,
+        color = COLORS.LIGHT_GRAY,
         menuGroup = menuGroup
     })
     
@@ -446,55 +466,16 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
     -- Player slot references (created dynamically)
     lobbyElements.playerSlots = {}
     
-    -- Create 4 player slots
-    for i = 1, 4 do
-        local slotY = 250 + (i - 1) * 70
-        lobbyElements.playerSlots[i] = {
-            panel = UI.CreatePanel({
-                x = centerX - 250,
-                y = slotY,
-                width = 500,
-                height = 60,
-                backgroundColor = 0x1E90FF44,
-                modal = false,
-                menuGroup = menuGroup
-            }),
-            nameText = UI.CreateText({
-                x = centerX - 150,
-                y = slotY + 20,
-                text = "Empty Slot",
-                fontSize = 22,
-                color = COLORS.GRAY,
-                menuGroup = menuGroup
-            }),
-            statusText = UI.CreateText({
-                x = centerX + 150,
-                y = slotY + 20,
-                text = "",
-                fontSize = 20,
-                color = COLORS.GRAY,
-                menuGroup = menuGroup
-            })
-        }
-    end
+    -- Create player slots dynamically (will be created when joining room)
+    -- We'll create them in UpdateLobbyUI based on actual maxPlayers
+    lobbyElements.playerSlots = {}
     
     -- Bottom buttons
     local buttonY = height - 150
     
-    -- Ready button (for non-hosts)
-    lobbyElements.readyBtn = UI.CreateButton({
-        x = centerX - 220,
-        y = buttonY,
-        width = 180,
-        height = 50,
-        text = "READY",
-        onClick = "OnToggleReady",
-        menuGroup = menuGroup
-    })
-    
-    -- Start game button (host only)
+    -- Start game button (host only) - centré à gauche
     lobbyElements.startBtn = UI.CreateButton({
-        x = centerX,
+        x = centerX - 110,
         y = buttonY,
         width = 180,
         height = 50,
@@ -503,9 +484,9 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
         menuGroup = menuGroup
     })
     
-    -- Leave button
+    -- Leave button - centré à droite
     lobbyElements.leaveBtn = UI.CreateButton({
-        x = centerX + 220,
+        x = centerX + 110,
         y = buttonY,
         width = 180,
         height = 50,
@@ -877,13 +858,60 @@ function OnRefreshServers()
 end
 
 function OnJoinByIP()
-    local ip = UI.GetInputText(serverBrowserElements.ipInput)
-    if ip and ip ~= "" then
-        print("[UI] Joining server at: " .. ip)
-        JoinRoom(ip)
-    else
-        print("[UI] No IP entered")
+    -- Prevent duplicate connect attempts
+    if lobbyData.joiningRoom then
+        print("[UI] Already attempting to connect, please wait...")
+        return
     end
+
+    local ip = UI.GetInputText(serverBrowserElements.ipInput)
+    if not ip or ip == "" then
+        print("[UI] No IP entered")
+        return
+    end
+
+    -- If format is host:port, attempt to connect the Network client at runtime
+    local host, port = string.match(ip, "^([^:]+):?(%d*)$")
+    if host and port and port ~= "" then
+        print("[UI] Connecting to server at: " .. host .. ":" .. port)
+        -- mark joining to avoid double-clicks
+        lobbyData.joiningRoom = true
+        lobbyData.joinTimeout = os.time()
+        if serverBrowserElements.connectedText then
+            UI.SetText(serverBrowserElements.connectedText, "Connecting...")
+            UI.SetVisible(serverBrowserElements.connectedText, true)
+        end
+        if Network and Network.Connect then
+            Network.Connect(host, tonumber(port))
+            -- After connecting, request the room list to populate UI
+            RefreshServerList()
+        else
+            print("[UI] WARNING: Network.Connect not available in bindings")
+            lobbyData.joiningRoom = false
+        end
+    else
+        -- Fallback: try join by room id if it's a number
+        local n = tonumber(ip)
+        if n then
+            print("[UI] Joining room by ID: " .. n)
+            JoinRoom(n)
+        else
+            print("[UI] Invalid input. Enter host:port or room ID.")
+        end
+    end
+end
+
+-- Callback from C++ when a connection is established
+function OnConnected(host, port)
+    print("[UI] OnConnected callback: " .. tostring(host) .. ":" .. tostring(port))
+    -- IMPORTANT: Reset joiningRoom flag to allow joining rooms
+    lobbyData.joiningRoom = false
+    if serverBrowserElements.connectedText then
+        UI.SetText(serverBrowserElements.connectedText, "Connected: " .. tostring(host) .. ":" .. tostring(port))
+        UI.SetVisible(serverBrowserElements.connectedText, true)
+    end
+    -- Refresh room list after connection
+    RefreshServerList()
 end
 
 function OnCreateRoomClicked()
@@ -943,19 +971,7 @@ end
 -- ============================================
 -- LOBBY CALLBACKS
 -- ============================================
-function OnToggleReady()
-    lobbyData.isReady = not lobbyData.isReady
-    print("[UI] Ready status: " .. tostring(lobbyData.isReady))
-    
-    -- Update button text
-    if lobbyData.isReady then
-        UI.SetText(lobbyElements.readyBtn, "NOT READY")
-    else
-        UI.SetText(lobbyElements.readyBtn, "READY")
-    end
-    
-    SetReady(lobbyData.isReady)
-end
+-- Players are automatically ready when they join, no toggle needed
 
 function OnStartGame()
     if lobbyData.isHost then
@@ -1210,39 +1226,86 @@ end
 -- NETWORK STUB FUNCTIONS (for future integration)
 -- ============================================
 function RefreshServerList()
-    print("[Network Stub] RefreshServerList called")
-    -- Will be implemented when network is ready
-    lobbyData.rooms = {}
-    
-    -- For testing, show placeholder
-    if serverBrowserElements.noServersText then
-        UI.SetVisible(serverBrowserElements.noServersText, true)
+    print("[UI] Refreshing server list...")
+    -- Call C++ network binding to request room list from server
+    if Network and Network.RequestRoomList then
+        Network.RequestRoomList()
+    else
+        print("[UI] WARNING: Network.RequestRoomList not available!")
+        lobbyData.rooms = {}
+        if serverBrowserElements.noServersText then
+            UI.SetVisible(serverBrowserElements.noServersText, true)
+        end
     end
 end
 
 function JoinRoom(roomIdOrIP)
-    print("[Network Stub] JoinRoom called with: " .. tostring(roomIdOrIP))
-    -- Will be implemented when network is ready
+    -- Protection contre les double-clics
+    if lobbyData.joiningRoom then
+        print("[UI] Already joining a room, please wait...")
+        return
+    end
+    
+    print("[UI] Joining room: " .. tostring(roomIdOrIP))
+    lobbyData.joiningRoom = true  -- Marquer qu'on est en train de rejoindre
+    
+    -- Timeout de sécurité : reset après 5 secondes
+    local joinTime = os.time()
+    lobbyData.joinTimeout = joinTime
+    
+    -- Call C++ network binding to join a room
+    if Network and Network.JoinRoom then
+        if type(roomIdOrIP) == "number" then
+            Network.JoinRoom(roomIdOrIP)
+        else
+            print("[UI] Cannot join by IP yet (only room IDs supported)")
+            lobbyData.joiningRoom = false  -- Reset si erreur
+        end
+    else
+        print("[UI] WARNING: Network.JoinRoom not available!")
+        lobbyData.joiningRoom = false  -- Reset si erreur
+    end
 end
 
 function CreateRoom(config)
-    print("[Network Stub] CreateRoom called")
+    print("[UI] Creating room")
     print("  Name: " .. tostring(config.name))
     print("  Max Players: " .. tostring(config.maxPlayers))
     print("  Difficulty: " .. tostring(config.difficulty))
-    -- Will be implemented when network is ready
+    -- Call C++ network binding to create a room
+    if Network and Network.CreateRoom then
+        Network.CreateRoom(
+            config.name or "New Room",
+            config.maxPlayers or 4,
+            config.password or "",
+            config.difficulty or 1
+        )
+    else
+        print("[UI] WARNING: Network.CreateRoom not available!")
+    end
 end
 
 function SetReady(ready)
-    print("[Network Stub] SetReady: " .. tostring(ready))
-    -- Will be implemented when network is ready
+    print("[UI] Set ready: " .. tostring(ready))
+    -- Call C++ network binding to set ready state
+    if Network and Network.SetPlayerReady then
+        Network.SetPlayerReady(ready)
+    else
+        print("[UI] WARNING: Network.SetPlayerReady not available!")
+    end
 end
 
 function StartGame()
-    print("[Network Stub] StartGame called")
-    -- Will be implemented when network is ready
-    UI.HideAllMenus()
-    GameState.Set("Playing")
+    print("[UI] Starting game...")
+    -- Call C++ network binding to start the game (host only)
+    if Network and Network.StartGame then
+        Network.StartGame()
+    else
+        print("[UI] WARNING: Network.StartGame not available!")
+        -- Fallback: start solo game
+        UI.HideAllMenus()
+        GameState.Set("Playing")
+    end
 end
 
 function SendChatMessage(message)
@@ -1251,8 +1314,13 @@ function SendChatMessage(message)
 end
 
 function LeaveRoom()
-    print("[Network Stub] LeaveRoom called")
-    -- Will be implemented when network is ready
+    print("[UI] Leaving room...")
+    -- Call C++ network binding to leave the current room
+    if Network and Network.LeaveRoom then
+        Network.LeaveRoom()
+    else
+        print("[UI] WARNING: Network.LeaveRoom not available!")
+    end
 end
 
 -- ============================================
@@ -1266,8 +1334,19 @@ end
 
 function OnRoomJoined(roomInfo)
     print("[UI] Joined room: " .. roomInfo.name)
-    lobbyData.currentRoom = roomInfo
-    lobbyData.isHost = roomInfo.isHost
+    lobbyData.joiningRoom = false  -- Reset le flag de join
+    lobbyData.currentRoom = {
+        name = roomInfo.name,
+        isHost = roomInfo.isHost or false,
+        maxPlayers = roomInfo.maxPlayers or 4
+    }
+    lobbyData.isHost = roomInfo.isHost or false
+    -- Players are automatically ready when joining
+    lobbyData.isReady = true
+    if Network and Network.SetPlayerReady then
+        Network.SetPlayerReady(true)
+        print("[UI] Auto-ready: true")
+    end
     UpdateLobbyUI(roomInfo.name)
     UI.HideAllMenus()
     UI.ShowMenu("lobby_waiting")
@@ -1302,9 +1381,39 @@ function OnPlayerReadyChanged(playerId, ready)
     UpdatePlayerListUI()
 end
 
+-- NOUVEAU: Callback pour la mise à jour de la liste des joueurs (Problème 2)
+function OnRoomPlayersUpdated(players)
+    print("[UI] Room players updated: " .. #players .. " players")
+    lobbyData.players = {}
+    
+    for i, player in ipairs(players) do
+        table.insert(lobbyData.players, {
+            id = player.id,
+            name = player.name,
+            isHost = player.isHost,
+            ready = player.ready
+        })
+        print("[UI]   - " .. player.name .. (player.isHost and " (HOST)" or ""))
+    end
+    
+    UpdatePlayerListUI()
+end
+
 function OnGameStarting(countdown)
     print("[UI] Game starting in " .. countdown .. " seconds")
-    UI.SetText(lobbyElements.roomInfo, "Starting in " .. countdown .. "...")
+    
+    -- Cacher le menu du lobby pour laisser place au jeu
+    UI.HideMenu("lobby_waiting")
+    UI.HideMenu("server_browser")
+    UI.HideMenu("create_room_menu")
+    UI.HideMenu("main_menu")
+    
+    -- Afficher un compte à rebours si besoin
+    if lobbyElements.roomInfo then
+        UI.SetText(lobbyElements.roomInfo, "Starting in " .. countdown .. "...")
+    end
+    
+    print("[UI] Lobby menus hidden, game starting...")
 end
 
 function OnChatMessage(sender, message)
@@ -1316,13 +1425,58 @@ end
 -- UI UPDATE HELPERS
 -- ============================================
 function UpdateServerListUI()
-    -- Hide "no servers" text if we have servers
-    if serverBrowserElements.noServersText then
-        UI.SetVisible(serverBrowserElements.noServersText, #lobbyData.rooms == 0)
+    -- NOUVEAU: Ne pas mettre à jour si on est déjà dans une room !
+    if lobbyData.currentRoom then
+        print("[UI] Ignoring server list update - already in a room")
+        return
     end
     
-    -- Update server entries (would need dynamic creation)
-    -- For now, this is a placeholder
+    -- Nettoyer les anciennes callbacks
+    if serverBrowserElements.serverEntries then
+        for _, entry in ipairs(serverBrowserElements.serverEntries) do
+            if entry.roomId then
+                _G["OnRoomSelected_" .. entry.roomId] = nil  -- Supprime la callback
+            end
+        end
+    end
+    serverBrowserElements.serverEntries = {}
+    
+    -- Create new server entries dynamically
+    local startY = 250
+    local spacing = 70
+    local centerX = 960  -- Assuming 1920x1080
+    
+    for i, room in ipairs(lobbyData.rooms) do
+        if i <= 6 then  -- Limit to 6 rooms visible
+            local y = startY + (i - 1) * spacing
+            
+            -- Create room button
+            local buttonText = room.name .. " (" .. room.currentPlayers .. "/" .. room.maxPlayers .. ")"
+            local roomButton = UI.CreateButton({
+                x = centerX,
+                y = y,
+                width = 600,
+                height = 55,
+                text = buttonText,
+                onClick = "OnRoomSelected_" .. room.id,
+                menuGroup = "server_browser"
+            })
+            
+            -- Store the button and create the callback
+            table.insert(serverBrowserElements.serverEntries, {
+                button = roomButton,
+                roomId = room.id
+            })
+            
+            -- Create global callback function for this room
+            _G["OnRoomSelected_" .. room.id] = function()
+                print("[UI] Selected room: " .. room.name .. " (ID: " .. room.id .. ")")
+                JoinRoom(room.id)
+            end
+        end
+    end
+    
+    print("[UI] Updated server list with " .. #lobbyData.rooms .. " rooms")
 end
 
 function UpdateLobbyUI(roomName)
@@ -1330,18 +1484,53 @@ function UpdateLobbyUI(roomName)
         UI.SetText(lobbyElements.roomTitle, "ROOM: " .. roomName)
     end
     
+    -- Create slots dynamically based on maxPlayers
+    local maxPlayers = (lobbyData.currentRoom and lobbyData.currentRoom.maxPlayers) or 4
+    local menuGroup = "lobby_waiting"
+    local centerX = 960
+    
+    -- Create slots if they don't exist or if count changed
+    if #lobbyElements.playerSlots ~= maxPlayers then
+        lobbyElements.playerSlots = {}
+        for i = 1, maxPlayers do
+            local slotY = 250 + (i - 1) * 70
+            lobbyElements.playerSlots[i] = {
+                panel = UI.CreatePanel({
+                    x = centerX - 250,
+                    y = slotY,
+                    width = 500,
+                    height = 60,
+                    backgroundColor = 0x1E90FF44,
+                    modal = false,
+                    menuGroup = menuGroup
+                }),
+                nameText = UI.CreateText({
+                    x = centerX - 150,
+                    y = slotY + 20,
+                    text = "Empty Slot",
+                    fontSize = 22,
+                    color = COLORS.GRAY,
+                    menuGroup = menuGroup
+                }),
+                statusText = UI.CreateText({
+                    x = centerX + 150,
+                    y = slotY + 20,
+                    text = "",
+                    fontSize = 20,
+                    color = COLORS.GRAY,
+                    menuGroup = menuGroup
+                })
+            }
+        end
+    end
+    
     -- Show/hide host-specific buttons
     if lobbyElements.startBtn then
         UI.SetVisible(lobbyElements.startBtn, lobbyData.isHost)
     end
     
-    -- Reset ready button
-    if lobbyElements.readyBtn then
-        UI.SetText(lobbyElements.readyBtn, "READY")
-        UI.SetVisible(lobbyElements.readyBtn, not lobbyData.isHost)
-    end
-    
-    lobbyData.isReady = false
+    -- Players are automatically ready
+    lobbyData.isReady = true
 end
 
 function UpdatePlayerListUI()
@@ -1353,7 +1542,8 @@ function UpdatePlayerListUI()
                 local player = lobbyData.players[i]
                 UI.SetText(slot.nameText, player.name)
                 
-                local statusText = player.ready and "READY" or "NOT READY"
+                -- All players are automatically ready
+                local statusText = "READY"
                 if player.isHost then
                     statusText = "HOST"
                 end
@@ -1379,6 +1569,16 @@ function UpdateUI(deltaTime)
         
         -- Note: Would need UI.SetScale() function to actually apply this
         -- For now, this is prepared for future implementation
+    end
+    
+    -- Timeout de sécurité pour le join
+    if lobbyData.joiningRoom and lobbyData.joinTimeout then
+        local elapsed = os.time() - lobbyData.joinTimeout
+        if elapsed > 5 then  -- 5 secondes timeout
+            print("[UI] Join timeout - resetting flag")
+            lobbyData.joiningRoom = false
+            lobbyData.joinTimeout = nil
+        end
     end
 end
 

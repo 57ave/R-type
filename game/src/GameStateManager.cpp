@@ -78,6 +78,8 @@ void GameStateManager::GoBack()
             SetState(GameState::Playing);
             break;
         case GameState::GameOver:
+            SetState(GameState::MainMenu);
+            break;
         case GameState::Victory:
             SetState(GameState::MainMenu);
             break;
