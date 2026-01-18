@@ -21,7 +21,7 @@ void AnimationSystem::Update(float dt)
 {
     if (!coordinator_) return;
 
-    // Update basic frame-based animations
+    // Update basic frame-based animation
     for (auto entity : mEntities) {
         if (!coordinator_->HasComponent<Animation>(entity) || 
             !coordinator_->HasComponent<Sprite>(entity))
