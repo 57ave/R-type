@@ -76,6 +76,12 @@ public:
         }
         return list;
     }
+    
+    // NOUVEAU: Retourne toutes les rooms sous forme de map (Problème 3)
+    std::map<uint32_t, std::shared_ptr<Room>> getAllRooms() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return rooms_;
+    }
 
 private:
     std::map<uint32_t, std::shared_ptr<Room>> rooms_;

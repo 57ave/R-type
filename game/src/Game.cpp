@@ -2,6 +2,8 @@
 #include <filesystem>
 #include <fstream>
 #include <core/GameStateCallbacks.hpp>
+#include "network/NetworkBindings.hpp"
+#include "network/RTypeProtocol.hpp"  // Pour RoomPlayersPayload et ChatMessagePayload
 
 // Cache for the resolved base path
 static std::string g_basePath = "";
@@ -1079,6 +1081,11 @@ int Game::Run(int argc, char* argv[])
             networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
             networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
 
+            // Register network bindings to Lua for lobby/rooming system
+            RType::Network::NetworkBindings::RegisterAll(luaState.GetState());
+            RType::Network::NetworkBindings::SetNetworkClient(networkClient);
+            std::cout << "[Game] Network bindings registered to Lua" << std::endl;
+
             // Set callback to register new entities and add sprites
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
                 allEntities.push_back(entity);
@@ -1229,6 +1236,12 @@ int Game::Run(int argc, char* argv[])
             networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
                 std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed by server" << std::endl;
                 // Just log, don't create explosions - server handles that
+            });
+
+            // Set callback for game start
+            networkSystem->setGameStartCallback([this]() {
+                std::cout << "[Game] GAME_START received - transitioning to Playing state" << std::endl;
+                GameStateManager::Instance().SetState(GameState::Playing);
             });
 
             networkClient->start();
@@ -1752,10 +1765,10 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "Game initialized successfully!" << std::endl;
 
-    // In network mode, start directly in Playing state (server handles game logic)
+    // Network mode stays on MainMenu - player will join/create room via UI
+    // GameState changes to Playing when room owner starts the game
     if (networkMode) {
-        GameStateManager::Instance().SetState(GameState::Playing);
-        std::cout << "[Game] Network mode: Starting directly in Playing state" << std::endl;
+        std::cout << "[Game] Network mode: Starting on main menu - waiting for room creation/join" << std::endl;
     }
 
     // Input mask for network
@@ -1876,6 +1889,107 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         if (networkMode && networkSystem) {
             networkSystem->Update(deltaTime);
+
+            // Process rooming packets (ROOM_LIST_REPLY, ROOM_CREATED, ROOM_JOINED, GAME_START)
+            while (networkClient && networkClient->hasReceivedPackets()) {
+                auto packet = networkClient->getNextReceivedPacket();
+                auto packetType = static_cast<GamePacketType>(packet.header.type);
+                
+                switch (packetType) {
+                    case GamePacketType::ROOM_LIST_REPLY: {
+                        try {
+                            RoomListPayload payload = RoomListPayload::deserialize(packet.payload);
+                            RType::Network::NetworkBindings::OnRoomListReceived(payload.rooms);
+                            std::cout << "[Game] Received room list: " << payload.rooms.size() << " rooms" << std::endl;
+                        } catch (const std::exception& e) {
+                            std::cerr << "[Game] Error parsing ROOM_LIST_REPLY: " << e.what() << std::endl;
+                        }
+                        break;
+                    }
+                    
+                    case GamePacketType::ROOM_CREATED: {
+                        if (packet.payload.size() >= 4) {
+                            Network::Deserializer deserializer(packet.payload);
+                            uint32_t roomId = deserializer.read<uint32_t>();
+                            RType::Network::NetworkBindings::OnRoomCreated(roomId);
+                            std::cout << "[Game] Room created with ID: " << roomId << std::endl;
+                        }
+                        break;
+                    }
+                    
+                    case GamePacketType::ROOM_JOINED: {
+                        if (packet.payload.size() >= 4) {
+                            try {
+                                Network::Deserializer deserializer(packet.payload);
+                                uint32_t roomId = deserializer.read<uint32_t>();
+                                std::string roomName = deserializer.readString();
+                                uint8_t maxPlayers = deserializer.read<uint8_t>();
+                                uint32_t hostPlayerId = deserializer.read<uint32_t>();
+                                
+                                bool isHost = (networkSystem && hostPlayerId == networkSystem->getLocalPlayerId());
+                                RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName, maxPlayers, isHost);
+                                std::cout << "[Game] Successfully joined room: " << roomName << " (ID: " << roomId 
+                                          << ", max: " << static_cast<int>(maxPlayers) 
+                                          << ", host: " << (isHost ? "YES" : "NO") << ")" << std::endl;
+                            } catch (const std::exception& e) {
+                                std::cerr << "[Game] Error parsing ROOM_JOINED: " << e.what() << std::endl;
+                            }
+                        }
+                        break;
+                    }
+                    
+                    case GamePacketType::GAME_START: {
+                        std::cout << "[Game] ========== GAME STARTING! =========" << std::endl;
+                        
+                        // Transition d'état
+                        GameStateManager::Instance().SetState(GameState::Playing);
+                        
+                        // Notifier Lua pour cacher les menus
+                        RType::Network::NetworkBindings::OnGameStarting(3); // 3 second countdown
+                        
+                        std::cout << "[Game] Transitioned to Playing state" << std::endl;
+                        break;
+                    }
+                    
+                    case GamePacketType::ROOM_PLAYERS_UPDATE: {
+                        try {
+                            RoomPlayersPayload payload = RoomPlayersPayload::deserialize(packet.payload);
+                            std::cout << "[Game] Received player list update for room " << payload.roomId 
+                                      << ": " << payload.players.size() << " players" << std::endl;
+                            RType::Network::NetworkBindings::OnRoomPlayersUpdated(payload.players);
+                        } catch (const std::exception& e) {
+                            std::cerr << "[Game] Error parsing ROOM_PLAYERS_UPDATE: " << e.what() << std::endl;
+                        }
+                        break;
+                    }
+                    
+                    case GamePacketType::CHAT_MESSAGE: {
+                        try {
+                            ChatMessagePayload payload = ChatMessagePayload::deserialize(packet.payload);
+                            std::cout << "[Game] Chat from " << payload.senderName << ": " << payload.message << std::endl;
+                            RType::Network::NetworkBindings::OnChatMessage(payload.senderName, payload.message);
+                        } catch (const std::exception& e) {
+                            std::cerr << "[Game] Error parsing CHAT_MESSAGE: " << e.what() << std::endl;
+                        }
+                        break;
+                    }
+                    
+                    // These packets are handled by NetworkSystem
+                    case GamePacketType::SERVER_WELCOME:
+                    case GamePacketType::WORLD_SNAPSHOT:
+                    case GamePacketType::ENTITY_SPAWN:
+                    case GamePacketType::ENTITY_DESTROY:
+                    case GamePacketType::PLAYER_DIED:
+                    case GamePacketType::CLIENT_LEFT:
+                        // Already processed by NetworkSystem, skip
+                        break;
+                    
+                    default:
+                        // Unknown packet type
+                        std::cout << "[Game] Unknown/unhandled packet type: " << packet.header.type << std::endl;
+                        break;
+                }
+            }
 
             // Count entities with Enemy tag
             int enemyCount = 0;
@@ -2361,7 +2475,8 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         // 4. LOCAL ENEMY SPAWNING (Only in local mode during gameplay)
         // ========================================
-        if (!inMenu && !networkMode) {
+        // In network mode, the SERVER spawns all enemies - clients just render them
+        if (!inMenu && !networkMode && currentState == GameState::Playing) {
             enemySpawnTimer += deltaTime;
             // Local Lua state reference for config/factory access
             sol::state& lua = luaState.GetState();
