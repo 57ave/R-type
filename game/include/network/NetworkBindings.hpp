@@ -86,8 +86,10 @@ public:
      * @brief Called when successfully joined a room
      * @param roomId The room ID
      * @param roomName The room name
+     * @param maxPlayers Maximum players allowed
+     * @param isHost Whether this player is the host
      */
-    static void OnRoomJoined(uint32_t roomId, const std::string& roomName);
+    static void OnRoomJoined(uint32_t roomId, const std::string& roomName, uint8_t maxPlayers, bool isHost);
     
     /**
      * @brief Called when another player joins the room

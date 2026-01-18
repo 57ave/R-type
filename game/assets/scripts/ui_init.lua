@@ -457,37 +457,9 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
     -- Player slot references (created dynamically)
     lobbyElements.playerSlots = {}
     
-    -- Create 4 player slots
-    for i = 1, 4 do
-        local slotY = 250 + (i - 1) * 70
-        lobbyElements.playerSlots[i] = {
-            panel = UI.CreatePanel({
-                x = centerX - 250,
-                y = slotY,
-                width = 500,
-                height = 60,
-                backgroundColor = 0x1E90FF44,
-                modal = false,
-                menuGroup = menuGroup
-            }),
-            nameText = UI.CreateText({
-                x = centerX - 150,
-                y = slotY + 20,
-                text = "Empty Slot",
-                fontSize = 22,
-                color = COLORS.GRAY,
-                menuGroup = menuGroup
-            }),
-            statusText = UI.CreateText({
-                x = centerX + 150,
-                y = slotY + 20,
-                text = "",
-                fontSize = 20,
-                color = COLORS.GRAY,
-                menuGroup = menuGroup
-            })
-        }
-    end
+    -- Create player slots dynamically (will be created when joining room)
+    -- We'll create them in UpdateLobbyUI based on actual maxPlayers
+    lobbyElements.playerSlots = {}
     
     -- Bottom buttons
     local buttonY = height - 150
@@ -1330,8 +1302,12 @@ end
 function OnRoomJoined(roomInfo)
     print("[UI] Joined room: " .. roomInfo.name)
     lobbyData.joiningRoom = false  -- Reset le flag de join
-    lobbyData.currentRoom = roomInfo
-    lobbyData.isHost = roomInfo.isHost
+    lobbyData.currentRoom = {
+        name = roomInfo.name,
+        isHost = roomInfo.isHost or false,
+        maxPlayers = roomInfo.maxPlayers or 4
+    }
+    lobbyData.isHost = roomInfo.isHost or false
     UpdateLobbyUI(roomInfo.name)
     UI.HideAllMenus()
     UI.ShowMenu("lobby_waiting")
@@ -1387,8 +1363,8 @@ end
 function OnGameStarting(countdown)
     print("[UI] Game starting in " .. countdown .. " seconds")
     
-    -- Cacher seulement les menus de lobby/browser (pas tout !)
-    UI.HideMenu("lobby_menu")
+    -- Cacher le menu du lobby pour laisser place au jeu
+    UI.HideMenu("lobby_waiting")
     UI.HideMenu("server_browser")
     UI.HideMenu("create_room_menu")
     UI.HideMenu("main_menu")
@@ -1467,6 +1443,46 @@ end
 function UpdateLobbyUI(roomName)
     if lobbyElements.roomTitle then
         UI.SetText(lobbyElements.roomTitle, "ROOM: " .. roomName)
+    end
+    
+    -- Create slots dynamically based on maxPlayers
+    local maxPlayers = (lobbyData.currentRoom and lobbyData.currentRoom.maxPlayers) or 4
+    local menuGroup = "lobby_waiting"
+    local centerX = 960
+    
+    -- Create slots if they don't exist or if count changed
+    if #lobbyElements.playerSlots ~= maxPlayers then
+        lobbyElements.playerSlots = {}
+        for i = 1, maxPlayers do
+            local slotY = 250 + (i - 1) * 70
+            lobbyElements.playerSlots[i] = {
+                panel = UI.CreatePanel({
+                    x = centerX - 250,
+                    y = slotY,
+                    width = 500,
+                    height = 60,
+                    backgroundColor = 0x1E90FF44,
+                    modal = false,
+                    menuGroup = menuGroup
+                }),
+                nameText = UI.CreateText({
+                    x = centerX - 150,
+                    y = slotY + 20,
+                    text = "Empty Slot",
+                    fontSize = 22,
+                    color = COLORS.GRAY,
+                    menuGroup = menuGroup
+                }),
+                statusText = UI.CreateText({
+                    x = centerX + 150,
+                    y = slotY + 20,
+                    text = "",
+                    fontSize = 20,
+                    color = COLORS.GRAY,
+                    menuGroup = menuGroup
+                })
+            }
+        end
     end
     
     -- Show/hide host-specific buttons

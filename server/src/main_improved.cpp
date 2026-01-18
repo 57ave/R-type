@@ -681,6 +681,17 @@ private:
             Network::Serializer joinedSerializer;
             joinedSerializer.write(roomId);
             joinedSerializer.writeString(payload.name);
+            
+            // Send maxPlayers and hostPlayerId so client knows full room info
+            auto createdRoom = server_.getRoomManager().getRoom(roomId);
+            if (createdRoom) {
+                joinedSerializer.write(createdRoom->maxPlayers);
+                joinedSerializer.write(static_cast<uint32_t>(createdRoom->hostPlayerId));
+            } else {
+                joinedSerializer.write(static_cast<uint8_t>(4));  // default
+                joinedSerializer.write(static_cast<uint32_t>(playerId));  // fallback
+            }
+            
             joinedReply.setPayload(joinedSerializer.getBuffer());
             joinedReply.header.timestamp = getCurrentTimestamp();
             server_.sendTo(joinedReply, sender);
@@ -723,8 +734,12 @@ private:
                 auto room = server_.getRoomManager().getRoom(payload.roomId);
                 if (room) {
                     serializer.writeString(room->name);
+                    serializer.write(room->maxPlayers);
+                    serializer.write(static_cast<uint32_t>(room->hostPlayerId));
                 } else {
                     serializer.writeString("Unknown Room");
+                    serializer.write(static_cast<uint8_t>(4));
+                    serializer.write(static_cast<uint32_t>(0));
                 }
                 
                 reply.setPayload(serializer.getBuffer());

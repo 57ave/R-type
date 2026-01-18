@@ -200,7 +200,7 @@ void NetworkBindings::OnRoomCreated(uint32_t roomId) {
     // On attend juste la confirmation ROOM_JOINED du serveur
 }
 
-void NetworkBindings::OnRoomJoined(uint32_t roomId, const std::string& roomName) {
+void NetworkBindings::OnRoomJoined(uint32_t roomId, const std::string& roomName, uint8_t maxPlayers, bool isHost) {
     if (!s_lua) {
         std::cerr << "[NetworkBindings] Cannot call Lua callback: Lua state not set" << std::endl;
         return;
@@ -213,11 +213,12 @@ void NetworkBindings::OnRoomJoined(uint32_t roomId, const std::string& roomName)
         return;
     }
     
-    // Create room info table
+    // Create room info table with all properties
     sol::table roomInfo = s_lua->create_table();
     roomInfo["id"] = roomId;
     roomInfo["name"] = roomName;
-    roomInfo["isHost"] = false; // TODO: Detect if we are the host
+    roomInfo["maxPlayers"] = maxPlayers;
+    roomInfo["isHost"] = isHost;
     
     // Call Lua function
     auto result = luaCallback(roomInfo);
@@ -226,7 +227,9 @@ void NetworkBindings::OnRoomJoined(uint32_t roomId, const std::string& roomName)
         std::cerr << "[NetworkBindings] Lua error in OnRoomJoined: " 
                   << err.what() << std::endl;
     } else {
-        std::cout << "[NetworkBindings] OnRoomJoined called in Lua (room: " << roomName << ")" << std::endl;
+        std::cout << "[NetworkBindings] OnRoomJoined called in Lua (room: " << roomName 
+                  << ", max: " << static_cast<int>(maxPlayers) 
+                  << ", host: " << (isHost ? "YES" : "NO") << ")" << std::endl;
     }
 }
 

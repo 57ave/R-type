@@ -1777,8 +1777,14 @@ int Game::Run(int argc, char* argv[])
                                 Network::Deserializer deserializer(packet.payload);
                                 uint32_t roomId = deserializer.read<uint32_t>();
                                 std::string roomName = deserializer.readString();
-                                RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName);
-                                std::cout << "[Game] Successfully joined room: " << roomName << " (ID: " << roomId << ")" << std::endl;
+                                uint8_t maxPlayers = deserializer.read<uint8_t>();
+                                uint32_t hostPlayerId = deserializer.read<uint32_t>();
+                                
+                                bool isHost = (networkSystem && hostPlayerId == networkSystem->getLocalPlayerId());
+                                RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName, maxPlayers, isHost);
+                                std::cout << "[Game] Successfully joined room: " << roomName << " (ID: " << roomId 
+                                          << ", max: " << static_cast<int>(maxPlayers) 
+                                          << ", host: " << (isHost ? "YES" : "NO") << ")" << std::endl;
                             } catch (const std::exception& e) {
                                 std::cerr << "[Game] Error parsing ROOM_JOINED: " << e.what() << std::endl;
                             }

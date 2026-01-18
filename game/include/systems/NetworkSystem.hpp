@@ -260,8 +260,8 @@ private:
     void handleRoomJoined(const NetworkPacket& packet) {
         std::cout << "[NetworkSystem] Received ROOM_JOINED" << std::endl;
         
-        // Check payload size
-        if (packet.payload.size() < sizeof(uint32_t)) {
+        // Check payload size (roomId + roomName + maxPlayers + hostPlayerId)
+        if (packet.payload.size() < sizeof(uint32_t) + 1) {
             std::cerr << "[NetworkSystem] ROOM_JOINED payload too small: " << packet.payload.size() << " bytes" << std::endl;
             return;
         }
@@ -271,11 +271,17 @@ private:
             Network::Deserializer deserializer(packet.payload);
             uint32_t roomId = deserializer.read<uint32_t>();
             std::string roomName = deserializer.readString();
+            uint8_t maxPlayers = deserializer.read<uint8_t>();
+            uint32_t hostPlayerId = deserializer.read<uint32_t>();
             
-            std::cout << "[NetworkSystem] Joined room " << roomId << ": " << roomName << std::endl;
+            bool isHost = (hostPlayerId == localPlayerId_);
             
-            // Forward to NetworkBindings
-            RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName);
+            std::cout << "[NetworkSystem] Joined room " << roomId << ": " << roomName 
+                      << " (max: " << static_cast<int>(maxPlayers) << ", host: " 
+                      << (isHost ? "YES" : "NO") << ")" << std::endl;
+            
+            // Forward to NetworkBindings with all info
+            RType::Network::NetworkBindings::OnRoomJoined(roomId, roomName, maxPlayers, isHost);
         } catch (const std::exception& e) {
             std::cerr << "[NetworkSystem] Error deserializing ROOM_JOINED: " << e.what() << std::endl;
         }
