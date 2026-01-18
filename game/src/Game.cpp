@@ -694,26 +694,25 @@ int Game::Run(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
 
-    // Parse command line arguments
-    bool networkMode = false;
+    // Network mode is now ALWAYS enabled by default
+    bool networkMode = true;
     std::string serverAddress = "127.0.0.1";
     short serverPort = 12345;
 
-    if (argc > 1 && std::string(argv[1]) == "--network") {
-        networkMode = true;
-        isNetworkClient = true;  // Mark as network client
-        if (argc > 2) {
-            serverAddress = argv[2];
-        }
-        if (argc > 3) {
-            serverPort = static_cast<short>(std::stoi(argv[3]));
-        }
-        std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
-        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
-    } else {
-        std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
-        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
+    // Optional: Allow override of server address/port via command line
+    // Usage: ./r-type_game [server_ip] [port]
+    if (argc > 1) {
+        serverAddress = argv[1];
+        std::cout << "[Game] Custom server address: " << serverAddress << std::endl;
     }
+    if (argc > 2) {
+        serverPort = static_cast<short>(std::stoi(argv[2]));
+        std::cout << "[Game] Custom server port: " << serverPort << std::endl;
+    }
+
+    isNetworkClient = true;  // Always true now
+    std::cout << "[Game] Network mode ENABLED by default. Server: " << serverAddress << ":" << serverPort << std::endl;
+    std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
 
     // Initialize ECS Coordinator
     gCoordinator.Init();
