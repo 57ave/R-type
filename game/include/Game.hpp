@@ -68,6 +68,13 @@
 
     // Game State Management
     #include "GameStateManager.hpp"
+    
+    // Custom UI Components
+    #include "ui/HealthBarUI.hpp"
+    #include "ui/ScoreUI.hpp"
+    
+    // ShootEmUp Score Component
+    #include <components/Score.hpp>
 
     // Generic Engine Systems
     #include <systems/MovementSystem.hpp>
@@ -221,6 +228,16 @@
             
             // Window pointer for resolution changes from Lua
             SFMLWindow* m_window = nullptr;
+            
+            // ========================================
+            // GAMEPLAY UI - Health Bars and Scores
+            // ========================================
+            HealthBarUI playerHealthBar;
+            ScoreUI playerScoreUI;
+            std::unordered_map<ECS::Entity, HealthBarUI> otherPlayersHealthBars;
+            std::unordered_map<ECS::Entity, ScoreUI> otherPlayersScoreUIs;
+            sf::Font gameFont;
+            bool gameFontLoaded = false;
     };
 
 #endif // GAME_HPP

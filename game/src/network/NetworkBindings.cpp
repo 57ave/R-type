@@ -19,6 +19,7 @@ void NetworkBindings::RegisterAll(sol::state& lua) {
     netTable["RequestRoomList"] = &NetworkBindings::RequestRoomList;
     netTable["CreateRoom"] = &NetworkBindings::CreateRoom;
     netTable["JoinRoom"] = &NetworkBindings::JoinRoom;
+    netTable["Connect"] = &NetworkBindings::Connect;
     netTable["LeaveRoom"] = &NetworkBindings::LeaveRoom;
     netTable["SetPlayerReady"] = &NetworkBindings::SetPlayerReady;
     netTable["StartGame"] = &NetworkBindings::StartGame;
@@ -30,6 +31,10 @@ void NetworkBindings::RegisterAll(sol::state& lua) {
 void NetworkBindings::SetNetworkClient(std::shared_ptr<NetworkClient> client) {
     s_networkClient = client;
     std::cout << "[NetworkBindings] NetworkClient set" << std::endl;
+}
+
+std::shared_ptr<NetworkClient> NetworkBindings::GetNetworkClient() {
+    return s_networkClient;
 }
 
 // ========== Functions called FROM Lua ==========
@@ -49,6 +54,68 @@ void NetworkBindings::RequestRoomList() {
     s_networkClient->sendPacket(packet);
     
     std::cout << "[NetworkBindings] ROOM_LIST request sent to server" << std::endl;
+}
+
+void NetworkBindings::Connect(const std::string& host, int port) {
+    try {
+        if (host.empty() || port <= 0) {
+            std::cerr << "[NetworkBindings] Invalid host/port" << std::endl;
+            return;
+        }
+
+        // If we already have an active connected client, do not open another connection.
+        if (s_networkClient && s_networkClient->isConnected()) {
+            std::cout << "[NetworkBindings] Already connected - ignoring duplicate Connect()" << std::endl;
+            // Notify Lua that we're connected (useful if UI initiated a redundant call)
+            if (s_lua) {
+                sol::protected_function onConnected = (*s_lua)["OnConnected"];
+                if (onConnected.valid()) {
+                    try { onConnected(host, port); } catch (const std::exception& e) { std::cerr << "[NetworkBindings] Lua OnConnected error: " << e.what() << std::endl; }
+                }
+            }
+            return;
+        }
+
+        // If a client exists but is not connected, attempt to cleanly disconnect and reset it
+        if (s_networkClient) {
+            try {
+                s_networkClient->disconnect();
+            } catch (const std::exception& e) {
+                std::cerr << "[NetworkBindings] Warning: error while disconnecting previous client: " << e.what() << std::endl;
+            }
+            s_networkClient.reset();
+        }
+
+        auto client = std::make_shared<NetworkClient>(host, static_cast<short>(port));
+        client->start();
+        // Send CLIENT_HELLO so the server recognizes and replies with Welcome
+        try {
+            client->sendHello();
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkBindings] Warning: sendHello() threw: " << e.what() << std::endl;
+        }
+        SetNetworkClient(client);
+
+        std::cout << "[NetworkBindings] Connected to " << host << ":" << port << std::endl;
+
+        // Notify Lua that we've connected (optional callback)
+        if (s_lua) {
+            try {
+                sol::protected_function onConnected = (*s_lua)["OnConnected"];
+                if (onConnected.valid()) {
+                    auto res = onConnected(host, port);
+                    if (!res.valid()) {
+                        sol::error err = res;
+                        std::cerr << "[NetworkBindings] Lua OnConnected error: " << err.what() << std::endl;
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[NetworkBindings] Exception calling OnConnected: " << e.what() << std::endl;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[NetworkBindings] Connect error: " << e.what() << std::endl;
+    }
 }
 
 void NetworkBindings::CreateRoom(const std::string& name, int maxPlayers,

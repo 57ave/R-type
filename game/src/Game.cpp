@@ -144,6 +144,15 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     gCoordinator.AddComponent(player, Tag{"player"});
     gCoordinator.AddComponent(player, ShootEmUp::Components::PlayerTag{0});
 
+    // Score - Initialize with 0 score
+    ShootEmUp::Components::Score score;
+    score.currentScore = 0;
+    score.highScore = 0;
+    score.comboMultiplier = 1;
+    score.comboTimer = 0.0f;
+    score.consecutiveKills = 0;
+    gCoordinator.AddComponent(player, score);
+
     return player;
 }
 
@@ -606,6 +615,9 @@ int Game::Run(int argc, char* argv[])
     gCoordinator.RegisterComponent<ChargeAnimation>();
     gCoordinator.RegisterComponent<NetworkId>();
     
+    // Register ShootEmUp Score component
+    gCoordinator.RegisterComponent<ShootEmUp::Components::Score>();
+    
     // Register Audio components
     gCoordinator.RegisterComponent<AudioSource>();
     gCoordinator.RegisterComponent<SoundEffect>();
@@ -636,6 +648,11 @@ int Game::Run(int argc, char* argv[])
     Scripting::ComponentBindings::RegisterCoordinator(luaState.GetState(), &gCoordinator);
 
     std::cout << "[Game] Lua components registered" << std::endl;
+
+    // Register network bindings to Lua even if we start in local mode.
+    // This allows Lua/UI to call Network.Connect(...) at runtime.
+    RType::Network::NetworkBindings::RegisterAll(luaState.GetState());
+    std::cout << "[Game] Network bindings registered to Lua (deferred connect supported)" << std::endl;
 
     // ========================================
     // INITIALIZE GAME STATE MANAGER
@@ -890,6 +907,45 @@ int Game::Run(int argc, char* argv[])
             }
         }
 
+        // ========================================
+        // SCORE SYSTEM - Award points when enemy is destroyed
+        // ========================================
+        if (bDied && bIsEnemy && aIsProjectile) {
+            // Check if the projectile was from the local player
+            if (gCoordinator.HasComponent<ShootEmUp::Components::ProjectileTag>(a)) {
+                auto& projTag = gCoordinator.GetComponent<ShootEmUp::Components::ProjectileTag>(a);
+                if (projTag.isPlayerProjectile) {
+                    // Find the player entity to award score
+                    ECS::Entity localPlayer = 0;
+                    for (auto entity : allEntities) {
+                        if (gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(entity) &&
+                            gCoordinator.HasComponent<ShootEmUp::Components::Score>(entity)) {
+                            auto& playerTag = gCoordinator.GetComponent<ShootEmUp::Components::PlayerTag>(entity);
+                            if (playerTag.playerId == 0) {  // Local player has playerId 0
+                                localPlayer = entity;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (localPlayer != 0) {
+                        auto& score = gCoordinator.GetComponent<ShootEmUp::Components::Score>(localPlayer);
+                        
+                        // Get enemy score value (default 100 points)
+                        uint32_t pointsAwarded = 100;
+                        if (gCoordinator.HasComponent<ShootEmUp::Components::EnemyTag>(b)) {
+                            auto& enemyTag = gCoordinator.GetComponent<ShootEmUp::Components::EnemyTag>(b);
+                            pointsAwarded = enemyTag.scoreValue;
+                        }
+                        
+                        score.AddPoints(pointsAwarded);
+                        std::cout << "[Score] +" << pointsAwarded << " points (x" << score.comboMultiplier 
+                                  << ") | Total: " << score.currentScore << std::endl;
+                    }
+                }
+            }
+        }
+        
         // Create explosion ONLY when something dies (not on every collision frame)
         if (!isNetworkClient && (aDied || bDied)) {
             // Create explosion at the center of the entity that died
@@ -940,10 +996,9 @@ int Game::Run(int argc, char* argv[])
             networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
             networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
 
-            // Register network bindings to Lua for lobby/rooming system
-            RType::Network::NetworkBindings::RegisterAll(luaState.GetState());
+            // Set the NetworkClient for bindings (we already registered bindings earlier)
             RType::Network::NetworkBindings::SetNetworkClient(networkClient);
-            std::cout << "[Game] Network bindings registered to Lua" << std::endl;
+            std::cout << "[Game] Network client set for Lua bindings" << std::endl;
 
             // Set callback to register new entities and add sprites
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
@@ -1192,6 +1247,25 @@ int Game::Run(int argc, char* argv[])
             lastAppliedFullscreen = fullscreen;
         }
     };
+
+    // ========================================
+    // LOAD GAME FONT FOR UI
+    // ========================================
+    std::string fontPath = ResolveAssetPath("game/assets/fonts/arial.ttf");
+    if (!gameFont.loadFromFile(fontPath)) {
+        // Try alternative font path
+        fontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+        if (!gameFont.loadFromFile(fontPath)) {
+            std::cerr << "[Game] Warning: Could not load font - UI text will not display" << std::endl;
+            gameFontLoaded = false;
+        } else {
+            gameFontLoaded = true;
+            std::cout << "[Game] Loaded system font: " << fontPath << std::endl;
+        }
+    } else {
+        gameFontLoaded = true;
+        std::cout << "[Game] Loaded game font: " << fontPath << std::endl;
+    }
 
     // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
@@ -1573,7 +1647,9 @@ int Game::Run(int argc, char* argv[])
         sol::state& lua = luaState.GetState();
         sol::protected_function initUI = lua["InitUI"];
         if (initUI.valid()) {
-            sol::protected_function_result result = initUI(1920, 1080);
+            // Use the actual created window size instead of hardcoded values
+            auto winSize = window.getSize();
+            sol::protected_function_result result = initUI(winSize.x, winSize.y);
             if (!result.valid()) {
                 sol::error err = result;
                 std::cerr << "[Game] InitUI() error: " << err.what() << std::endl;
@@ -1654,6 +1730,13 @@ int Game::Run(int argc, char* argv[])
             player = CreatePlayer(100.0f, 400.0f);
             playerCreated = true;
             std::cout << "[Game] Player created - game starting!" << std::endl;
+            
+            // Initialize player UI elements
+            playerHealthBar.Init(20.0f, 20.0f, 250.0f, 30.0f);
+            if (gameFontLoaded) {
+                playerScoreUI.Init(gameFont, 20.0f, 60.0f, 32);
+                std::cout << "[Game] Player UI initialized (HealthBar + Score)" << std::endl;
+            }
         }
 
         // Skip game logic updates when in menu states
@@ -1672,6 +1755,7 @@ int Game::Run(int argc, char* argv[])
                 // Special case: Pause menu - pause game music, don't play menu music
                 if (currentState == GameState::Paused) {
                     PauseMusic();
+                    // should pause the game also
                     std::cout << "[Game] Game music paused (entering pause menu)" << std::endl;
                 } else {
                     // For other menus (MainMenu, Options, etc.), play menu music
@@ -1737,17 +1821,36 @@ int Game::Run(int argc, char* argv[])
                 }
             }
         }
-
+        
         // ========================================
-        // 1. NETWORK UPDATE (Receives server state)
+        // RUNTIME NETWORK CLIENT UPDATE (for UI connections without --network flag)
         // ========================================
-        if (networkMode && networkSystem) {
+        // If we have a NetworkClient created at runtime (not from --network flag),
+        // we need to update it manually to keep the connection alive AND process its packets
+        std::shared_ptr<NetworkClient> activeClient = nullptr;
+        if (!networkMode) {
+            auto runtimeClient = RType::Network::NetworkBindings::GetNetworkClient();
+            if (runtimeClient && runtimeClient->isConnected()) {
+                runtimeClient->update(deltaTime);
+                runtimeClient->process();
+                activeClient = runtimeClient;  // Will process packets below
+            }
+        } else if (networkMode && networkSystem) {
+            // In network mode, use the --network flag client
             networkSystem->Update(deltaTime);
+            activeClient = networkClient;  // Will process packets below
+        }
 
+        // ========================================
+        // PROCESS NETWORK PACKETS (for both --network and runtime connections)
+        // ========================================
+        if (activeClient) {
             // Process rooming packets (ROOM_LIST_REPLY, ROOM_CREATED, ROOM_JOINED, GAME_START)
-            while (networkClient && networkClient->hasReceivedPackets()) {
-                auto packet = networkClient->getNextReceivedPacket();
+            while (activeClient->hasReceivedPackets()) {
+                auto packet = activeClient->getNextReceivedPacket();
                 auto packetType = static_cast<GamePacketType>(packet.header.type);
+                
+                std::cout << "[Game] Received packet type: " << static_cast<int>(packet.header.type) << std::endl;
                 
                 switch (packetType) {
                     case GamePacketType::ROOM_LIST_REPLY: {
@@ -1844,7 +1947,12 @@ int Game::Run(int argc, char* argv[])
                         break;
                 }
             }
+        }
 
+        // ========================================
+        // NETWORK MODE ONLY: ECS entity sprite management
+        // ========================================
+        if (networkMode && networkSystem) {
             // Count entities with Enemy tag
             int enemyCount = 0;
             int enemyWithSpriteCount = 0;
@@ -2546,6 +2654,33 @@ int Game::Run(int argc, char* argv[])
                 animationSystem->Update(deltaTime);
                 lifetimeSystem->Update(deltaTime);
             }
+            
+            // ========================================
+            // UPDATE PLAYER UI (Health Bar & Score)
+            // ========================================
+            if (player != 0 && playerCreated) {
+                // Update Health Bar
+                if (gCoordinator.HasComponent<Health>(player)) {
+                    auto& health = gCoordinator.GetComponent<Health>(player);
+                    playerHealthBar.Update(health.current, health.max);
+                    
+                    // Game Over si vie = 0
+                    if (health.current <= 0 && currentState == GameState::Playing) {
+                        std::cout << "[Game] Player died! Game Over" << std::endl;
+                        OnGameOver();
+                        GameStateManager::Instance().SetState(GameState::GameOver);
+                    }
+                }
+                
+                // Update Score UI
+                if (gCoordinator.HasComponent<ShootEmUp::Components::Score>(player)) {
+                    auto& score = gCoordinator.GetComponent<ShootEmUp::Components::Score>(player);
+                    score.UpdateCombo(deltaTime);
+                    if (gameFontLoaded) {
+                        playerScoreUI.UpdateScore(score.currentScore, score.comboMultiplier, score.consecutiveKills);
+                    }
+                }
+            }
         }
 
         // Process destroyed entities
@@ -2562,6 +2697,24 @@ int Game::Run(int argc, char* argv[])
         // Render using RenderSystem
         window.clear();
         renderSystem->Update(deltaTime);
+        
+        // ========================================
+        // RENDER GAMEPLAY UI (Health Bar & Score)
+        // ========================================
+        if (!inMenu && playerCreated && player != 0) {
+            // Render player health bar and score
+            if (playerHealthBar.IsInitialized()) {
+                playerHealthBar.Render(window.getSFMLWindow());
+            }
+            if (gameFontLoaded && playerScoreUI.IsInitialized()) {
+                playerScoreUI.Render(window.getSFMLWindow());
+            }
+            
+            // TODO: Render other players' health bars in network mode
+            // for (auto& [entity, healthBar] : otherPlayersHealthBars) {
+            //     healthBar.Render(window.getSFMLWindow());
+            // }
+        }
 
         // Render UI on top of game (always, so menus are visible)
         uiSystem->Render(&window);

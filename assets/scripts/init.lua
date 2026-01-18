@@ -105,7 +105,7 @@ end
 -- ============================================================================
 
 -- Active ou désactive le showcase automatique au démarrage en solo
-AUTO_START_SHOWCASE = true  -- Mettre à false pour désactiver
+AUTO_START_SHOWCASE = false  -- Mettre à false pour désactiver
 
 print("Configuration:")
 print("  • Auto-start showcase: " .. tostring(AUTO_START_SHOWCASE))

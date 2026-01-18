@@ -42,6 +42,32 @@ struct JoinRoomPayload {
     }
 };
 
+struct RoomJoinedPayload {
+    uint32_t roomId;
+    std::string roomName;
+    uint8_t maxPlayers;
+    uint32_t hostPlayerId;
+
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(roomId);
+        serializer.writeString(roomName);
+        serializer.write(maxPlayers);
+        serializer.write(hostPlayerId);
+        return serializer.getBuffer();
+    }
+
+    static RoomJoinedPayload deserialize(const std::vector<char>& data) {
+        Network::Deserializer deserializer(data);
+        RoomJoinedPayload payload;
+        payload.roomId = deserializer.read<uint32_t>();
+        payload.roomName = deserializer.readString();
+        payload.maxPlayers = deserializer.read<uint8_t>();
+        payload.hostPlayerId = deserializer.read<uint32_t>();
+        return payload;
+    }
+};
+
 struct RoomInfo {
     uint32_t id;
     std::string name;

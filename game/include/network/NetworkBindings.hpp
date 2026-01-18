@@ -29,6 +29,12 @@ public:
      */
     static void SetNetworkClient(std::shared_ptr<NetworkClient> client);
     
+    /**
+     * @brief Get the current network client instance (may be null)
+     * @return Shared pointer to the NetworkClient, or nullptr if not set
+     */
+    static std::shared_ptr<NetworkClient> GetNetworkClient();
+    
     // ========== Functions called FROM Lua ==========
     
     /**
@@ -51,6 +57,12 @@ public:
      * @param roomId The ID of the room to join
      */
     static void JoinRoom(uint32_t roomId);
+    
+    /**
+     * @brief Connect to a server by host:port and set the NetworkClient used by bindings.
+     * Can be called at runtime even if the game wasn't started with --network.
+     */
+    static void Connect(const std::string& host, int port);
     
     /**
      * @brief Leave the current room

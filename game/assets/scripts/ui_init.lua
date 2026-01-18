@@ -230,6 +230,15 @@ function CreateServerBrowser(centerX, centerY, width, height)
         placeholder = "IP:PORT (e.g. 127.0.0.1:12345)",
         menuGroup = menuGroup
     })
+
+    serverBrowserElements.connectedText = UI.CreateText({
+        x = centerX,
+        y = 640,
+        text = "Not connected",
+        fontSize = 16,
+        color = COLORS.LIGHT_GRAY,
+        menuGroup = menuGroup
+    })
     
     serverBrowserElements.joinIpBtn = UI.CreateButton({
         x = centerX + 200,
@@ -464,20 +473,9 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
     -- Bottom buttons
     local buttonY = height - 150
     
-    -- Ready button (for non-hosts)
-    lobbyElements.readyBtn = UI.CreateButton({
-        x = centerX - 220,
-        y = buttonY,
-        width = 180,
-        height = 50,
-        text = "READY",
-        onClick = "OnToggleReady",
-        menuGroup = menuGroup
-    })
-    
-    -- Start game button (host only)
+    -- Start game button (host only) - centré à gauche
     lobbyElements.startBtn = UI.CreateButton({
-        x = centerX,
+        x = centerX - 110,
         y = buttonY,
         width = 180,
         height = 50,
@@ -486,9 +484,9 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
         menuGroup = menuGroup
     })
     
-    -- Leave button
+    -- Leave button - centré à droite
     lobbyElements.leaveBtn = UI.CreateButton({
-        x = centerX + 220,
+        x = centerX + 110,
         y = buttonY,
         width = 180,
         height = 50,
@@ -860,13 +858,60 @@ function OnRefreshServers()
 end
 
 function OnJoinByIP()
-    local ip = UI.GetInputText(serverBrowserElements.ipInput)
-    if ip and ip ~= "" then
-        print("[UI] Joining server at: " .. ip)
-        JoinRoom(ip)
-    else
-        print("[UI] No IP entered")
+    -- Prevent duplicate connect attempts
+    if lobbyData.joiningRoom then
+        print("[UI] Already attempting to connect, please wait...")
+        return
     end
+
+    local ip = UI.GetInputText(serverBrowserElements.ipInput)
+    if not ip or ip == "" then
+        print("[UI] No IP entered")
+        return
+    end
+
+    -- If format is host:port, attempt to connect the Network client at runtime
+    local host, port = string.match(ip, "^([^:]+):?(%d*)$")
+    if host and port and port ~= "" then
+        print("[UI] Connecting to server at: " .. host .. ":" .. port)
+        -- mark joining to avoid double-clicks
+        lobbyData.joiningRoom = true
+        lobbyData.joinTimeout = os.time()
+        if serverBrowserElements.connectedText then
+            UI.SetText(serverBrowserElements.connectedText, "Connecting...")
+            UI.SetVisible(serverBrowserElements.connectedText, true)
+        end
+        if Network and Network.Connect then
+            Network.Connect(host, tonumber(port))
+            -- After connecting, request the room list to populate UI
+            RefreshServerList()
+        else
+            print("[UI] WARNING: Network.Connect not available in bindings")
+            lobbyData.joiningRoom = false
+        end
+    else
+        -- Fallback: try join by room id if it's a number
+        local n = tonumber(ip)
+        if n then
+            print("[UI] Joining room by ID: " .. n)
+            JoinRoom(n)
+        else
+            print("[UI] Invalid input. Enter host:port or room ID.")
+        end
+    end
+end
+
+-- Callback from C++ when a connection is established
+function OnConnected(host, port)
+    print("[UI] OnConnected callback: " .. tostring(host) .. ":" .. tostring(port))
+    -- IMPORTANT: Reset joiningRoom flag to allow joining rooms
+    lobbyData.joiningRoom = false
+    if serverBrowserElements.connectedText then
+        UI.SetText(serverBrowserElements.connectedText, "Connected: " .. tostring(host) .. ":" .. tostring(port))
+        UI.SetVisible(serverBrowserElements.connectedText, true)
+    end
+    -- Refresh room list after connection
+    RefreshServerList()
 end
 
 function OnCreateRoomClicked()
@@ -926,19 +971,7 @@ end
 -- ============================================
 -- LOBBY CALLBACKS
 -- ============================================
-function OnToggleReady()
-    lobbyData.isReady = not lobbyData.isReady
-    print("[UI] Ready status: " .. tostring(lobbyData.isReady))
-    
-    -- Update button text
-    if lobbyData.isReady then
-        UI.SetText(lobbyElements.readyBtn, "NOT READY")
-    else
-        UI.SetText(lobbyElements.readyBtn, "READY")
-    end
-    
-    SetReady(lobbyData.isReady)
-end
+-- Players are automatically ready when they join, no toggle needed
 
 function OnStartGame()
     if lobbyData.isHost then
@@ -1308,6 +1341,12 @@ function OnRoomJoined(roomInfo)
         maxPlayers = roomInfo.maxPlayers or 4
     }
     lobbyData.isHost = roomInfo.isHost or false
+    -- Players are automatically ready when joining
+    lobbyData.isReady = true
+    if Network and Network.SetPlayerReady then
+        Network.SetPlayerReady(true)
+        print("[UI] Auto-ready: true")
+    end
     UpdateLobbyUI(roomInfo.name)
     UI.HideAllMenus()
     UI.ShowMenu("lobby_waiting")
@@ -1490,13 +1529,8 @@ function UpdateLobbyUI(roomName)
         UI.SetVisible(lobbyElements.startBtn, lobbyData.isHost)
     end
     
-    -- Reset ready button
-    if lobbyElements.readyBtn then
-        UI.SetText(lobbyElements.readyBtn, "READY")
-        UI.SetVisible(lobbyElements.readyBtn, not lobbyData.isHost)
-    end
-    
-    lobbyData.isReady = false
+    -- Players are automatically ready
+    lobbyData.isReady = true
 end
 
 function UpdatePlayerListUI()
@@ -1508,7 +1542,8 @@ function UpdatePlayerListUI()
                 local player = lobbyData.players[i]
                 UI.SetText(slot.nameText, player.name)
                 
-                local statusText = player.ready and "READY" or "NOT READY"
+                -- All players are automatically ready
+                local statusText = "READY"
                 if player.isHost then
                     statusText = "HOST"
                 end

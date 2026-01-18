@@ -166,6 +166,8 @@ private:
         welcome.payload.push_back(playerId);
         
         server_.sendTo(welcome, sender);
+        std::cout << "[Network] Welcome sent to " << sender.address().to_string() 
+                  << ":" << sender.port() << " (Player ID: " << (int)playerId << ")" << std::endl;
         
         // Don't create entity or broadcast yet - wait for game to start
     }
