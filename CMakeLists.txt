@@ -18,7 +18,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BUILD_CLIENT "Build client executable" ON)
 option(BUILD_SERVER "Build server executable" ON)
 option(BUILD_GAME "Build game executable" ON)
-option(BUILD_GAME2 "Build Flappy Bird game executable" ON)
 option(BUILD_TESTS "Build tests" OFF)
 
 # Compiler warnings
@@ -51,9 +50,4 @@ endif()
 # Build game if requested
 if(BUILD_GAME)
     add_subdirectory(game)
-endif()
-
-# Build Flappy Bird (game2) if requested
-if(BUILD_GAME2)
-    add_subdirectory(game2)
 endif()

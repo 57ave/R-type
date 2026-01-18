@@ -816,17 +816,13 @@ end
 -- MAIN MENU CALLBACKS
 -- ============================================
 function OnPlayClicked()
-    print("[UI] Play clicked - redirecting to server browser (network mode)")
-    -- Le jeu est maintenant toujours en mode réseau
-    -- Le bouton PLAY redirige vers le server browser
+    print("[UI] Play clicked - starting game")
     UI.HideAllMenus()
-    UI.ShowMenu("server_browser")
-    UI.SetActiveMenu("server_browser")
-    RefreshServerList()
+    GameState.Set("Playing")
 end
 
 function OnMultiplayerClicked()
-    print("[UI] Multiplayer clicked - showing server browser")
+    print("[UI] Multiplayer clicked")
     UI.HideAllMenus()
     UI.ShowMenu("server_browser")
     UI.SetActiveMenu("server_browser")

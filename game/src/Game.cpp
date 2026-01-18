@@ -19,75 +19,29 @@ std::string ResolveAssetPath(const std::string& relativePath) {
         return g_basePath + relativePath;
     }
 
-    // If we already found the base path, use it
-    if (!g_basePath.empty()) {
-        return g_basePath + relativePath;
+    // List of possible base paths to check
+    std::vector<std::string> basePaths = {
+        "",                    // Current directory (running from project root)
+        "../../",              // Running from build/game/
+        "../../../",           // Running from deeper build directories
+    };
+
+    // Test file to check if we're in the right directory
+    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
+
+    for (const auto& base : basePaths) {
+        std::string fullPath = base + testFile;
+        std::ifstream file(fullPath);
+        if (file.good()) {
+            g_basePath = base;
+            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
+            return g_basePath + relativePath;
+        }
     }
 
-    // Do not embed any file paths in this file. Assume Lua provides
-    // full relative paths via configuration. If g_basePath wasn't set
-    // yet, just return the given relativePath and let the caller handle it.
+    // Fallback: return the path as-is
+    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
     return relativePath;
-}
-
-// Load asset/script paths from the Lua state into Game members.
-bool Game::LoadAssetsFromLua() {
-    try {
-        auto& luaState = Scripting::LuaState::Instance();
-        sol::state& L = luaState.GetState();
-        sol::optional<sol::table> assets = L["Assets"];
-        if (!assets) return false;
-
-        backgroundPath = assets->get_or("background", std::string());
-        baseAssetsDir = assets->get_or("base", std::string());
-        // normalize baseAssetsDir to end with '/'
-        if (!baseAssetsDir.empty() && baseAssetsDir.back() != '/') baseAssetsDir += '/';
-
-        if (assets->get<sol::object>("players").is<sol::table>()) {
-            sol::table p = assets->get<sol::table>("players");
-            playerPath = p.get_or("player", std::string());
-            missilePath = p.get_or("missile", std::string());
-        }
-
-        if (assets->get<sol::object>("enemies").is<sol::table>()) {
-            sol::table e = assets->get<sol::table>("enemies");
-            enemyBulletsPath = e.get_or("bullets", std::string());
-            explosionPath = e.get_or("explosion", std::string());
-        }
-
-        if (assets->get<sol::object>("fonts").is<sol::table>()) {
-            sol::table f = assets->get<sol::table>("fonts");
-            defaultFontPath = f.get_or("default", std::string());
-        }
-
-        if (assets->get<sol::object>("sounds").is<sol::table>()) {
-            sol::table s = assets->get<sol::table>("sounds");
-            shootSfxPath = s.get_or("shoot", std::string());
-            menuMusicPath = s.get_or("menu", std::string());
-            soundsBase = s.get_or("base", std::string());
-            if (!soundsBase.empty() && soundsBase.back() != '/') soundsBase += '/';
-        }
-
-        if (assets->get<sol::object>("scripts").is<sol::table>()) {
-            sol::table sc = assets->get<sol::table>("scripts");
-            initScriptPath = sc.get_or("init", std::string());
-            audioConfigPath = sc.get_or("audio_config", std::string());
-            uiInitPath = sc.get_or("ui_init", std::string());
-            spawnScriptPath = sc.get_or("spawn_system", std::string());
-            difficultyScriptsBase = sc.get_or("difficulty_base", std::string());
-            if (!difficultyScriptsBase.empty() && difficultyScriptsBase.back() != '/') difficultyScriptsBase += '/';
-        }
-
-        if (assets->get<sol::object>("config").is<sol::table>()) {
-            sol::table cfg = assets->get<sol::table>("config");
-            settingsJsonPath = cfg.get_or("user_settings", std::string());
-        }
-
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[Game] Exception while reading Assets from Lua: " << ex.what() << std::endl;
-        return false;
-    }
 }
 
 void Game::RegisterEntity(ECS::Entity entity) {
@@ -347,106 +301,26 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
     allSprites.push_back(sprite);
     sprite->setTexture(missileTexture.get());
 
-    // Default rect/visuals (fallback)
-    IntRect rect(245, 85, 20, 20);
-    float finalScale = 3.0f;
-    bool addAnimation = false;
-    Animation anim;
-
-    // Try to read projectile visuals from Lua WeaponsConfig for the player's weapon
-    try {
-        sol::state& lua = Scripting::LuaState::Instance().GetState();
-        sol::table weaponsConfig = lua["WeaponsConfig"];
-
-
-        // Determine weapon type: use default fallback (CreateMissile is called without weaponType)
-        // If you later want per-weapon visuals, pass weaponType into CreateMissile or set a global/current weapon in Lua
-        std::string weaponType = "single_shot"; // fallback
-
-        sol::table weaponTable = weaponsConfig[weaponType];
-        if (weaponTable.valid()) {
-            sol::table proj = weaponTable["projectile"];
-            if (proj.valid()) {
-                // Normal rect
-                if (proj["normalRect"].valid()) {
-                    sol::table nr = proj["normalRect"];
-                    int nx = nr["x"].get_or(245);
-                    int ny = nr["y"].get_or(85);
-                    int nw = nr["w"].get_or(20);
-                    int nh = nr["h"].get_or(20);
-                    rect = IntRect(nx, ny, nw, nh);
-                }
-
-                // If charged, prefer per-level rects in Lua: projectile.chargedRects[chargeLevel]
-                if (isCharged) {
-                    bool applied = false;
-
-                    // 1) Check for a table of rects per level
-                    if (proj["chargedRects"].valid()) {
-                        sol::table crs = proj["chargedRects"];
-                        sol::optional<sol::table> cr = crs[chargeLevel];
-                        if (cr) {
-                            int cx = cr->get_or("x", rect.left);
-                            int cy = cr->get_or("y", rect.top);
-                            int cw = cr->get_or("w", rect.width);
-                            int ch = cr->get_or("h", rect.height);
-                            rect = IntRect(cx, cy, cw, ch);
-                            applied = true;
-                        }
-                    }
-
-                    // 2) Fallback to single chargedRect if present
-                    if (!applied && proj["chargedRect"].valid()) {
-                        sol::table cr = proj["chargedRect"];
-                        int cx = cr["x"].get_or(rect.left);
-                        int cy = cr["y"].get_or(rect.top);
-                        int cw = cr["w"].get_or(rect.width);
-                        int ch = cr["h"].get_or(rect.height);
-
-                        // If Lua defines chargelevels with a size multiplier, apply it
-                        if (weaponTable["chargelevels"].valid()) {
-                            sol::table levels = weaponTable["chargelevels"];
-                            sol::optional<sol::table> lvl = levels[chargeLevel];
-                            if (lvl) {
-                                double size = lvl->get_or("size", 0.0);
-                                if (size > 0.0) {
-                                    cw = static_cast<int>(cw * size + 0.5);
-                                    ch = static_cast<int>(ch * size + 0.5);
-                                }
-                            }
-                        }
-
-                        rect = IntRect(cx, cy, cw, ch);
-                        applied = true;
-                    }
-
-                    // 3) If neither present, keep normalRect (rect already set)
-                }
-
-                // Visual scale override
-                finalScale = static_cast<float>(proj["scale"].get_or(static_cast<double>(finalScale)));
-
-                // Animation parameters
-                if (proj["animated"].get_or(false)) {
-                    addAnimation = true;
-                    anim.frameTime = static_cast<float>(proj["frameTime"].get_or(0.1));
-                    anim.currentFrame = 0;
-                    anim.frameCount = static_cast<int>(proj["frameCount"].get_or(1));
-                    anim.loop = true;
-                    anim.frameWidth = rect.width;
-                    anim.frameHeight = rect.height;
-                    anim.startX = rect.left;
-                    anim.startY = rect.top;
-                    // spacing may be specified; fallback to 0
-                    anim.spacing = static_cast<int>(proj["spacing"].get_or(static_cast<double>(0)));
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "[CreateMissile] Warning: failed to read WeaponsConfig from Lua: " << e.what() << std::endl;
+    IntRect rect;
+    if (!isCharged) {
+        // Missiles normaux - coordonnées de l'ancien fichier qui fonctionnait
+        rect = IntRect(245, 85, 20, 20);
+    } else {
+        // Charged missile sprites (lignes 5-9 avec les gros missiles)
+        struct ChargeData {
+            int xPos, yPos, width, height;
+        };
+        ChargeData chargeLevels[5] = {
+            {233, 100, 15, 15},  // Level 1
+            {202, 117, 31, 15},  // Level 2
+            {170, 135, 47, 15},  // Level 3
+            {138, 155, 63, 15},  // Level 4
+            {105, 170, 79, 17}   // Level 5
+        };
+        ChargeData& data = chargeLevels[chargeLevel - 1];
+        rect = IntRect(data.xPos, data.yPos, data.width, data.height);
     }
 
-    // Apply sprite rect/position/scale
     sprite->setTextureRect(rect);
     sprite->setPosition(Vector2f(x, y));
 
@@ -454,21 +328,22 @@ ECS::Entity Game::CreateMissile(float x, float y, bool isCharged, int chargeLeve
     spriteComp.sprite = sprite;
     spriteComp.textureRect = rect;
     spriteComp.layer = 8;
-    spriteComp.scaleX = finalScale;  // Scale pour les missiles (from data)
-    spriteComp.scaleY = finalScale;
+    spriteComp.scaleX = 3.0f;  // Scale pour les missiles
+    spriteComp.scaleY = 3.0f;
     gCoordinator.AddComponent(missile, spriteComp);
 
-    // Add animation if requested by config and/or for charged projectiles
-    if (addAnimation || isCharged) {
-        // If we didn't fill anim above, set sensible defaults for charged
-        if (anim.frameCount <= 0) anim.frameCount = 1;
-        if (anim.frameTime <= 0.0f) anim.frameTime = 0.1f;
-        if (anim.frameWidth <= 0) anim.frameWidth = rect.width;
-        if (anim.frameHeight <= 0) anim.frameHeight = rect.height;
-        if (anim.startX == 0 && anim.startY == 0) {
-            anim.startX = rect.left;
-            anim.startY = rect.top;
-        }
+    // Animation seulement pour les missiles chargés
+    if (isCharged) {
+        Animation anim;
+        anim.frameTime = 0.1f;
+        anim.currentFrame = 0;
+        anim.frameCount = 2;
+        anim.loop = true;
+        anim.frameWidth = rect.width;
+        anim.frameHeight = rect.height;
+        anim.startX = rect.left;
+        anim.startY = rect.top;
+        anim.spacing = rect.width + 2;
         gCoordinator.AddComponent(missile, anim);
     }
 
@@ -694,25 +569,26 @@ int Game::Run(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
 
-    // Network mode is now ALWAYS enabled by default
-    bool networkMode = true;
+    // Parse command line arguments
+    bool networkMode = false;
     std::string serverAddress = "127.0.0.1";
     short serverPort = 12345;
 
-    // Optional: Allow override of server address/port via command line
-    // Usage: ./r-type_game [server_ip] [port]
-    if (argc > 1) {
-        serverAddress = argv[1];
-        std::cout << "[Game] Custom server address: " << serverAddress << std::endl;
+    if (argc > 1 && std::string(argv[1]) == "--network") {
+        networkMode = true;
+        isNetworkClient = true;  // Mark as network client
+        if (argc > 2) {
+            serverAddress = argv[2];
+        }
+        if (argc > 3) {
+            serverPort = static_cast<short>(std::stoi(argv[3]));
+        }
+        std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
+        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
+    } else {
+        std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
+        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     }
-    if (argc > 2) {
-        serverPort = static_cast<short>(std::stoi(argv[2]));
-        std::cout << "[Game] Custom server port: " << serverPort << std::endl;
-    }
-
-    isNetworkClient = true;  // Always true now
-    std::cout << "[Game] Network mode ENABLED by default. Server: " << serverAddress << ":" << serverPort << std::endl;
-    std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
 
     // Initialize ECS Coordinator
     gCoordinator.Init();
@@ -777,21 +653,6 @@ int Game::Run(int argc, char* argv[])
     // This allows Lua/UI to call Network.Connect(...) at runtime.
     RType::Network::NetworkBindings::RegisterAll(luaState.GetState());
     std::cout << "[Game] Network bindings registered to Lua (deferred connect supported)" << std::endl;
-    // ======================================================
-    // Read asset paths from Lua (game_config.lua -> Assets)
-    // Populate variables used later when loading textures/fonts/sounds
-    // ======================================================
-    // Bootstrap: ensure minimal config (game_config.lua) is loaded so Assets table exists.
-    // This is the single required bootstrap script; all asset paths themselves stay in Lua.
-    luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"));
-
-    // Load asset/script paths from Lua and populate Game members.
-    if (!LoadAssetsFromLua()) {
-        std::cerr << "[Game] Error: Assets table missing or invalid in Lua. Aborting." << std::endl;
-        return 1;
-    }
-
-    // Script paths are populated by LoadAssetsFromLua() into Game members
 
     // ========================================
     // INITIALIZE GAME STATE MANAGER
@@ -910,7 +771,7 @@ int Game::Run(int argc, char* argv[])
     uiSystem->Init();
 
     // Load default font for UI
-        if (!uiSystem->LoadFont("default", ResolveAssetPath(defaultFontPath))) {
+    if (!uiSystem->LoadFont("default", ResolveAssetPath("game/assets/fonts/Roboto-Regular.ttf"))) {
         std::cerr << "Warning: Could not load default UI font" << std::endl;
     } else {
         std::cout << "[Game] Default UI font loaded" << std::endl;
@@ -1139,16 +1000,29 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "[Game] All Systems initialized!" << std::endl;
 
-    // Network setup
+    // Network setup (can be initialized on-demand from UI)
     std::shared_ptr<NetworkClient> networkClient;
     std::shared_ptr<eng::engine::systems::NetworkSystem> networkSystem;
-
-    if (networkMode) {
+    
+    // Lambda to initialize network mode dynamically
+    auto initializeNetworkMode = [&](const std::string& address, short port) {
+        if (networkClient && networkClient->isConnected()) {
+            std::cout << "[Game] Network already initialized, skipping" << std::endl;
+            return;
+        }
+        
+        std::cout << "[Game] 🌐 Initializing network mode dynamically..." << std::endl;
+        std::cout << "[Game] Connecting to " << address << ":" << port << std::endl;
+        
         try {
-            networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
+            networkClient = std::make_shared<NetworkClient>(address, port);
             networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+            
+            // Mark as network client
+            networkMode = true;
+            isNetworkClient = true;
 
-            // Set the NetworkClient for bindings (we already registered bindings earlier)
+            // Set the NetworkClient for bindings
             RType::Network::NetworkBindings::SetNetworkClient(networkClient);
             std::cout << "[Game] Network client set for Lua bindings" << std::endl;
 
@@ -1156,15 +1030,13 @@ int Game::Run(int argc, char* argv[])
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
                 allEntities.push_back(entity);
                 
-                // Only add sprite if it doesn't already have one (network entities only)
+                // Only add sprite if it doesn't already have one
                 if (gCoordinator.HasComponent<Sprite>(entity)) {
-                    std::cout << "[Game] Entity " << entity << " already has sprite, skipping" << std::endl;
                     return;
                 }
                 
                 // Add sprite based on entity tag
                 if (!gCoordinator.HasComponent<Tag>(entity)) {
-                    std::cout << "[Game] ⚠️  Network entity " << entity << " has NO Tag component!" << std::endl;
                     return;
                 }
                 
@@ -1172,7 +1044,6 @@ int Game::Run(int argc, char* argv[])
                 std::cout << "[Game] 🎨 Creating sprite for network entity " << entity << " (Tag: " << tag.name << ")" << std::endl;
                     
                 if (tag.name == "Player" && gCoordinator.HasComponent<NetworkId>(entity)) {
-                    // Create player sprite
                     auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
@@ -1183,10 +1054,8 @@ int Game::Run(int argc, char* argv[])
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
                     gCoordinator.AddComponent(entity, spriteComp);
-                    std::cout << "[Game] Created player sprite for entity " << entity << " (line " << (int)netId.playerLine << ")" << std::endl;
                 }
                 else if (tag.name == "Enemy") {
-                    // Create enemy sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(textureMap["enemy"]);
@@ -1199,7 +1068,6 @@ int Game::Run(int argc, char* argv[])
                     spriteComp.scaleY = 2.5f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
-                    // Add animation for enemy (8 frames horizontally)
                     Animation anim;
                     anim.frameCount = 8;
                     anim.currentFrame = 0;
@@ -1208,72 +1076,62 @@ int Game::Run(int argc, char* argv[])
                     anim.loop = true;
                     anim.frameWidth = 33;
                     anim.frameHeight = 32;
-                    anim.startX = 0;  // Start at frame 0 - les 8 premières frames
+                    anim.startX = 0;
                     anim.startY = 0;
-                    anim.spacing = 0;  // Frames are adjacent (no gap between them)
+                    anim.spacing = 0;
                     gCoordinator.AddComponent(entity, anim);
-                    
-                    std::cout << "[Game] Created enemy sprite for entity " << entity << " with animation" << std::endl;
                 }
                 else if (tag.name == "PlayerBullet") {
-                    // Create player missile sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(missileTexture.get());
-                    IntRect rect(245, 85, 20, 20);  // Correct rect from CreateMissile!
+                    IntRect rect(245, 85, 20, 20);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 3.0f;  // Same as local mode
+                    spriteComp.scaleX = 3.0f;
                     spriteComp.scaleY = 3.0f;
                     gCoordinator.AddComponent(entity, spriteComp);
-                    std::cout << "[Game] Created player bullet sprite for entity " << entity << std::endl;
                 }
                 else if (tag.name == "EnemyBullet") {
-                    // Create enemy bullet sprite - orange balls with animation
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(enemyBulletTexture.get());
-                    IntRect rect(135, 0, 17, 17);  // First frame position (17x17 frames)
+                    IntRect rect(135, 0, 17, 17);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 4.0f;  // Scale for visibility
+                    spriteComp.scaleX = 4.0f;
                     spriteComp.scaleY = 4.0f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
-                    // Add animation - 4 frames of orange balls (17x17 each)
                     Animation anim;
                     anim.frameTime = 0.1f;
                     anim.currentFrame = 0;
                     anim.frameCount = 4;
                     anim.loop = true;
-                    anim.frameWidth = 17;   // 17 pixels per frame (includes 1px padding)
+                    anim.frameWidth = 17;
                     anim.frameHeight = 17;
                     anim.startX = 135;
                     anim.startY = 0;
                     anim.spacing = 0;
                     gCoordinator.AddComponent(entity, anim);
-                    
-                    std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation (17x17)" << std::endl;
                 }
                 else if (tag.name == "Explosion") {
-                    // Create explosion sprite with animation
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(explosionTexture.get());
-                    IntRect rect(130, 1, 33, 32);  // Match CreateExplosion!
+                    IntRect rect(130, 1, 33, 32);
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 2.5f;  // Match CreateExplosion scale
+                    spriteComp.scaleX = 2.5f;
                     spriteComp.scaleY = 2.5f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
-                    // Add animation - Match CreateExplosion parameters
                     Animation anim;
                     anim.frameCount = 6;
                     anim.frameTime = 0.08f;
@@ -1286,36 +1144,23 @@ int Game::Run(int argc, char* argv[])
                     anim.spacing = 1.5;
                     gCoordinator.AddComponent(entity, anim);
                     
-                    // Add lifetime - very short
                     gCoordinator.AddComponent(entity, Lifetime{0.05f});
-                    
-                    std::cout << "[Game] Created explosion sprite for entity " << entity << std::endl;
-                }
-                else {
-                    std::cout << "[Game] ⚠️  Unknown tag '" << tag.name << "' for entity " << entity << ", no sprite created" << std::endl;
                 }
             });
 
-            // Set callback for entity destruction
-            // NOTE: We do NOT create explosions here on the client side!
-            // The server creates explosion entities and sends them to clients.
             networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
-                std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed by server" << std::endl;
-                // Just log, don't create explosions - server handles that
+                std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed" << std::endl;
             });
 
-            // Set callback for game start
             networkSystem->setGameStartCallback([this]() {
-                std::cout << "[Game] GAME_START received - transitioning to Playing state" << std::endl;
+                std::cout << "[Game] GAME_START received from NetworkSystem" << std::endl;
                 GameStateManager::Instance().SetState(GameState::Playing);
             });
 
             networkClient->start();
             networkClient->sendHello();
-
-            std::cout << "[Game] Network client started, waiting for SERVER_WELCOME..." << std::endl;
-
-            // Wait for server welcome (with timeout)
+            
+            std::cout << "[Game] Waiting for SERVER_WELCOME..." << std::endl;
             auto startTime = std::chrono::steady_clock::now();
             bool connected = false;
             while (!connected) {
@@ -1326,7 +1171,7 @@ int Game::Run(int argc, char* argv[])
                         if (packet.payload.size() >= 1) {
                             uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
                             networkSystem->setLocalPlayerId(playerId);
-                            std::cout << "[Game] Connected! Player ID: " << (int)playerId << std::endl;
+                            std::cout << "[Game] ✅ Connected! Player ID: " << (int)playerId << std::endl;
                             connected = true;
                         }
                     }
@@ -1334,14 +1179,33 @@ int Game::Run(int argc, char* argv[])
 
                 auto now = std::chrono::steady_clock::now();
                 if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 5) {
-                    std::cerr << "[Game] Connection timeout!" << std::endl;
-                    return 1;
+                    std::cerr << "[Game] ⚠️  Connection timeout!" << std::endl;
+                    networkClient.reset();
+                    networkSystem.reset();
+                    networkMode = false;
+                    isNetworkClient = false;
+                    return;
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            
+            std::cout << "[Game] ✅ Network mode successfully initialized!" << std::endl;
+            
         } catch (const std::exception& e) {
-            std::cerr << "[Game] Network error: " << e.what() << std::endl;
+            std::cerr << "[Game] ❌ Network initialization error: " << e.what() << std::endl;
+            networkClient.reset();
+            networkSystem.reset();
+            networkMode = false;
+            isNetworkClient = false;
+        }
+    };
+
+    if (networkMode) {
+        // Initialize network from command line arguments
+        initializeNetworkMode(serverAddress, serverPort);
+        if (!networkClient || !networkClient->isConnected()) {
+            std::cerr << "[Game] Failed to initialize network mode" << std::endl;
             return 1;
         }
     }
@@ -1421,51 +1285,52 @@ int Game::Run(int argc, char* argv[])
 
     // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
-    if (!backgroundTexture->loadFromFile(ResolveAssetPath(backgroundPath))) {
-        std::cerr << "Error: Could not load background: " << backgroundPath << std::endl;
+    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
+        std::cerr << "Error: Could not load background.png" << std::endl;
         return 1;
     }
 
     playerTexture = std::make_unique<SFMLTexture>();
-    if (!playerTexture->loadFromFile(ResolveAssetPath(playerPath))) {
-        std::cerr << "Error: Could not load player sprite: " << playerPath << std::endl;
+    if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
+        std::cerr << "Error: Could not load player sprite" << std::endl;
         return 1;
     }
 
     missileTexture = std::make_unique<SFMLTexture>();
-    if (!missileTexture->loadFromFile(ResolveAssetPath(missilePath))) {
-        std::cerr << "Error: Could not load missile sprite: " << missilePath << std::endl;
+    if (!missileTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet1.png"))) {
+        std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
     }
 
     // Note: enemy textures are loaded per-enemy from Lua config later
     // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
-    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath(enemyBulletsPath))) {
-        std::cerr << "Error: Could not load enemy bullet sprite: " << enemyBulletsPath << std::endl;
+    if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
+        std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
-    if (!explosionTexture->loadFromFile(ResolveAssetPath(explosionPath))) {
-        std::cerr << "Error: Could not load explosion sprite: " << explosionPath << std::endl;
+    if (!explosionTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/r-typesheet44.png"))) {
+        std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;
     }
 
     // Load sound
-    if (!shootBuffer.loadFromFile(ResolveAssetPath(shootSfxPath))) {
-        std::cerr << "Warning: Could not load shoot.ogg at " << shootSfxPath << std::endl;
+    if (!shootBuffer.loadFromFile(ResolveAssetPath("game/assets/vfx/shoot.ogg"))) {
+        std::cerr << "Warning: Could not load shoot.ogg" << std::endl;
     } else {
         shootSound.setBuffer(shootBuffer);
         shootSound.setVolume(80.f);
     }
 
     // Load menu music (from feature/game_menu)
-    std::cout << "[Game] Attempting to load menu music from: " << ResolveAssetPath(menuMusicPath) << std::endl;
+    std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
+    std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
     
-    if (!menuMusicBuffer.loadFromFile(ResolveAssetPath(menuMusicPath))) {
-        std::cerr << "ERROR: Could not load menu music from: " << ResolveAssetPath(menuMusicPath) << std::endl;
+    if (!menuMusicBuffer.loadFromFile(menuMusicPath)) {
+        std::cerr << "ERROR: Could not load menu music from: " << menuMusicPath << std::endl;
         std::cerr << "       Please verify the file exists and is readable." << std::endl;
     } else {
         menuMusic.setBuffer(menuMusicBuffer);
@@ -1491,13 +1356,15 @@ int Game::Run(int argc, char* argv[])
     // Load Lua scripts
     std::cout << "📜 Loading Lua scripts..." << std::endl;
 
-    // Load main initialization script (must be provided by Lua Assets)
-    if (initScriptPath.empty()) {
-        std::cerr << "Warning: init script path not provided by Lua (Assets.scripts.init). Skipping init.lua load." << std::endl;
-    } else if (!luaState.LoadScript(ResolveAssetPath(initScriptPath))) {
-        std::cerr << "Warning: Could not load init script: " << initScriptPath << std::endl;
+    // Load main initialization script (which loads all configs)
+    if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/init.lua"))) {
+        std::cerr << "Warning: Could not load init.lua, trying fallback..." << std::endl;
+        // Fallback to old config if init.lua doesn't exist
+        if (!luaState.LoadScript(ResolveAssetPath("assets/scripts/config/game_config.lua"))) {
+            std::cerr << "Warning: Could not load game_config.lua either" << std::endl;
+        }
     } else {
-        std::cout << "[Game] ✓ init script loaded - configurations initialized" << std::endl;
+        std::cout << "[Game] ✓ init.lua loaded - All configurations initialized" << std::endl;
         
         // Initialize mode based on network setting
         sol::state& lua = luaState.GetState();
@@ -1593,7 +1460,7 @@ int Game::Run(int argc, char* argv[])
     // LOAD AUDIO CONFIGURATION
     // ========================================
     std::cout << "🎵 Loading Audio Configuration..." << std::endl;
-    if (!luaState.LoadScript(ResolveAssetPath(audioConfigPath))) {
+    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/config/audio_config.lua"))) {
         std::cerr << "[Audio] Warning: Could not load audio_config.lua" << std::endl;
     } else {
         std::cout << "[Audio] Audio configuration loaded" << std::endl;
@@ -1747,7 +1614,7 @@ int Game::Run(int argc, char* argv[])
                             auto tex = std::make_unique<SFMLTexture>();
                             bool loaded = false;
                             // Try resolved candidate paths
-                            std::string candidate1 = ResolveAssetPath(baseAssetsDir + texPath);
+                            std::string candidate1 = ResolveAssetPath(std::string("game/assets/") + texPath);
                             if (!candidate1.empty() && tex->loadFromFile(candidate1)) {
                                 loaded = true;
                                 std::cout << "[Game] Loaded enemy texture: " << candidate1 << std::endl;
@@ -1795,10 +1662,8 @@ int Game::Run(int argc, char* argv[])
 
     // Load UI scripts
     std::cout << "🎨 Loading UI scripts..." << std::endl;
-    if (uiInitPath.empty()) {
-        std::cerr << "Warning: UI init script path not provided by Lua (Assets.scripts.ui_init). Skipping UI init." << std::endl;
-    } else if (!luaState.LoadScript(ResolveAssetPath(uiInitPath))) {
-        std::cerr << "Warning: Could not load UI init script: " << uiInitPath << std::endl;
+    if (!luaState.LoadScript(ResolveAssetPath("game/assets/scripts/ui_init.lua"))) {
+        std::cerr << "Warning: Could not load ui_init.lua" << std::endl;
     } else {
         // Initialize UI from Lua
         sol::state& lua = luaState.GetState();
@@ -1818,20 +1683,16 @@ int Game::Run(int argc, char* argv[])
         }
     }
 
-    // Load spawn system (path provided by Lua)
-    if (spawnScriptPath.empty()) {
-        std::cerr << "Warning: spawn system script path not provided by Lua (Assets.scripts.spawn_system). Skipping spawn system load." << std::endl;
-    } else {
-        spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
-            ResolveAssetPath(spawnScriptPath),
-            &gCoordinator
-        );
+    // Load spawn system
+    spawnScriptSystem = Scripting::ScriptedSystemLoader::LoadSystem(
+        ResolveAssetPath("assets/scripts/systems/spawn_system.lua"),
+        &gCoordinator
+    );
 
-        if (spawnScriptSystem) {
-            std::cout << "[Game] Spawn system loaded from Lua" << std::endl;
-        } else {
-            std::cerr << "[Game] Warning: Spawn system failed to load from: " << spawnScriptPath << std::endl;
-        }
+    if (spawnScriptSystem) {
+        std::cout << "[Game] Spawn system loaded from Lua" << std::endl;
+    } else {
+        std::cerr << "[Game] Warning: Spawn system failed to load" << std::endl;
     }
 
     // Create game entities - but NOT the player yet (created when game starts)
@@ -1996,8 +1857,184 @@ int Game::Run(int argc, char* argv[])
         if (!networkMode) {
             auto runtimeClient = RType::Network::NetworkBindings::GetNetworkClient();
             if (runtimeClient && runtimeClient->isConnected()) {
-                runtimeClient->update(deltaTime);
-                runtimeClient->process();
+                // Initialize network system if needed (first time we have a connected runtime client)
+                if (!networkSystem && !networkClient) {
+                    std::cout << "[Game] 🌐 Runtime client detected - initializing network mode..." << std::endl;
+                    
+                    // Assign the runtime client
+                    networkClient = runtimeClient;
+                    networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+                    
+                    // Mark as network client
+                    networkMode = true;
+                    isNetworkClient = true;
+                    
+                    // Setup all callbacks (same as in initializeNetworkMode lambda)
+                    networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
+                        allEntities.push_back(entity);
+                        
+                        if (gCoordinator.HasComponent<Sprite>(entity)) {
+                            return;
+                        }
+                        
+                        if (!gCoordinator.HasComponent<Tag>(entity)) {
+                            return;
+                        }
+                        
+                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                        std::cout << "[Game] 🎨 Creating sprite for network entity " << entity << " (Tag: " << tag.name << ")" << std::endl;
+                            
+                        if (tag.name == "Player" && gCoordinator.HasComponent<NetworkId>(entity)) {
+                            auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
+                            auto* sprite = new SFMLSprite();
+                            allSprites.push_back(sprite);
+                            sprite->setTexture(playerTexture.get());
+                            IntRect rect(33 * 2, netId.playerLine * 17, 33, 17);
+                            sprite->setTextureRect(rect);
+                            Sprite spriteComp;
+                            spriteComp.sprite = sprite;
+                            spriteComp.textureRect = rect;
+                            gCoordinator.AddComponent(entity, spriteComp);
+                        }
+                        else if (tag.name == "Enemy") {
+                            auto* sprite = new SFMLSprite();
+                            allSprites.push_back(sprite);
+                            sprite->setTexture(textureMap["enemy"]);
+                            IntRect rect(0, 0, 33, 36);
+                            sprite->setTextureRect(rect);
+                            Sprite spriteComp;
+                            spriteComp.sprite = sprite;
+                            spriteComp.textureRect = rect;
+                            spriteComp.scaleX = 2.5f;
+                            spriteComp.scaleY = 2.5f;
+                            gCoordinator.AddComponent(entity, spriteComp);
+                            
+                            Animation anim;
+                            anim.frameCount = 8;
+                            anim.currentFrame = 0;
+                            anim.frameTime = 0.1f;
+                            anim.currentTime = 0.0f;
+                            anim.loop = true;
+                            anim.frameWidth = 33;
+                            anim.frameHeight = 32;
+                            anim.startX = 0;
+                            anim.startY = 0;
+                            anim.spacing = 0;
+                            gCoordinator.AddComponent(entity, anim);
+                        }
+                        else if (tag.name == "PlayerBullet") {
+                            auto* sprite = new SFMLSprite();
+                            allSprites.push_back(sprite);
+                            sprite->setTexture(missileTexture.get());
+                            IntRect rect(245, 85, 20, 20);
+                            sprite->setTextureRect(rect);
+                            Sprite spriteComp;
+                            spriteComp.sprite = sprite;
+                            spriteComp.textureRect = rect;
+                            spriteComp.scaleX = 3.0f;
+                            spriteComp.scaleY = 3.0f;
+                            gCoordinator.AddComponent(entity, spriteComp);
+                        }
+                        else if (tag.name == "EnemyBullet") {
+                            auto* sprite = new SFMLSprite();
+                            allSprites.push_back(sprite);
+                            sprite->setTexture(enemyBulletTexture.get());
+                            IntRect rect(135, 0, 17, 17);
+                            sprite->setTextureRect(rect);
+                            Sprite spriteComp;
+                            spriteComp.sprite = sprite;
+                            spriteComp.textureRect = rect;
+                            spriteComp.scaleX = 4.0f;
+                            spriteComp.scaleY = 4.0f;
+                            gCoordinator.AddComponent(entity, spriteComp);
+                            
+                            Animation anim;
+                            anim.frameTime = 0.1f;
+                            anim.currentFrame = 0;
+                            anim.frameCount = 4;
+                            anim.loop = true;
+                            anim.frameWidth = 17;
+                            anim.frameHeight = 17;
+                            anim.startX = 135;
+                            anim.startY = 0;
+                            anim.spacing = 0;
+                            gCoordinator.AddComponent(entity, anim);
+                        }
+                        else if (tag.name == "Explosion") {
+                            auto* sprite = new SFMLSprite();
+                            allSprites.push_back(sprite);
+                            sprite->setTexture(explosionTexture.get());
+                            IntRect rect(130, 1, 33, 32);
+                            sprite->setTextureRect(rect);
+                            Sprite spriteComp;
+                            spriteComp.sprite = sprite;
+                            spriteComp.textureRect = rect;
+                            spriteComp.scaleX = 2.5f;
+                            spriteComp.scaleY = 2.5f;
+                            gCoordinator.AddComponent(entity, spriteComp);
+                            
+                            Animation anim;
+                            anim.frameCount = 6;
+                            anim.frameTime = 0.08f;
+                            anim.currentFrame = 0;
+                            anim.loop = false;
+                            anim.frameWidth = 32;
+                            anim.frameHeight = 32;
+                            anim.startX = 130;
+                            anim.startY = 1;
+                            anim.spacing = 1.5;
+                            gCoordinator.AddComponent(entity, anim);
+                            
+                            gCoordinator.AddComponent(entity, Lifetime{0.05f});
+                        }
+                    });
+
+                    networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
+                        std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed" << std::endl;
+                    });
+
+                    networkSystem->setGameStartCallback([this]() {
+                        std::cout << "[Game] GAME_START received from NetworkSystem" << std::endl;
+                        GameStateManager::Instance().SetState(GameState::Playing);
+                    });
+                    
+                    // Wait for SERVER_WELCOME to get player ID
+                    std::cout << "[Game] Waiting for SERVER_WELCOME from server..." << std::endl;
+                    auto startTime = std::chrono::steady_clock::now();
+                    bool gotPlayerId = false;
+                    while (!gotPlayerId) {
+                        networkClient->process();
+                        if (networkClient->hasReceivedPackets()) {
+                            auto packet = networkClient->getNextReceivedPacket();
+                            if (static_cast<GamePacketType>(packet.header.type) == GamePacketType::SERVER_WELCOME) {
+                                if (packet.payload.size() >= 1) {
+                                    uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
+                                    networkSystem->setLocalPlayerId(playerId);
+                                    std::cout << "[Game] ✅ Received player ID: " << (int)playerId << std::endl;
+                                    gotPlayerId = true;
+                                }
+                            }
+                        }
+
+                        auto now = std::chrono::steady_clock::now();
+                        if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 3) {
+                            std::cout << "[Game] ⏱️  Timeout waiting for player ID (will continue anyway)" << std::endl;
+                            break;
+                        }
+
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                    
+                    std::cout << "[Game] ✅ Network mode fully initialized from runtime connection!" << std::endl;
+                }
+                
+                // Update network system
+                if (networkSystem) {
+                    networkSystem->Update(deltaTime);
+                } else {
+                    runtimeClient->update(deltaTime);
+                    runtimeClient->process();
+                }
                 activeClient = runtimeClient;  // Will process packets below
             }
         } else if (networkMode && networkSystem) {
@@ -2929,13 +2966,7 @@ int Game::Run(int argc, char* argv[])
 // ============================================
 
 void Game::PlayMusic(const std::string& musicName, bool loop) {
-    // Determine sounds base from Lua Assets table if available, otherwise use default
-    // Read sounds base from Lua (if provided). If not provided, assume
-    // musicName may be a full path and pass it directly to ResolveAssetPath.
-    // Use cached soundsBase if available
-    std::string musicPath;
-    if (soundsBase.empty()) musicPath = ResolveAssetPath(musicName);
-    else musicPath = ResolveAssetPath(soundsBase + musicName);
+    std::string musicPath = ResolveAssetPath("game/assets/sounds/" + musicName);
     
     // Check if we need to load the buffer
     if (musicBuffers.find(musicName) == musicBuffers.end()) {
@@ -3147,7 +3178,7 @@ void Game::OnAllStagesClear() {
 }
 
 void Game::LoadDifficulty(const std::string& difficulty) {
-    std::string diffPath = ResolveAssetPath(difficultyScriptsBase + std::string("difficulty_") + difficulty + std::string(".lua"));
+    std::string diffPath = ResolveAssetPath("game/assets/scripts/difficulty_game/difficulty_" + difficulty + ".lua");
     
     auto& lua = Scripting::LuaState::Instance().GetState();
     
@@ -3173,7 +3204,7 @@ void Game::LoadDifficulty(const std::string& difficulty) {
 }
 
 void Game::SaveUserSettings() {
-    std::string settingsPath = ResolveAssetPath(settingsJsonPath);
+    std::string settingsPath = ResolveAssetPath("game/assets/config/user_settings.json");
     
     std::ofstream file(settingsPath);
     if (file.is_open()) {
@@ -3194,13 +3225,8 @@ void Game::SaveUserSettings() {
 }
 
 void Game::LoadUserSettings() {
-    // Use cached path from Game members
-    if (settingsJsonPath.empty()) {
-        std::cerr << "[Settings] No settings path provided by Lua (Assets.config.user_settings). Skipping load." << std::endl;
-        return;
-    }
-
-    std::string settingsPath = ResolveAssetPath(settingsJsonPath);
+    std::string settingsPath = ResolveAssetPath("game/assets/config/user_settings.json");
+    
     std::ifstream file(settingsPath);
     if (file.is_open()) {
         std::string content((std::istreambuf_iterator<char>(file)),
@@ -3224,7 +3250,7 @@ void Game::LoadUserSettings() {
             currentSFXVolume = std::clamp(value, 0.0f, 100.0f);
         }
         
-    std::cout << "[Settings] ✓ Loaded from: " << settingsPath << std::endl;
+        std::cout << "[Settings] ✓ Loaded from: " << settingsPath << std::endl;
         std::cout << "[Settings]   Music: " << currentMusicVolume << "%, SFX: " << currentSFXVolume << "%" << std::endl;
     } else {
         std::cout << "[Settings] No saved settings found, using defaults" << std::endl;
