@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <typeinfo>
 #include <stdexcept>
+#include <string>
 
 namespace ECS {
 
@@ -15,7 +16,7 @@ namespace ECS {
             template<typename T>
             void RegisterComponent()
             {
-                const char* typeName = typeid(T).name();
+                std::string typeName = typeid(T).name();
 
                 if (mComponentTypes.find(typeName) != mComponentTypes.end()) {
                     throw std::runtime_error("Registering component type more than once.");
@@ -29,7 +30,7 @@ namespace ECS {
             template<typename T>
             ComponentType GetComponentType()
             {
-                const char* typeName = typeid(T).name();
+                std::string typeName = typeid(T).name();
 
                 if (mComponentTypes.find(typeName) == mComponentTypes.end()) {
                     throw std::runtime_error("Component not registered before use.");
@@ -65,14 +66,14 @@ namespace ECS {
             void EntityDestroyed(Entity entity);
 
      private:
-            std::unordered_map<const char*, ComponentType> mComponentTypes;
-            std::unordered_map<const char*, std::shared_ptr<IComponentArray>> mComponentArrays;
+            std::unordered_map<std::string, ComponentType> mComponentTypes;
+            std::unordered_map<std::string, std::shared_ptr<IComponentArray>> mComponentArrays;
             ComponentType mNextComponentType = 0;
 
             template<typename T>
             std::shared_ptr<ComponentArray<T>> GetComponentArray()
             {
-                const char* typeName = typeid(T).name();
+                std::string typeName = typeid(T).name();
 
                 if (mComponentTypes.find(typeName) == mComponentTypes.end()) {
                     throw std::runtime_error("Component not registered before use.");
