@@ -65,6 +65,10 @@
     
     // Audio System
     #include <systems/AudioSystem.hpp>
+    
+    // Developer Tools
+    #include <core/DevConsole.hpp>
+    #include <core/ProfilerOverlay.hpp>
 
     // Game State Management
     #include "GameStateManager.hpp"
@@ -238,6 +242,23 @@
             std::unordered_map<ECS::Entity, ScoreUI> otherPlayersScoreUIs;
             sf::Font gameFont;
             bool gameFontLoaded = false;
+            
+            // ========================================
+            // WIN CONDITION TIMER (30 seconds)
+            // ========================================
+            float gamePlayTime = 0.0f;
+            bool winConditionTriggered = false;
+            float winDisplayTimer = 0.0f;
+            const float WIN_TIME_THRESHOLD = 60.0f;  // Win after 30 seconds
+            const float WIN_DISPLAY_DURATION = 3.0f;  // Show win message for 3 seconds
+            
+            // ========================================
+            // DEVELOPER TOOLS
+            // ========================================
+            std::unique_ptr<rtype::core::DevConsole> devConsole;
+            std::unique_ptr<rtype::core::ProfilerOverlay> profilerOverlay;
+            bool showDevConsole = true;
+            bool showProfiler = true;
     };
 
 #endif // GAME_HPP

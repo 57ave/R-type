@@ -10,7 +10,7 @@ GameplayConfig = {
     -- ========================================================================
     player = {
         -- Base stats
-        baseHealth = 100,
+        baseHealth = 1,
         baseLives = 3,
         baseSpeed = 500,
         

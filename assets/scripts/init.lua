@@ -112,6 +112,23 @@ print("  • Auto-start showcase: " .. tostring(AUTO_START_SHOWCASE))
 print("")
 
 -- ============================================================================
+-- VICTORY CALLBACK
+-- ============================================================================
+
+-- Function called when the player wins (survives 30 seconds)
+function OnVictory()
+    print("🎉 [VICTORY] Player has won the game!")
+    
+    -- Play victory sound if audio system is available
+    if Audio and Audio.PlaySound then
+        Audio.PlaySound("victory", 100)  -- Play victory sound at full volume
+    end
+    
+    -- Could add particle effects, special music, etc. here
+    print("🏆 Congratulations on surviving 30 seconds!")
+end
+
+-- ============================================================================
 -- COMMANDES DISPONIBLES
 -- ============================================================================
 

@@ -1282,6 +1282,68 @@ int Game::Run(int argc, char* argv[])
         gameFontLoaded = true;
         std::cout << "[Game] Loaded game font: " << fontPath << std::endl;
     }
+    
+    // ========================================
+    // INITIALIZE DEVELOPER TOOLS
+    // ========================================
+    std::cout << "🛠️  Initializing Developer Tools..." << std::endl;
+    
+    devConsole = std::make_unique<rtype::core::DevConsole>();
+    profilerOverlay = std::make_unique<rtype::core::ProfilerOverlay>();
+    
+    // Register console commands
+    devConsole->registerCommand("help", "Show available commands", "help", 
+        [this](const std::vector<std::string>& args) -> std::string {
+            return "Available Commands:\n"
+                   "  help - Show this help message\n"
+                   "  spawn <enemy_type> - Spawn an enemy\n"
+                   "  health <value> - Set player health\n"
+                   "  win - Trigger win condition\n"
+                   "  clear - Clear console";
+        });
+    
+    devConsole->registerCommand("spawn", "Spawn an enemy", "spawn <enemy_type>",
+        [this](const std::vector<std::string>& args) -> std::string {
+            if (args.size() < 2) {
+                return "Usage: spawn <enemy_type>";
+            }
+            std::string enemyType = args[1];
+            CreateEnemy(800.0f, 540.0f, enemyType);
+            return "Spawned enemy: " + enemyType;
+        });
+    
+    devConsole->registerCommand("health", "Set player health", "health <value>",
+        [this](const std::vector<std::string>& args) -> std::string {
+            if (args.size() < 2) {
+                return "Usage: health <value>";
+            }
+            int healthValue = std::stoi(args[1]);
+            // Find player entity and set health
+            for (auto entity : allEntities) {
+                if (gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(entity) && 
+                    gCoordinator.HasComponent<Health>(entity)) {
+                    auto& health = gCoordinator.GetComponent<Health>(entity);
+                    health.current = healthValue;
+                    health.max = std::max(health.max, healthValue);
+                    return "Player health set to: " + std::to_string(healthValue);
+                }
+            }
+            return "Error: Player not found";
+        });
+    
+    devConsole->registerCommand("win", "Trigger win condition", "win",
+        [this](const std::vector<std::string>& args) -> std::string {
+            gamePlayTime = WIN_TIME_THRESHOLD;
+            return "Win condition triggered!";
+        });
+    
+    devConsole->registerCommand("clear", "Clear console", "clear",
+        [this](const std::vector<std::string>& args) -> std::string {
+            devConsole->clear();
+            return "";
+        });
+    
+    std::cout << "[Game] Developer Tools initialized" << std::endl;
 
     // Load textures using resolved asset paths
     backgroundTexture = std::make_unique<SFMLTexture>();
@@ -1849,6 +1911,63 @@ int Game::Run(int argc, char* argv[])
         }
         
         // ========================================
+        // WIN CONDITION TIMER (30 seconds)
+        // ========================================
+        if (currentState == GameState::Playing && !winConditionTriggered) {
+            gamePlayTime += deltaTime;
+            
+            // Check if 30 seconds have elapsed
+            if (gamePlayTime >= WIN_TIME_THRESHOLD) {
+                std::cout << "[Game] 🎉 WIN! Player survived for " << gamePlayTime << " seconds!" << std::endl;
+                winConditionTriggered = true;
+                winDisplayTimer = 0.0f;
+                
+                // Transition to Victory state
+                GameStateManager::Instance().SetState(GameState::Victory);
+                
+                // Play victory music/sound if available
+                sol::state& lua = luaState.GetState();
+                sol::protected_function onVictory = lua["OnVictory"];
+                if (onVictory.valid()) {
+                    onVictory();
+                }
+            }
+        }
+        
+        // Handle victory display timer (show win screen for a few seconds, then return to menu)
+        if (currentState == GameState::Victory && winConditionTriggered) {
+            winDisplayTimer += deltaTime;
+            
+            if (winDisplayTimer >= WIN_DISPLAY_DURATION) {
+                std::cout << "[Game] Returning to main menu after victory..." << std::endl;
+                
+                // Reset game state
+                winConditionTriggered = false;
+                gamePlayTime = 0.0f;
+                winDisplayTimer = 0.0f;
+                playerCreated = false;
+                
+                // Destroy all game entities except backgrounds
+                for (auto entity : allEntities) {
+                    if (gCoordinator.HasComponent<Tag>(entity)) {
+                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
+                        if (tag.name != "Background") {
+                            entitiesToDestroy.push_back(entity);
+                        }
+                    }
+                }
+                
+                // Return to main menu
+                GameStateManager::Instance().SetState(GameState::MainMenu);
+            }
+        }
+        
+        // Reset timer when leaving Playing state
+        if (currentState != GameState::Playing && gamePlayTime > 0.0f && !winConditionTriggered) {
+            gamePlayTime = 0.0f;
+        }
+        
+        // ========================================
         // RUNTIME NETWORK CLIENT UPDATE (for UI connections without --network flag)
         // ========================================
         // If we have a NetworkClient created at runtime (not from --network flag),
@@ -2395,6 +2514,42 @@ int Game::Run(int argc, char* argv[])
             if (event.type == eng::engine::EventType::Closed) {
                 window.close();
             }
+            
+            // ========================================
+            // DEVELOPER TOOLS INPUT HANDLING
+            // ========================================
+            // F1 to toggle dev console
+            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::F1) {
+                showDevConsole = !showDevConsole;
+                std::cout << "[DevTools] Console " << (showDevConsole ? "opened" : "closed") << std::endl;
+            }
+            
+            // F2 to toggle profiler overlay
+            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::F2) {
+                showProfiler = !showProfiler;
+                std::cout << "[DevTools] Profiler " << (showProfiler ? "opened" : "closed") << std::endl;
+            }
+            
+            // Handle dev console text input
+            if (showDevConsole && devConsole) {
+                if (event.type == eng::engine::EventType::TextEntered) {
+                    if (event.text.unicode < 128) {
+                        devConsole->handleTextInput(event.text.unicode);
+                    }
+                } else if (event.type == eng::engine::EventType::KeyPressed) {
+                    // Convert our key codes to SFML key codes for special keys
+                    sf::Keyboard::Key sfmlKey = sf::Keyboard::Unknown;
+                    if (event.key.code == eng::engine::Key::Enter) sfmlKey = sf::Keyboard::Return;
+                    else if (event.key.code == eng::engine::Key::Backspace) sfmlKey = sf::Keyboard::BackSpace;
+                    else if (event.key.code == eng::engine::Key::Up) sfmlKey = sf::Keyboard::Up;
+                    else if (event.key.code == eng::engine::Key::Down) sfmlKey = sf::Keyboard::Down;
+                    else if (event.key.code == eng::engine::Key::Tab) sfmlKey = sf::Keyboard::Tab;
+                    
+                    if (sfmlKey != sf::Keyboard::Unknown) {
+                        devConsole->handleSpecialKey(sfmlKey);
+                    }
+                }
+            }
 
             // Handle Escape key for pause menu toggle
             if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::Escape) {
@@ -2902,6 +3057,13 @@ int Game::Run(int argc, char* argv[])
 
         // Process destroyed entities
         ProcessDestroyedEntities();
+        
+        // ========================================
+        // UPDATE DEVELOPER TOOLS
+        // ========================================
+        if (showProfiler && profilerOverlay) {
+            profilerOverlay->update();
+        }
 
         // ========================================
         // 6. UI SYSTEM UPDATE
@@ -2933,9 +3095,71 @@ int Game::Run(int argc, char* argv[])
             //     healthBar.Render(window.getSFMLWindow());
             // }
         }
+        
+        // ========================================
+        // RENDER VICTORY SCREEN
+        // ========================================
+        if (currentState == GameState::Victory && gameFontLoaded) {
+            // Semi-transparent overlay
+            sf::RectangleShape overlay(sf::Vector2f(1920.0f, 1080.0f));
+            overlay.setFillColor(sf::Color(0, 0, 0, 180));  // Dark overlay
+            window.getSFMLWindow().draw(overlay);
+            
+            // "VICTORY!" text
+            sf::Text victoryText;
+            victoryText.setFont(gameFont);
+            victoryText.setString("VICTORY!");
+            victoryText.setCharacterSize(120);
+            victoryText.setFillColor(sf::Color(255, 215, 0));  // Gold color
+            victoryText.setStyle(sf::Text::Bold);
+            
+            // Center the text
+            sf::FloatRect textBounds = victoryText.getLocalBounds();
+            victoryText.setOrigin(textBounds.left + textBounds.width / 2.0f,
+                                 textBounds.top + textBounds.height / 2.0f);
+            victoryText.setPosition(1920.0f / 2.0f, 400.0f);
+            window.getSFMLWindow().draw(victoryText);
+            
+            // "You survived 30 seconds!" text
+            sf::Text subText;
+            subText.setFont(gameFont);
+            subText.setString("You survived 30 seconds!");
+            subText.setCharacterSize(48);
+            subText.setFillColor(sf::Color::White);
+            
+            sf::FloatRect subBounds = subText.getLocalBounds();
+            subText.setOrigin(subBounds.left + subBounds.width / 2.0f,
+                             subBounds.top + subBounds.height / 2.0f);
+            subText.setPosition(1920.0f / 2.0f, 550.0f);
+            window.getSFMLWindow().draw(subText);
+            
+            // "Returning to menu..." text
+            sf::Text menuText;
+            menuText.setFont(gameFont);
+            menuText.setString("Returning to menu...");
+            menuText.setCharacterSize(32);
+            menuText.setFillColor(sf::Color(200, 200, 200));
+            
+            sf::FloatRect menuBounds = menuText.getLocalBounds();
+            menuText.setOrigin(menuBounds.left + menuBounds.width / 2.0f,
+                              menuBounds.top + menuBounds.height / 2.0f);
+            menuText.setPosition(1920.0f / 2.0f, 650.0f);
+            window.getSFMLWindow().draw(menuText);
+        }
 
         // Render UI on top of game (always, so menus are visible)
         uiSystem->Render(&window);
+        
+        // ========================================
+        // RENDER DEVELOPER TOOLS (on top of everything)
+        // ========================================
+        if (showProfiler && profilerOverlay) {
+            profilerOverlay->render(window.getSFMLWindow());
+        }
+        
+        if (showDevConsole && devConsole) {
+            devConsole->render(window.getSFMLWindow());
+        }
 
         window.display();
     }
