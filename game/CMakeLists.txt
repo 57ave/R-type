@@ -21,9 +21,14 @@ if(GAME_SOURCES)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/engine/modules  # For shootemup module includes
         ${CMAKE_SOURCE_DIR}/server/include  # For shared network protocol (RTypeProtocol.hpp)
-        ${SOL3_INCLUDE_DIR}
-        ${LUA_INCLUDE_DIR}
     )
+
+    if(SOL3_INCLUDE_DIR)
+        target_include_directories(game PUBLIC ${SOL3_INCLUDE_DIR})
+    endif()
+    if(LUA_INCLUDE_DIR)
+        target_include_directories(game PUBLIC ${LUA_INCLUDE_DIR})
+    endif()
 
     # Game dépend de l'engine + shootemup module
     target_link_libraries(game PUBLIC
