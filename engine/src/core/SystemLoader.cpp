@@ -30,20 +30,17 @@ SystemLoader::~SystemLoader() {
 }
 
 std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath, const std::string& systemName) {
-    // Check if already loaded
     if (IsLoaded(systemName)) {
         std::cout << "[SystemLoader] System already loaded: " << systemName << std::endl;
         return m_LoadedSystems[systemName].system;
     }
     
-    // Open shared library
     DL_HANDLE handle = DL_OPEN(libPath.c_str());
     if (!handle) {
         throw std::runtime_error("[SystemLoader] Failed to load library: " + libPath + 
                                  "\nError: " + DL_ERROR());
     }
     
-    // Get CreateSystem function
     typedef ECS::System* (*CreateSystemFunc)(ECS::Coordinator*);
     auto createFunc = (CreateSystemFunc)DL_SYM(handle, "CreateSystem");
     
@@ -74,7 +71,7 @@ std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath
     sysHandle.libraryHandle = handle;
     sysHandle.libPath = libPath;
     sysHandle.system = system;
-    sysHandle.signature = ECS::Signature();  // Empty, will be set by user
+    sysHandle.signature = ECS::Signature();
     
     m_LoadedSystems[systemName] = sysHandle;
     
@@ -90,11 +87,7 @@ void SystemLoader::UnloadSystem(const std::string& systemName) {
     }
     
     DL_HANDLE handle = (DL_HANDLE)it->second.libraryHandle;
-    
-    // First, erase from map (this will destroy the shared_ptr and call the deleter)
     m_LoadedSystems.erase(it);
-    
-    // Now that the system is destroyed, we can safely close the library
     DL_CLOSE(handle);
     
     std::cout << "[SystemLoader] Unloaded system: " << systemName << std::endl;
@@ -108,17 +101,11 @@ std::shared_ptr<ECS::System> SystemLoader::ReloadSystem(const std::string& syste
     
     std::cout << "[SystemLoader] Reloading system: " << systemName << std::endl;
     
-    // Store info before unloading
     std::string libPath = it->second.libPath;
     ECS::Signature signature = it->second.signature;
-    
-    // Unload
     UnloadSystem(systemName);
     
-    // Reload
     auto system = LoadSystem(libPath, systemName);
-    
-    // Restore signature
     m_LoadedSystems[systemName].signature = signature;
     
     return system;
