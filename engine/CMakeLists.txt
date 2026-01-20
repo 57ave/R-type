@@ -32,7 +32,6 @@ endif()
 option(ENABLE_SCRIPTING "Enable Lua/Sol3 scripting support" ON)
 
 if(ENABLE_SCRIPTING)
-    # 1. Try to find Lua on the system (unless cross-compiling)
     if(NOT CMAKE_CROSSCOMPILING)
         find_package(Lua 5.4 QUIET)
     endif()
@@ -40,7 +39,6 @@ if(ENABLE_SCRIPTING)
     if(NOT LUA_FOUND)
         message(STATUS "Lua 5.4 not found on system (or cross-compiling). Fetching via CPM...")
         
-        # Fetch official Lua source
         CPMAddPackage(
             NAME Lua
             GITHUB_REPOSITORY "lua/lua"
@@ -50,21 +48,9 @@ if(ENABLE_SCRIPTING)
         
         if(Lua_ADDED)
             message(STATUS "Configuring Lua manually from source...")
-            # Glob sources (Lua source is flat in root usually, or src?)
-            # Official mirror has everything in root? Or src? 
-            # Checking structure implies src usually. But let's check.
-            # Mirror usually mimics tarball? No, it's git.
-            # git repo has headers/c in root? NO, checking online: lua.org source is in src?
-            # Github mirror `lua/lua`: files are in root?? NO.
-            # I should verify structure...
-            # But standard Lua has one level.
-            # Let's assume content is in ${Lua_SOURCE_DIR}.
-            
             file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
-            # Remove lua.c (interpreter) and luac.c (compiler) from library
             list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
 
-            # Standard definitions
             if(WIN32 OR MINGW)
                 add_library(lua SHARED ${LUA_SOURCES})
                 target_compile_definitions(lua PUBLIC LUA_BUILD_AS_DLL)
@@ -81,7 +67,6 @@ if(ENABLE_SCRIPTING)
     endif()
 
     if(LUA_FOUND)
-        # 2. Sol3 library (Header Only)
         CPMAddPackage(
             NAME sol2
             GITHUB_REPOSITORY "ThePhD/sol2"
@@ -92,8 +77,6 @@ if(ENABLE_SCRIPTING)
             set(SOL3_INCLUDE_DIR ${sol2_SOURCE_DIR}/include)
             message(STATUS "Sol2/Sol3 fetched via CPM")
         else()
-             # Fallback if found locally via previous path attempts? 
-             # For now assume CPM works or user provided path.
              if(NOT DEFINED SOL3_INCLUDE_DIR)
                  set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include")
              endif()
