@@ -66,6 +66,8 @@ if(NOT SFML_FOUND)
         GITHUB_REPOSITORY SFML/SFML
         GIT_TAG 2.6.1
         PATCH_COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/patch_sfml.py
+        OPTIONS
+            "SFML_INSTALL_PKGCONFIG_FILES OFF"
     )
 endif()
 add_subdirectory(engine)
