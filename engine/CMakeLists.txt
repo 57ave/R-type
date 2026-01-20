@@ -413,9 +413,6 @@ if(LUA_FOUND)
     if(WIN32 OR MINGW)
         target_link_options(UISystem PRIVATE -Wl,--export-all-symbols)
     endif()
-    if(WIN32 OR MINGW)
-        target_link_options(UISystem PRIVATE "-Wl,--exclude-libs,ALL")
-    endif()
 
     target_include_directories(UISystem PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
