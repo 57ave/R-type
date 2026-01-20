@@ -93,3 +93,10 @@ build
 .vscode/
 engine/build
 engine/external
+
+# Temp and test files
+crash_log.txt
+install_test/
+build_verify/
+install/
+install_verify/
