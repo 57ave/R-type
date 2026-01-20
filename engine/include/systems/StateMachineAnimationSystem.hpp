@@ -1,5 +1,6 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <components/Animation.hpp>
@@ -11,7 +12,7 @@
  * This system manages animations that transition between states (columns in spritesheet)
  * Used for player ships that tilt up/down/neutral
  */
-class StateMachineAnimationSystem : public ECS::System {
+class RTYPE_API StateMachineAnimationSystem : public ECS::System {
 public:
     explicit StateMachineAnimationSystem(ECS::Coordinator* coordinator);
     ~StateMachineAnimationSystem() override = default;

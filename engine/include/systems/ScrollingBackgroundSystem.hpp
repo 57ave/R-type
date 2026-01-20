@@ -1,13 +1,14 @@
 #ifndef ENG_ENGINE_SYSTEMS_SCROLLINGBACKGROUNDSYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_SCROLLINGBACKGROUNDSYSTEM_HPP
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 
 namespace ECS {
     class Coordinator;
 }
 
-class ScrollingBackgroundSystem : public ECS::System {
+class RTYPE_API ScrollingBackgroundSystem : public ECS::System {
     public:
         explicit ScrollingBackgroundSystem(ECS::Coordinator* coordinator = nullptr);
         ~ScrollingBackgroundSystem() override = default;

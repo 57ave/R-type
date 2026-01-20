@@ -14,7 +14,7 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++ -D_WIN32_WINNT=0x0601")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libgcc -static-libstdc++ -D_WIN32_WINNT=0x0601")
 
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,libgcc.a:libgcc_eh.a:libstdc++.a:libmingw32.a:libmingwex.a" CACHE STRING "" FORCE)
-set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--exclude-libs,libgcc.a:libgcc_eh.a:libstdc++.a:libmingw32.a:libmingwex.a" CACHE STRING "" FORCE)
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--exclude-libs,ALL" CACHE STRING "" FORCE)
+set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--exclude-libs,ALL" CACHE STRING "" FORCE)
 
 

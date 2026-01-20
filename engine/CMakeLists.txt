@@ -60,6 +60,7 @@ if(ENABLE_SCRIPTING)
             if(WIN32 OR MINGW)
                 add_library(lua SHARED ${LUA_SOURCES})
                 target_compile_definitions(lua PUBLIC LUA_BUILD_AS_DLL)
+                target_compile_definitions(lua PRIVATE RTYPE_BUILD_DLL)
             else()
                 add_library(lua STATIC ${LUA_SOURCES})
                 target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
@@ -273,6 +274,7 @@ endif()
 add_library(MovementSystem SHARED
     src/systems/MovementSystem.cpp
 )
+target_compile_definitions(MovementSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(MovementSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -295,6 +297,7 @@ target_link_libraries(MovementSystem PUBLIC ecs)
 add_library(InputSystem SHARED
     src/systems/InputSystem.cpp
 )
+target_compile_definitions(InputSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(InputSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -306,6 +309,7 @@ target_link_libraries(InputSystem PUBLIC ecs)
 add_library(LifetimeSystem SHARED
     src/systems/LifetimeSystem.cpp
 )
+target_compile_definitions(LifetimeSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(LifetimeSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -317,6 +321,7 @@ target_link_libraries(LifetimeSystem PUBLIC ecs)
 add_library(AnimationSystem SHARED
     src/systems/AnimationSystem.cpp
 )
+target_compile_definitions(AnimationSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(AnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -328,6 +333,7 @@ target_link_libraries(AnimationSystem PUBLIC ecs rendering)
 add_library(StateMachineAnimationSystem SHARED
     src/systems/StateMachineAnimationSystem.cpp
 )
+target_compile_definitions(StateMachineAnimationSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(StateMachineAnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -342,6 +348,7 @@ target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering)
 add_library(ScrollingBackgroundSystem SHARED
     src/systems/ScrollingBackgroundSystem.cpp
 )
+target_compile_definitions(ScrollingBackgroundSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(ScrollingBackgroundSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -353,6 +360,7 @@ target_link_libraries(ScrollingBackgroundSystem PUBLIC ecs rendering)
 add_library(BoundarySystem SHARED
     src/systems/BoundarySystem.cpp
 )
+target_compile_definitions(BoundarySystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(BoundarySystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -364,6 +372,7 @@ target_link_libraries(BoundarySystem PUBLIC ecs)
 add_library(HealthSystem SHARED
     src/systems/HealthSystem.cpp
 )
+target_compile_definitions(HealthSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(HealthSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -378,6 +387,7 @@ if(LUA_FOUND)
         src/systems/UISystemRender.cpp
         src/systems/UISystemEntities.cpp
     )
+    target_compile_definitions(UISystem PRIVATE RTYPE_BUILD_DLL)
 
     target_include_directories(UISystem PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -398,6 +408,7 @@ endif()
 add_library(AudioSystem SHARED
     src/systems/AudioSystem.cpp
 )
+target_compile_definitions(AudioSystem PRIVATE RTYPE_BUILD_DLL)
 
 target_include_directories(AudioSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

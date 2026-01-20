@@ -1,5 +1,6 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <components/Position.hpp>
@@ -20,7 +21,7 @@
  *       // Game-specific collision handling here
  *   });
  */
-class CollisionSystem : public ECS::System {
+class RTYPE_API CollisionSystem : public ECS::System {
 public:
     using CollisionCallback = std::function<void(ECS::Entity, ECS::Entity)>;
     
