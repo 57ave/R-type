@@ -6,14 +6,11 @@
 #include "network/NetworkBindings.hpp"
 #include "network/RTypeProtocol.hpp"  // Pour RoomPlayersPayload et ChatMessagePayload
 
-// Cache for the resolved base path
 static std::string g_basePath = "";
 
-// Static pointers for menu music control from Lua
 static eng::engine::Sound* g_menuMusic = nullptr;
 static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
 
-// Resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
     namespace fs = std::filesystem;
     if (fs::exists(relativePath)) return relativePath;
@@ -1349,16 +1346,13 @@ int Game::Run(int argc, char* argv[])
     
     std::cout << "[Game] Developer Tools initialized" << std::endl;
 
-    // Handle background tiling
     sf::Image bgImage;
     if (!bgImage.loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
         return 1;
     }
-
     unsigned int maxTextureSize = sf::Texture::getMaximumSize();
     if (maxTextureSize < 512) maxTextureSize = 1024;
-
     unsigned int tileWidth = std::min(maxTextureSize, 1024u);
     unsigned int imgWidth = bgImage.getSize().x;
     unsigned int imgHeight = bgImage.getSize().y;
@@ -1387,13 +1381,12 @@ int Game::Run(int argc, char* argv[])
         return 1;
     }
 
-    // Note: enemy textures are loaded per-enemy from Lua config later
-    // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
     if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
         std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
+
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
@@ -1410,29 +1403,23 @@ int Game::Run(int argc, char* argv[])
         shootSound.setVolume(80.f);
     }
 
-    // Load menu music (from feature/game_menu)
     std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
     std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
     
     if (!menuMusicBuffer.loadFromFile(menuMusicPath)) {
         std::cerr << "ERROR: Could not load menu music from: " << menuMusicPath << std::endl;
-        std::cerr << "       Please verify the file exists and is readable." << std::endl;
     } else {
         menuMusic.setBuffer(menuMusicBuffer);
-        menuMusic.setVolume(70.f);  // Set to match default in Lua (70%)
-        menuMusic.setLoop(true);  // Loop continuously
+        menuMusic.setVolume(70.f);
+        menuMusic.setLoop(true);
         
-        // Set static pointers for Lua access
         g_menuMusic = &menuMusic;
         g_menuMusicBuffer = &menuMusicBuffer;
         
         std::cout << "[Game] ✓ Menu music loaded successfully from: " << menuMusicPath << std::endl;
-        std::cout << "[Game]   Volume: 70%, Loop: enabled" << std::endl;
         
-        // Start menu music immediately since we're in MainMenu state
         if (GameStateManager::Instance().GetState() == GameState::MainMenu) {
             menuMusic.play();
-            std::cout << "[Game] ♪ Menu music started!" << std::endl;
         }
     }
 
