@@ -38,6 +38,7 @@ if(ENABLE_SCRIPTING)
             set(LUA_LIBRARIES ${LUA_LIBRARIES} CACHE STRING "" FORCE)
             set(LUA_INCLUDE_DIR ${LUA_INCLUDE_DIR} CACHE PATH "" FORCE)
             set(LUA_FOUND TRUE CACHE BOOL "" FORCE)
+            set(LUA_FOUND TRUE)
         endif()
     endif()
 
@@ -51,7 +52,7 @@ if(ENABLE_SCRIPTING)
             DOWNLOAD_ONLY YES
         )
         
-        if(Lua_ADDED)
+        if(Lua_ADDED OR EXISTS "${Lua_SOURCE_DIR}")
             message(STATUS "Configuring Lua manually from source...")
             file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
             list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
@@ -68,6 +69,7 @@ if(ENABLE_SCRIPTING)
             set(LUA_LIBRARIES lua CACHE STRING "" FORCE)
             set(LUA_INCLUDE_DIR ${Lua_SOURCE_DIR} CACHE PATH "" FORCE)
             set(LUA_FOUND TRUE CACHE BOOL "" FORCE)
+            set(LUA_FOUND TRUE)
         endif()
     endif()
 
@@ -412,13 +414,19 @@ install(TARGETS ecs rendering core scripting network
     BoundarySystem
     HealthSystem
     AudioSystem
-    UISystem
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
 
-# Optional: Install lua if it's our internal target
+if(TARGET UISystem)
+    install(TARGETS UISystem
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()
+
 if(TARGET lua)
     install(TARGETS lua
         LIBRARY DESTINATION lib
