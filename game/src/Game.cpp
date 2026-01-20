@@ -13,34 +13,70 @@ static eng::engine::Sound* g_menuMusic = nullptr;
 static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
 
 // Helper function to resolve asset paths from different working directories
+// Helper function to resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
-    // If we already found the base path, use it
-    if (!g_basePath.empty()) {
-        return g_basePath + relativePath;
+    namespace fs = std::filesystem;
+    
+    // 1. Check if the path exists as-is (absolute or relative to CWD)
+    if (fs::exists(relativePath)) {
+        return relativePath;
     }
 
-    // List of possible base paths to check
-    std::vector<std::string> basePaths = {
-        "",                    // Current directory (running from project root)
-        "../../",              // Running from build/game/
-        "../../../",           // Running from deeper build directories
-    };
-
-    // Test file to check if we're in the right directory
-    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
-
-    for (const auto& base : basePaths) {
-        std::string fullPath = base + testFile;
-        std::ifstream file(fullPath);
-        if (file.good()) {
-            g_basePath = base;
-            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
-            return g_basePath + relativePath;
+    // 2. Handle "game/assets" prefix removal for installed version
+    // In installed version, "game/assets" becomes just "assets" relative to binary
+    std::string strippedPath = relativePath;
+    if (relativePath.rfind("game/", 0) == 0) { // Starts with "game/"
+        strippedPath = relativePath.substr(5); // Remove "game/"
+        if (fs::exists(strippedPath)) {
+            return strippedPath;
         }
     }
 
-    // Fallback: return the path as-is
-    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
+    // 3. Fallback to base path search if not found yet
+    if (!g_basePath.empty()) {
+        std::string fullPath = g_basePath + relativePath;
+        if (fs::exists(fullPath)) return fullPath;
+        
+        // Try with stripped path
+        fullPath = g_basePath + strippedPath;
+        if (fs::exists(fullPath)) return fullPath;
+    }
+
+    // Initialize base path if empty
+    if (g_basePath.empty()) {
+        std::vector<std::string> basePaths = {
+            "",                    // Current directory
+            "../../",              // Build directory (build/game)
+            "../../../",           // Deeper build
+            "../",                 // Parent
+            "assets/",             // Assets subdir
+        };
+
+        // Try to find a known file
+        std::string testFile = "assets/fonts/Roboto-Regular.ttf";
+        std::string gameTestFile = "game/" + testFile;
+
+        for (const auto& base : basePaths) {
+            if (fs::exists(base + testFile)) {
+                g_basePath = base;
+                 // If we found it in "assets/...", and input was "game/assets...", 
+                 // we might need to be careful. But the logic above (strippedPath) handles it.
+                break;
+            }
+            if (fs::exists(base + gameTestFile)) {
+                g_basePath = base;
+                break;
+            }
+        }
+        
+        if (!g_basePath.empty()) {
+             std::cout << "[AssetPath] Base path resolved to: " << g_basePath << std::endl;
+             // Retry resolution with new base path
+             return ResolveAssetPath(relativePath);
+        }
+    }
+
+    std::cerr << "[AssetPath] Warning: Could not resolve: " << relativePath << std::endl;
     return relativePath;
 }
 
@@ -1661,8 +1697,9 @@ int Game::Run(int argc, char* argv[])
     // Load enemy-specific textures referenced in EnemiesConfig (if available)
     try {
         sol::state& lua = luaState.GetState();
-        sol::table enemiesConfig = lua["EnemiesConfig"];
-        if (enemiesConfig.valid()) {
+        sol::optional<sol::table> enemiesConfigOpt = lua["EnemiesConfig"];
+        if (enemiesConfigOpt) {
+            sol::table& enemiesConfig = enemiesConfigOpt.value();
             for (auto& kv : enemiesConfig) {
                 // kv.first = key, kv.second = value
                 sol::object key = kv.first;
