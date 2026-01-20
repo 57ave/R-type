@@ -9,6 +9,202 @@ on:
       - "ga-ignore-**"
 
 jobs:
+  check_program_compilation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+        component: [client, server, game, engine]
+    container:
+      image: epitechcontent/epitest-docker:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libopenal-dev libflac-dev libvorbis-dev \
+                           libgl1-mesa-dev libegl1-mesa-dev libfreetype6-dev libx11-dev libx11-xcb-dev \
+                           libxcb-randr0-dev libxcb-image0-dev libxcb-keysyms1-dev libglu1-mesa-dev
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build-${{ matrix.build_type }}-${{ matrix.component }}
+          cd build-${{ matrix.build_type }}-${{ matrix.component }}
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_CLIENT=${{ matrix.component == 'client' }} \
+            -DBUILD_SERVER=${{ matrix.component == 'server' }} \
+            -DBUILD_GAME=${{ matrix.component == 'game' }} \
+            -DBUILD_TESTS=OFF
+
+      - name: Build specific component
+        run: |
+          cd build-${{ matrix.build_type }}-${{ matrix.component }}
+          cmake --build . --config ${{ matrix.build_type }} --parallel $(nproc)
+
+      - name: List built executables
+        run: |
+          echo "Built files in build-${{ matrix.build_type }}-${{ matrix.component }}:"
+          find build-${{ matrix.build_type }}-${{ matrix.component }} -name "*.so" -o -name "*.a" -o -name "RType*" -type f | xargs -I {} ls -la {}
+
+  run_tests:
+    runs-on: ubuntu-latest
+    needs: check_program_compilation
+    container:
+      image: epitechcontent/epitest-docker:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libopenal-dev libflac-dev libvorbis-dev \
+                           libgl1-mesa-dev libegl1-mesa-dev libfreetype6-dev libx11-dev libx11-xcb-dev \
+                           libxcb-randr0-dev libxcb-image0-dev libxcb-keysyms1-dev libglu1-mesa-dev
+
+      - name: Configure CMake with tests
+        run: |
+          mkdir -p build-tests
+          cd build-tests
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DBUILD_CLIENT=OFF \
+            -DBUILD_SERVER=OFF \
+            -DBUILD_GAME=OFF \
+            -DBUILD_TESTS=ON
+
+      - name: Build tests
+        run: |
+          cd build-tests
+          cmake --build . --config ${{ env.BUILD_TYPE }} --target unit_tests --parallel $(nproc)
+
+      - name: Run unit tests
+        run: |
+          cd build-tests
+          ./tests/unit_tests --gtest_output=xml:test_results.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: build-tests/test_results.xml
+
+  integration_tests:
+    runs-on: ubuntu-latest
+    needs: [check_program_compilation, run_tests]
+    container:
+      image: epitechcontent/epitest-docker:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev libopenal-dev libflac-dev libvorbis-dev \
+                           libgl1-mesa-dev libegl1-mesa-dev libfreetype6-dev libx11-dev libx11-xcb-dev \
+                           libxcb-randr0-dev libxcb-image0-dev libxcb-keysyms1-dev libglu1-mesa-dev \
+                           netcat-openbsd
+
+      - name: Build server for integration tests
+        run: |
+          mkdir -p build-integration
+          cd build-integration
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DBUILD_CLIENT=OFF \
+            -DBUILD_SERVER=ON \
+            -DBUILD_GAME=OFF \
+            -DBUILD_TESTS=OFF
+          cmake --build . --config ${{ env.BUILD_TYPE }} --parallel $(nproc)
+
+      - name: Simple server startup test
+        timeout-minutes: 1
+        run: |
+          cd build-integration
+          # Start server in background
+          ./server/RType_server &
+          SERVER_PID=$!
+          
+          # Give server time to start
+          sleep 2
+          
+          # Check if server is still running
+          if ps -p $SERVER_PID > /dev/null; then
+            echo "Server started successfully"
+            kill $SERVER_PID
+          else
+            echo "Server failed to start"
+            exit 1
+          fi
+
+      - name: Network connectivity test
+        timeout-minutes: 1
+        run: |
+          cd build-integration
+          # Start server on specific port
+          ./server/RType_server --port 4242 &
+          SERVER_PID=$!
+          
+          sleep 3
+          
+          # Test if server is listening on the port
+          if nc -z localhost 4242; then
+            echo "Server is listening on port 4242"
+            kill $SERVER_PID
+            exit 0
+          else
+            echo "Server is not listening on port 4242"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+  static_analysis:
+    runs-on: ubuntu-latest
+    container:
+      image: epitechcontent/epitest-docker:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: |
+          apt-get update
+          apt-get install -y cppcheck
+
+      - name: Run cppcheck on engine
+        run: |
+          cppcheck --enable=all --suppress=missingIncludeSystem \
+                   --suppress=unmatchedSuppression \
+                   --error-exitcode=1 \
+                   --inline-suppr \
+                   -I engine/include \
+                   engine/src/ 2> cppcheck_engine.txt || true
+          echo "=== Cppcheck results for engine ==="
+          cat cppcheck_engine.txt
+
+      - name: Run cppcheck on server
+        run: |
+          cppcheck --enable=all --suppress=missingIncludeSystem \
+                   --suppress=unmatchedSuppression \
+                   --error-exitcode=1 \
+                   --inline-suppr \
+                   -I engine/include \
+                   -I server/include \
+                   server/src/ 2> cppcheck_server.txt || true
+          echo "=== Cppcheck results for server ==="
+          cat cppcheck_server.txt
+
   push_to_mirror:
     runs-on: ubuntu-latest
 
