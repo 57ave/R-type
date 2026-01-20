@@ -4,6 +4,8 @@
 #include <vector>
 #include <unordered_map>
 #include <random>
+#include <cstdint>
+#include <algorithm>
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
 #include "engine/Clock.hpp"
@@ -61,6 +63,10 @@ public:
         const float snapshotRate = 1.0f / 30.0f; // 30 snapshots per second
         float accumulatedTime = 0.0f;
 
+        // Stats: print every second
+        // statsClock_ is a member Clock (initialized default)
+        const float statsInterval = 1.0f;
+
         while (gameRunning_) {
             float elapsed = updateClock.restart();
             accumulatedTime += elapsed;
@@ -104,6 +110,18 @@ public:
                 server_.checkTimeouts();
             }
             
+            // Stats printing every second
+            if (statsClock_.getElapsedTime() >= statsInterval) {
+                statsClock_.restart();
+                uint64_t sent = bytesSentLastInterval_;
+                uint64_t recv = bytesReceivedLastInterval_;
+                bytesSentLastInterval_ = 0;
+                bytesReceivedLastInterval_ = 0;
+                std::cout << "[NetworkStats] Sent: " << sent << " B/s  Received: " << recv << " B/s"
+                          << "  TotalSent: " << bytesSentTotal_ << " B  TotalRecv: " << bytesReceivedTotal_ << " B"
+                          << std::endl;
+            }
+
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
@@ -112,7 +130,13 @@ private:
     void processPackets() {
         while (server_.hasReceivedPackets()) {
             auto [packet, sender] = server_.getNextReceivedPacket();
-            
+
+            // Count received bytes (header fields + payload)
+            size_t headerBytes = sizeof(packet.header.type) + sizeof(packet.header.timestamp);
+            size_t packetSize = headerBytes + packet.payload.size();
+            bytesReceivedTotal_ += packetSize;
+            bytesReceivedLastInterval_ += packetSize;
+
             auto type = static_cast<GamePacketType>(packet.header.type);
             
             switch (type) {
@@ -171,8 +195,9 @@ private:
         welcome.header.timestamp = getCurrentTimestamp();
         welcome.payload.push_back(playerId);
         
-        server_.sendTo(welcome, sender);
-        std::cout << "[Network] Welcome sent to " << sender.address().to_string() 
+        // use wrapper to count bytes
+        sendToCount(welcome, sender);
+        std::cout << "[Network] Welcome sent to " << sender.address().to_string()
                   << ":" << sender.port() << " (Player ID: " << (int)playerId << ")" << std::endl;
         
         // Don't create entity or broadcast yet - wait for game to start
@@ -182,38 +207,42 @@ private:
         if (packet.payload.size() < sizeof(ClientInput)) {
             return;
         }
-        
+
         ClientInput input = ClientInput::deserialize(packet.payload.data());
-        
+
         // Find player entity
         auto it = playerEntities_.find(input.playerId);
         if (it == playerEntities_.end()) {
             return;
         }
-        
+
         uint32_t entityId = it->second;
         auto entityIt = entities_.find(entityId);
         if (entityIt == entities_.end()) {
             return;
         }
-        
+
         ServerEntity& player = entityIt->second;
-        
+
         // Apply input
         const float speed = 500.0f;
         player.vx = 0.0f;
         player.vy = 0.0f;
-        
+
         if (input.inputMask & (1 << 0)) player.vy = -speed; // Up
         if (input.inputMask & (1 << 1)) player.vy = speed;  // Down
         if (input.inputMask & (1 << 2)) player.vx = -speed; // Left
         if (input.inputMask & (1 << 3)) player.vx = speed;  // Right
-        
+
         // Fire (with rate limiting)
         if ((input.inputMask & (1 << 4)) && player.fireTimer <= 0.0f) {
             spawnPlayerMissile(player, input.chargeLevel);
             player.fireTimer = 0.2f; // 0.2 second cooldown
         }
+
+        // Update last input time and mask for prediction
+        lastPlayerInputTime_[input.playerId] = std::chrono::steady_clock::now();
+        lastPlayerInputMask_[input.playerId] = input.inputMask;
     }
 
     // ✅ NOUVEAU: Handler pour CLIENT_PING
@@ -226,18 +255,18 @@ private:
             // Send PING_REPLY
             NetworkPacket reply(static_cast<uint16_t>(GamePacketType::SERVER_PING_REPLY));
             reply.header.timestamp = getCurrentTimestamp();
-            server_.sendTo(reply, sender);
+            sendToCount(reply, sender);
         }
     }
 
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
         std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
-        
+
         // Try to get session first (from room-system-improvements)
         auto session = server_.getSession(sender);
         uint8_t playerId = 0;
         uint32_t roomId = 0;
-        
+
         if (session) {
             // Use session-based approach (preferred method from room-system-improvements)
             playerId = session->playerId;
@@ -253,12 +282,12 @@ private:
             playerId = epIt->second;
             std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from endpoint mapping" << std::endl;
         }
-        
+
         // ✅ NOUVEAU: Remove player entity with explosion
         auto playerIt = playerEntities_.find(playerId);
         if (playerIt != playerEntities_.end()) {
             uint32_t entityId = playerIt->second;
-            
+
             // Create explosion at player position before destroying
             auto entityIt = entities_.find(entityId);
             if (entityIt != entities_.end()) {
@@ -266,17 +295,17 @@ private:
                 std::cout << "[GameServer] Created explosion at player " << (int)playerId << " position (" 
                           << entityIt->second.x << ", " << entityIt->second.y << ")" << std::endl;
             }
-            
+
             // Remove from entities map
             if (entities_.erase(entityId)) {
                 // Use the improved broadcastEntityDestroy method
                 broadcastEntityDestroy(entityId);
                 std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
             }
-            
+
             playerEntities_.erase(playerIt);
         }
-        
+
         // ✅ NOUVEAU: Clean up room membership and transfer ownership if needed
         if (roomId != 0) {
             auto& roomManager = server_.getRoomManager();
@@ -284,29 +313,53 @@ private:
             if (room) {
                 room->removePlayer(playerId);
                 std::cout << "[GameServer] Removed player " << (int)playerId << " from room " << roomId << std::endl;
-                
+
                 // ✅ If this was the host, transfer ownership to another player
                 if (room->hostPlayerId == playerId && !room->playerIds.empty()) {
                     room->hostPlayerId = *room->playerIds.begin();
                     std::cout << "[GameServer] ⚡ Transferred host ownership of room " << roomId 
                               << " to player " << (int)room->hostPlayerId << std::endl;
                 }
-                
+
                 // Broadcast updated player list
                 broadcastRoomPlayers(roomId);
             }
         }
-        
+
         // Clean up endpoint mapping (from game_menu)
         endpointToPlayerId_.erase(sender);
-        
+
         // Remove the session from UDP server (from room-system-improvements)
         server_.removeClient(sender);
     }
 
+    void predictPlayerMovement(ServerEntity& entity)
+    {
+        if (entity.type == EntityType::ENTITY_PLAYER) {
+            uint8_t pid = entity.playerId;
+            auto itTime = lastPlayerInputTime_.find(pid);
+            if (itTime != lastPlayerInputTime_.end()) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - itTime->second).count();
+                const int predictionWindowMs = 200; // predict for 200 ms after last input
+                if (elapsedMs <= predictionWindowMs) {
+                    uint8_t inputMask = lastPlayerInputMask_[pid];
+                    const float speed = 500.0f;
+                    entity.vx = 0.0f;
+                    entity.vy = 0.0f;
+                    if (inputMask & (1 << 0)) entity.vy = -speed; // Up
+                    if (inputMask & (1 << 1)) entity.vy = speed;  // Down
+                    if (inputMask & (1 << 2)) entity.vx = -speed; // Left
+                    if (inputMask & (1 << 3)) entity.vx = speed;  // Right
+                    // We intentionally DO NOT spawn missiles here — only spawn on receipt of input packet earlier
+                }
+            }
+        }
+    }
+
     void updateEntities(float deltaTime) {
         std::vector<uint32_t> toRemove;
-        
+
         for (auto& [id, entity] : entities_) {
             // ✅ Update lifetime for temporary entities (explosions, etc.)
             if (entity.lifetime > 0.0f) {
@@ -317,12 +370,12 @@ private:
                     continue; // Skip rest of update for this entity
                 }
             }
-            
+
             // ✅ Explosions don't move, skip movement logic
             if (entity.type == EntityType::ENTITY_EXPLOSION) {
                 continue;
             }
-            
+
             // Update position
             entity.x += entity.vx * deltaTime;
             entity.y += entity.vy * deltaTime;
@@ -602,6 +655,7 @@ private:
                     packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
                 }
                 
+                // broadcastToRoom(roomId, packet);
                 broadcastToRoom(roomId, packet);
             }
         } else {
@@ -639,7 +693,8 @@ private:
                 packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
             }
             
-            server_.broadcast(packet);
+            // use broadcast wrapper to count bytes for all recipients
+            broadcastCount(packet);
         }
     }
 
@@ -662,7 +717,8 @@ private:
         packet.header.timestamp = getCurrentTimestamp();
         packet.setPayload(state.serialize());
         
-        server_.broadcast(packet);
+        // use broadcast wrapper
+        broadcastCount(packet);
     }
 
     void broadcastEntityDestroy(uint32_t entityId) {
@@ -673,7 +729,8 @@ private:
         std::memcpy(payload.data(), &entityId, sizeof(uint32_t));
         packet.setPayload(payload);
         
-        server_.broadcast(packet);
+        // use broadcast wrapper
+        broadcastCount(packet);
     }
 
     // ========== ROOMING SYSTEM HANDLERS ==========
@@ -695,8 +752,8 @@ private:
         reply.setPayload(payload.serialize());
         reply.header.timestamp = getCurrentTimestamp();
         
-        server_.sendTo(reply, sender);
-        
+        sendToCount(reply, sender);
+
         std::cout << "[GameServer] Sent room list (" << rooms.size() << " rooms) to " 
                   << sender << std::endl;
     }
@@ -735,8 +792,8 @@ private:
             createdSerializer.write(roomId);
             createdReply.setPayload(createdSerializer.getBuffer());
             createdReply.header.timestamp = getCurrentTimestamp();
-            server_.sendTo(createdReply, sender);
-            
+            sendToCount(createdReply, sender);
+
             // Send ROOM_JOINED confirmation (pour que le client affiche le lobby)
             NetworkPacket joinedReply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
             Network::Serializer joinedSerializer;
@@ -755,8 +812,8 @@ private:
             
             joinedReply.setPayload(joinedSerializer.getBuffer());
             joinedReply.header.timestamp = getCurrentTimestamp();
-            server_.sendTo(joinedReply, sender);
-            
+            sendToCount(joinedReply, sender);
+
             // NOUVEAU: Broadcaster la liste des joueurs (l'hôte se verra maintenant)
             broadcastRoomPlayers(roomId);
             
@@ -805,8 +862,8 @@ private:
                 
                 reply.setPayload(serializer.getBuffer());
                 reply.header.timestamp = getCurrentTimestamp();
-                server_.sendTo(reply, sender);
-                
+                sendToCount(reply, sender);
+
                 // NOUVEAU: Broadcast updated player list to all room members
                 broadcastRoomPlayers(payload.roomId);
                 
@@ -957,7 +1014,8 @@ private:
         for (const auto& session : sessions) {
             // Check if this session's player is in the room
             if (std::find(room->playerIds.begin(), room->playerIds.end(), session.playerId) != room->playerIds.end()) {
-                server_.sendTo(packet, session.endpoint);
+                // use per-recipient send counter
+                sendToCount(packet, session.endpoint);
                 sentCount++;
             }
         }
@@ -1023,6 +1081,33 @@ private:
         }
     }
 
+    // ------------------ Networking helpers & stats ------------------
+    // Wrapper to send and count bytes for a single recipient
+    void sendToCount(const NetworkPacket& packet, const asio::ip::udp::endpoint& endpoint) {
+        // compute bytes: header fields + payload
+        size_t headerBytes = sizeof(packet.header.type) + sizeof(packet.header.timestamp);
+        size_t packetSize = headerBytes + packet.payload.size();
+
+        server_.sendTo(packet, endpoint);
+        bytesSentTotal_ += packetSize;
+        bytesSentLastInterval_ += packetSize;
+    }
+
+    // Wrapper to broadcast to all active sessions and count bytes * recipients
+    void broadcastCount(const NetworkPacket& packet) {
+        size_t headerBytes = sizeof(packet.header.type) + sizeof(packet.header.timestamp);
+        size_t packetSize = headerBytes + packet.payload.size();
+
+        // get recipient count
+        auto sessions = server_.getActiveSessions();
+        size_t recipients = sessions.size();
+
+        server_.broadcast(packet);
+
+        bytesSentTotal_ += packetSize * recipients;
+        bytesSentLastInterval_ += packetSize * recipients;
+    }
+
     uint32_t getCurrentTimestamp() {
         auto now = std::chrono::steady_clock::now();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -1034,11 +1119,21 @@ private:
     std::unordered_map<uint8_t, uint32_t> playerEntities_; // playerId -> entityId
     std::unordered_map<asio::ip::udp::endpoint, uint8_t> endpointToPlayerId_; // endpoint -> playerId
     std::unordered_map<uint8_t, uint32_t> playerToRoom_;  // playerId -> roomId (NEW for rooming)
+    // Track last input time and last input mask per player for client-side prediction on the server
+    std::unordered_map<uint8_t, std::chrono::steady_clock::time_point> lastPlayerInputTime_;
+    std::unordered_map<uint8_t, uint8_t> lastPlayerInputMask_;
     uint32_t nextEntityId_;
     uint8_t nextPlayerId_ = 1;
     bool gameRunning_;
     std::mt19937 rng_;
     std::uniform_int_distribution<> dist_;
+
+    // ---------------- stats ----------------
+    eng::engine::Clock statsClock_;
+    uint64_t bytesSentTotal_ = 0;
+    uint64_t bytesReceivedTotal_ = 0;
+    uint64_t bytesSentLastInterval_ = 0;
+    uint64_t bytesReceivedLastInterval_ = 0;
 };
 
 int main() {
