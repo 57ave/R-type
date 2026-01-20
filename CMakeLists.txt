@@ -77,6 +77,58 @@ target_link_libraries(shootemup PRIVATE
     ${LUA_LIBRARIES}
 )
 
+# Fix for sol2/Lua dependency issue
+if(BUILD_GAME)
+    # Try to find system Lua first
+    find_package(Lua 5.3 QUIET)
+    
+    if(NOT Lua_FOUND)
+        message(STATUS "System Lua not found, downloading via CPM")
+        CPMAddPackage(
+            NAME lua
+            URL https://www.lua.org/ftp/lua-5.4.4.tar.gz
+            VERSION 5.4.4
+            OPTIONS
+                "INSTALL_BINARIES OFF"
+                "BUILD_SHARED_LIBS OFF"
+        )
+        if(lua_ADDED)
+            set(LUA_INCLUDE_DIR ${lua_SOURCE_DIR}/src)
+            set(LUA_LIBRARIES lua)
+        endif()
+    endif()
+    
+    # Add sol2
+    CPMAddPackage(
+        NAME sol2
+        GITHUB_REPOSITORY ThePhD/sol2
+        VERSION 3.3.0
+        OPTIONS
+            "SOL2_ENABLE_INSTALL OFF"
+            "SOL2_BUILD_EXAMPLES OFF"
+    )
+    
+    if(sol2_ADDED AND (LUA_INCLUDE_DIR OR lua_ADDED))
+        message(STATUS "sol2 and Lua dependencies resolved")
+        
+        # Add these includes to the engine module that needs them
+        if(TARGET shootemup)
+            target_include_directories(shootemup PRIVATE
+                ${sol2_SOURCE_DIR}/include
+                ${LUA_INCLUDE_DIR}
+            )
+            
+            if(LUA_LIBRARIES)
+                target_link_libraries(shootemup PRIVATE ${LUA_LIBRARIES})
+            elseif(lua_ADDED)
+                target_link_libraries(shootemup PRIVATE lua)
+            endif()
+        endif()
+    else()
+        message(WARNING "sol2 or Lua dependencies not found. Game module may not build correctly.")
+    endif()
+endif()
+
 # Build client if requested
 if(BUILD_CLIENT)
     add_subdirectory(client)

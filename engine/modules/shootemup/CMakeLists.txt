@@ -56,6 +56,49 @@ set(SHOOTEMUP_FACTORY_SOURCES
     src/factories/EnemyFactory.cpp
     src/factories/ProjectileFactory.cpp
 )
+# In engine/modules/shootemup/CMakeLists.txt
+
+# Find Lua
+find_package(Lua 5.3 QUIET)
+if(NOT Lua_FOUND)
+    # Fallback: try to find lua with pkg-config
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(LUA QUIET lua5.3)
+        if(LUA_FOUND)
+            set(LUA_INCLUDE_DIR ${LUA_INCLUDE_DIRS})
+            set(LUA_LIBRARIES ${LUA_LIBRARIES})
+        endif()
+    endif()
+endif()
+
+# Add sol2 via CPM
+CPMAddPackage(
+    NAME sol2
+    GITHUB_REPOSITORY ThePhD/sol2
+    VERSION 3.3.0
+    OPTIONS
+        "SOL2_ENABLE_INSTALL OFF"
+        "SOL2_BUILD_EXAMPLES OFF"
+)
+
+# Target configuration
+target_include_directories(shootemup PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/engine/include
+    ${sol2_SOURCE_DIR}/include
+    ${LUA_INCLUDE_DIR}
+)
+
+target_link_libraries(shootemup PRIVATE
+    engine
+    ${LUA_LIBRARIES}
+)
+
+# Add compile definitions if needed
+target_compile_definitions(shootemup PRIVATE
+    SOL_ALL_SAFETIES_ON=1
+)
 
 # ========================================
 # CREATE LIBRARY
