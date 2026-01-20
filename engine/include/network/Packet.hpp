@@ -7,7 +7,9 @@
 #include <iostream>
 #include "Serializer.hpp"
 
-#ifdef __APPLE__
+#ifdef _WIN32
+// Windows does not have endian.h
+#elif defined(__APPLE__)
 #include <machine/endian.h>
 #else
 #include <endian.h>

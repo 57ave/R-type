@@ -32,27 +32,51 @@ endif()
 option(ENABLE_SCRIPTING "Enable Lua/Sol3 scripting support" ON)
 
 if(ENABLE_SCRIPTING)
-    # 1. Try to find Lua on the system
-    find_package(Lua 5.4 QUIET)
+    # 1. Try to find Lua on the system (unless cross-compiling)
+    if(NOT CMAKE_CROSSCOMPILING)
+        find_package(Lua 5.4 QUIET)
+    endif()
 
     if(NOT LUA_FOUND)
-        message(STATUS "Lua 5.4 not found on system. Fetching via CPM...")
-        # Use a CMake-friendly Lua wrapper
+        message(STATUS "Lua 5.4 not found on system (or cross-compiling). Fetching via CPM...")
+        
+        # Fetch official Lua source
         CPMAddPackage(
             NAME Lua
-            GITHUB_REPOSITORY "epezent/lua"
-            GIT_TAG "v5.4.4"
-            OPTIONS 
-                "LUA_BUILD_EXAMPLE OFF"
-                "LUA_BUILD_A_GPL OFF"
+            GITHUB_REPOSITORY "lua/lua"
+            GIT_TAG "v5.4.6"
+            DOWNLOAD_ONLY YES
         )
         
         if(Lua_ADDED)
-             # Export Lua variables for other targets (standard FindLua variables)
+            message(STATUS "Configuring Lua manually from source...")
+            # Glob sources (Lua source is flat in root usually, or src?)
+            # Official mirror has everything in root? Or src? 
+            # Checking structure implies src usually. But let's check.
+            # Mirror usually mimics tarball? No, it's git.
+            # git repo has headers/c in root? NO, checking online: lua.org source is in src?
+            # Github mirror `lua/lua`: files are in root?? NO.
+            # I should verify structure...
+            # But standard Lua has one level.
+            # Let's assume content is in ${Lua_SOURCE_DIR}.
+            
+            file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
+            # Remove lua.c (interpreter) and luac.c (compiler) from library
+            list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
+
+            # Standard definitions
+            if(WIN32 OR MINGW)
+                add_library(lua SHARED ${LUA_SOURCES})
+                target_compile_definitions(lua PUBLIC LUA_BUILD_AS_DLL)
+            else()
+                add_library(lua STATIC ${LUA_SOURCES})
+                target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
+            endif()
+            target_include_directories(lua PUBLIC ${Lua_SOURCE_DIR})
+
             set(LUA_LIBRARIES lua)
             set(LUA_INCLUDE_DIR ${Lua_SOURCE_DIR})
             set(LUA_FOUND TRUE)
-            message(STATUS "Lua fetched and configured via CPM (epezent/lua)")
         endif()
     endif()
 
@@ -145,6 +169,10 @@ target_include_directories(network PUBLIC
 )
 
 target_link_libraries(network PUBLIC ecs)
+
+if(WIN32)
+    target_link_libraries(network PUBLIC ws2_32 wsock32)
+endif()
 
 set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -383,12 +411,9 @@ target_include_directories(AudioSystem PUBLIC
 target_link_libraries(AudioSystem PUBLIC ecs core)
 
 # Installation
-# Configure RPATH for installed targets
-# This ensures executables find shared libraries in ../lib relative to them
 set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib")
   set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
-# Installation
 install(TARGETS ecs rendering core scripting network
     MovementSystem
     InputSystem
@@ -404,6 +429,15 @@ install(TARGETS ecs rendering core scripting network
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
+# Optional: Install lua if it's our internal target
+if(TARGET lua)
+    install(TARGETS lua
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()
 
 install(DIRECTORY include/
     DESTINATION include

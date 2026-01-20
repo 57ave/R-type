@@ -100,3 +100,6 @@ install_test/
 build_verify/
 install/
 install_verify/
+build_windows/
+release_windows/
+

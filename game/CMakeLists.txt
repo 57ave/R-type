@@ -85,12 +85,25 @@ install(TARGETS r-type_game
 )
 
 # Install assets
-# Copy assets from project root to bin/assets
+# 1. Copy root assets (scripts)
 if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
         DESTINATION bin
     )
-    message(STATUS "📦 Assets configured for installation")
-else()
-    message(WARNING "⚠️ Assets directory not found at ${CMAKE_SOURCE_DIR}/assets")
 endif()
+
+# 2. Copy game-specific assets (fonts, images, sounds)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+    # Note: Using "/" at the end of the source directory copies the *contents*
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/"
+        DESTINATION bin/assets
+    )
+endif()
+
+# 3. Copy client assets if they exist and are different
+if(EXISTS "${CMAKE_SOURCE_DIR}/client/assets")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/client/assets/"
+        DESTINATION bin/assets
+    )
+endif()
+

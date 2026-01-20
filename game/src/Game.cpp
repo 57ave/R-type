@@ -1,6 +1,7 @@
 #include "Game.hpp"
 #include <filesystem>
 #include <fstream>
+#include <SFML/Graphics/Image.hpp>
 #include <core/GameStateCallbacks.hpp>
 #include "network/NetworkBindings.hpp"
 #include "network/RTypeProtocol.hpp"  // Pour RoomPlayersPayload et ChatMessagePayload
@@ -12,71 +13,33 @@ static std::string g_basePath = "";
 static eng::engine::Sound* g_menuMusic = nullptr;
 static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
 
-// Helper function to resolve asset paths from different working directories
-// Helper function to resolve asset paths from different working directories
+// Resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
     namespace fs = std::filesystem;
-    
-    // 1. Check if the path exists as-is (absolute or relative to CWD)
-    if (fs::exists(relativePath)) {
-        return relativePath;
-    }
+    if (fs::exists(relativePath)) return relativePath;
 
-    // 2. Handle "game/assets" prefix removal for installed version
-    // In installed version, "game/assets" becomes just "assets" relative to binary
     std::string strippedPath = relativePath;
-    if (relativePath.rfind("game/", 0) == 0) { // Starts with "game/"
-        strippedPath = relativePath.substr(5); // Remove "game/"
-        if (fs::exists(strippedPath)) {
-            return strippedPath;
-        }
+    if (relativePath.rfind("game/", 0) == 0) {
+        strippedPath = relativePath.substr(5);
+        if (fs::exists(strippedPath)) return strippedPath;
     }
 
-    // 3. Fallback to base path search if not found yet
     if (!g_basePath.empty()) {
-        std::string fullPath = g_basePath + relativePath;
-        if (fs::exists(fullPath)) return fullPath;
-        
-        // Try with stripped path
-        fullPath = g_basePath + strippedPath;
-        if (fs::exists(fullPath)) return fullPath;
+        if (fs::exists(g_basePath + relativePath)) return g_basePath + relativePath;
+        if (fs::exists(g_basePath + strippedPath)) return g_basePath + strippedPath;
     }
 
-    // Initialize base path if empty
     if (g_basePath.empty()) {
-        std::vector<std::string> basePaths = {
-            "",                    // Current directory
-            "../../",              // Build directory (build/game)
-            "../../../",           // Deeper build
-            "../",                 // Parent
-            "assets/",             // Assets subdir
-        };
-
-        // Try to find a known file
+        std::vector<std::string> basePaths = {"", "../../", "../../../", "../", "assets/"};
         std::string testFile = "assets/fonts/Roboto-Regular.ttf";
-        std::string gameTestFile = "game/" + testFile;
 
         for (const auto& base : basePaths) {
-            if (fs::exists(base + testFile)) {
+            if (fs::exists(base + testFile) || fs::exists(base + "game/" + testFile)) {
                 g_basePath = base;
-                 // If we found it in "assets/...", and input was "game/assets...", 
-                 // we might need to be careful. But the logic above (strippedPath) handles it.
-                break;
+                return ResolveAssetPath(relativePath);
             }
-            if (fs::exists(base + gameTestFile)) {
-                g_basePath = base;
-                break;
-            }
-        }
-        
-        if (!g_basePath.empty()) {
-             std::cout << "[AssetPath] Base path resolved to: " << g_basePath << std::endl;
-             // Retry resolution with new base path
-             return ResolveAssetPath(relativePath);
         }
     }
-
-    std::cerr << "[AssetPath] Warning: Could not resolve: " << relativePath << std::endl;
     return relativePath;
 }
 
@@ -192,50 +155,55 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     return player;
 }
 
-// Helper function to create background entity
-ECS::Entity Game::CreateBackground(float x, float y, float windowHeight, bool isFirst) {
-    ECS::Entity bg = gCoordinator.CreateEntity();
-    RegisterEntity(bg);
+// Helper function to create background entities (tiled)
+void Game::CreateBackground(float y, float windowHeight) {
+    if (backgroundTiles.empty()) return;
 
-    // Position
-    gCoordinator.AddComponent(bg, Position{x, y});
+    // Calculate total width of all tiles
+    float totalWidth = 0;
+    std::vector<float> tileWidths;
+    float scale = 1.0f;
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites.push_back(sprite);
-    sprite->setTexture(backgroundTexture.get());
-    sprite->setPosition(Vector2f(x, y));
-
-    // Calculate scale to fit window height
-    Vector2u texSize = backgroundTexture->getSize();
-    float scale = windowHeight / texSize.y;
-
-    Sprite spriteComp;
-    spriteComp.sprite = sprite;
-    spriteComp.layer = -10;
-    spriteComp.scaleX = scale;
-    spriteComp.scaleY = scale;
-    gCoordinator.AddComponent(bg, spriteComp);
-
-    // Scrolling background
-    ScrollingBackground scrolling;
-    scrolling.scrollSpeed = 200.0f;
-    scrolling.horizontal = true;
-    scrolling.loop = true;
-    scrolling.spriteWidth = texSize.x * scale;
-
-    if (isFirst) {
-        scrolling.sprite1X = 0.0f;
-        scrolling.sprite2X = scrolling.spriteWidth;
-    } else {
-        scrolling.sprite1X = scrolling.spriteWidth;
-        scrolling.sprite2X = 0.0f;
+    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
+        Vector2u texSize = backgroundTiles[i]->getSize();
+        if (i == 0) {
+            scale = windowHeight / texSize.y;
+        }
+        float w = texSize.x * scale;
+        tileWidths.push_back(w);
+        totalWidth += w;
     }
 
-    gCoordinator.AddComponent(bg, scrolling);
-    gCoordinator.AddComponent(bg, Tag{"background"});
+    float currentX = 0;
+    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
+        ECS::Entity bg = gCoordinator.CreateEntity();
+        RegisterEntity(bg);
 
-    return bg;
+        gCoordinator.AddComponent(bg, Position{currentX, y});
+
+        auto* sprite = new SFMLSprite();
+        allSprites.push_back(sprite);
+        sprite->setTexture(backgroundTiles[i].get());
+        sprite->setPosition(Vector2f(currentX, y));
+
+        Sprite spriteComp;
+        spriteComp.sprite = sprite;
+        spriteComp.layer = -10;
+        spriteComp.scaleX = scale;
+        spriteComp.scaleY = scale;
+        gCoordinator.AddComponent(bg, spriteComp);
+
+        ScrollingBackground scrolling;
+        scrolling.scrollSpeed = 200.0f;
+        scrolling.horizontal = true;
+        scrolling.loop = true;
+        scrolling.spriteWidth = totalWidth;
+        
+        gCoordinator.AddComponent(bg, scrolling);
+        gCoordinator.AddComponent(bg, Tag{"background"});
+
+        currentX += tileWidths[i];
+    }
 }
 
 // Helper function to create enemy entity
@@ -1381,12 +1349,31 @@ int Game::Run(int argc, char* argv[])
     
     std::cout << "[Game] Developer Tools initialized" << std::endl;
 
-    // Load textures using resolved asset paths
-    backgroundTexture = std::make_unique<SFMLTexture>();
-    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
+    // Handle background tiling
+    sf::Image bgImage;
+    if (!bgImage.loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
         return 1;
     }
+
+    unsigned int maxTextureSize = sf::Texture::getMaximumSize();
+    if (maxTextureSize < 512) maxTextureSize = 1024;
+
+    unsigned int tileWidth = std::min(maxTextureSize, 1024u);
+    unsigned int imgWidth = bgImage.getSize().x;
+    unsigned int imgHeight = bgImage.getSize().y;
+
+    backgroundTiles.clear();
+    for (unsigned int x = 0; x < imgWidth; x += tileWidth) {
+        unsigned int currentTileWidth = std::min(tileWidth, imgWidth - x);
+        auto tex = std::make_unique<SFMLTexture>();
+        if (!tex->loadFromImage(bgImage, sf::IntRect(x, 0, currentTileWidth, imgHeight))) {
+            std::cerr << "Error: Could not create background tile at x=" << x << std::endl;
+            return 1;
+        }
+        backgroundTiles.push_back(std::move(tex));
+    }
+    std::cout << "[Game] Background split into " << backgroundTiles.size() << " tiles (MAX_TEXTURE_SIZE=" << maxTextureSize << ")" << std::endl;
 
     playerTexture = std::make_unique<SFMLTexture>();
     if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
@@ -1688,7 +1675,7 @@ int Game::Run(int argc, char* argv[])
     std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
 
     // Core textures we already loaded earlier
-    textureMap["background"] = backgroundTexture.get();
+    if (!backgroundTiles.empty()) textureMap["background"] = backgroundTiles[0].get();
     textureMap["player"] = playerTexture.get();
     textureMap["missile"] = missileTexture.get();
     textureMap["explosion"] = explosionTexture.get();
@@ -1799,7 +1786,7 @@ int Game::Run(int argc, char* argv[])
     bool playerCreated = false;
     
     // Only create background for now - player will be created when game starts
-    CreateBackground(0.0f, 0.0f, 1080.0f, true);
+    CreateBackground(0.0f, 1080.0f);
 
     // Game variables using engine abstractions
     eng::engine::Clock clock;

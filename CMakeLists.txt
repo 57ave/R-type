@@ -36,10 +36,37 @@ include(cmake/CPM.cmake)
 set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib" "\$ORIGIN")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
+
+if(WIN32 OR MINGW)
+    message(STATUS "Fetching OpenAL-Soft for Windows...")
+    CPMAddPackage(
+        NAME OpenAL
+        GITHUB_REPOSITORY kcat/openal-soft
+        GIT_TAG 1.23.1
+        OPTIONS
+            "ALSOFT_UTILS OFF"
+            "ALSOFT_EXAMPLES OFF"
+            "ALSOFT_TESTS OFF"
+            "ALSOFT_INSTALL_EXAMPLES OFF"
+            "LIBTYPE STATIC"
+    )
+    if(OpenAL_ADDED)
+        set(OPENAL_LIBRARY OpenAL)
+        set(OPENAL_INCLUDE_DIR ${OpenAL_SOURCE_DIR}/include)
+        set(OPENAL_FOUND TRUE)
+        set(OPENAL_LIBRARIES OpenAL)
+    endif()
+endif()
+
 # Find SFML (required by all sub-projects)
 find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)
 if(NOT SFML_FOUND)
-    CPMAddPackage("gh:SFML/SFML#2.6.1")
+    CPMAddPackage(
+        NAME SFML
+        GITHUB_REPOSITORY SFML/SFML
+        GIT_TAG 2.6.1
+        PATCH_COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/patch_sfml.py
+    )
 endif()
 add_subdirectory(engine)
 
