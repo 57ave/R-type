@@ -65,6 +65,7 @@ if(ENABLE_SCRIPTING)
                 target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
             endif()
             target_include_directories(lua PUBLIC ${Lua_SOURCE_DIR})
+            set_target_properties(lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
             set(LUA_LIBRARIES lua CACHE STRING "" FORCE)
             set(LUA_INCLUDE_DIR ${Lua_SOURCE_DIR} CACHE PATH "" FORCE)
@@ -248,6 +249,7 @@ if(LUA_FOUND)
         src/scripting/ScriptSystem.cpp
         src/scripting/UIBindings.cpp
     )
+    set_target_properties(scripting PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     target_include_directories(scripting PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
