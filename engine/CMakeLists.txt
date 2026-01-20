@@ -385,6 +385,9 @@ if(LUA_FOUND)
 
     # Link Lua library - use the detected library from architecture-aware detection
     target_link_libraries(UISystem PUBLIC ecs rendering scripting ${LUA_LIBRARIES})
+
+    # Add to engine interface
+    target_link_libraries(engine INTERFACE UISystem)
 else()
     message(STATUS "UISystem disabled - requires Lua/Sol3")
 endif()
@@ -399,6 +402,9 @@ target_include_directories(AudioSystem PUBLIC
 )
 
 target_link_libraries(AudioSystem PUBLIC ecs core)
+
+# Add to engine interface
+target_link_libraries(engine INTERFACE AudioSystem)
 
 # Installation
 set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib")
