@@ -247,7 +247,6 @@ if(LUA_FOUND)
             src/scripting/ScriptingManager.cpp
             src/scripting/PrefabManager.cpp
             src/scripting/ScriptSystem.cpp
-            src/scripting/UIBindings.cpp
         )
         target_compile_definitions(scripting PRIVATE RTYPE_BUILD_DLL)
         target_link_options(scripting PRIVATE -Wl,--export-all-symbols)
@@ -263,7 +262,6 @@ if(LUA_FOUND)
             src/scripting/ScriptingManager.cpp
             src/scripting/PrefabManager.cpp
             src/scripting/ScriptSystem.cpp
-            src/scripting/UIBindings.cpp
         )
     endif()
     set_target_properties(scripting PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -275,12 +273,7 @@ if(LUA_FOUND)
     )
 
     # Link Lua library - use the detected library from architecture-aware detection
-    if(WIN32 OR MINGW)
-        # On Windows, scripting is SHARED and needs to link against UISystem
-        target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES} UISystem)
-    else()
-        target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES})
-    endif()
+    target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES})
     
     target_compile_definitions(scripting PUBLIC RTYPE_SCRIPTING_ENABLED=1)
 else()
@@ -431,6 +424,7 @@ if(LUA_FOUND)
         src/systems/UISystem.cpp
         src/systems/UISystemRender.cpp
         src/systems/UISystemEntities.cpp
+        src/scripting/UIBindings.cpp
     )
     target_compile_definitions(UISystem PRIVATE RTYPE_BUILD_DLL)
     if(WIN32 OR MINGW)
