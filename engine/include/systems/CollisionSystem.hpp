@@ -21,7 +21,7 @@
  *       // Game-specific collision handling here
  *   });
  */
-class RTYPE_API CollisionSystem : public ECS::System {
+class CollisionSystem : public ECS::System {
 public:
     using CollisionCallback = std::function<void(ECS::Entity, ECS::Entity)>;
     
