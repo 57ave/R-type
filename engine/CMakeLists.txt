@@ -275,7 +275,12 @@ if(LUA_FOUND)
     )
 
     # Link Lua library - use the detected library from architecture-aware detection
-    target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES})
+    if(WIN32 OR MINGW)
+        # On Windows, scripting is SHARED and needs to link against UISystem
+        target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES} UISystem)
+    else()
+        target_link_libraries(scripting PUBLIC ecs core rendering ${LUA_LIBRARIES})
+    endif()
     
     target_compile_definitions(scripting PUBLIC RTYPE_SCRIPTING_ENABLED=1)
 else()
