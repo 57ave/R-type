@@ -1,12 +1,10 @@
 # ==================== Game Logic Library ====================
 # Logique métier spécifique au R-Type
 
-# Scripting is always enabled - Lua/Sol3 required
-set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/external/sol3" CACHE PATH "Path to Sol3")
-
-# Use LUA_FOUND from parent if available, otherwise find Lua
-if(NOT DEFINED LUA_FOUND OR NOT LUA_FOUND)
-    find_package(Lua REQUIRED)
+# Scripting dependencies are inherited from engine
+# Ensure we have access to variables if needed
+if(NOT SOL3_INCLUDE_DIR AND TARGET sol2)
+    get_target_property(SOL3_INCLUDE_DIR sol2 INTERFACE_INCLUDE_DIRECTORIES)
 endif()
 
 file(GLOB_RECURSE GAME_SOURCES
@@ -80,3 +78,19 @@ target_link_libraries(r-type_game PRIVATE
     sfml-system
     sfml-audio
 )
+
+# Install steps
+install(TARGETS r-type_game
+    RUNTIME DESTINATION bin
+)
+
+# Install assets
+# Copy assets from project root to bin/assets
+if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
+        DESTINATION bin
+    )
+    message(STATUS "📦 Assets configured for installation")
+else()
+    message(WARNING "⚠️ Assets directory not found at ${CMAKE_SOURCE_DIR}/assets")
+endif()

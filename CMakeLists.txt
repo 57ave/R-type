@@ -14,7 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Export compile commands for IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Options de build
+# Build Options
 option(BUILD_CLIENT "Build client executable" ON)
 option(BUILD_SERVER "Build server executable" ON)
 option(BUILD_GAME "Build game executable" ON)
@@ -29,6 +29,12 @@ endif()
 
 # Include CPM
 include(cmake/CPM.cmake)
+
+# Configure RPATH for installed executables
+# This ensures executables find shared libraries in ../lib relative to them
+# AND shared libraries find each other in standard locations
+set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib" "\$ORIGIN")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Find SFML (required by all sub-projects)
 find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)

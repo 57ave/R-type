@@ -25,3 +25,7 @@ target_link_libraries(r-type_server PRIVATE
 
 # Le serveur n'a pas besoin du rendering graphique
 target_compile_definitions(r-type_server PRIVATE NO_GRAPHICS)
+
+install(TARGETS r-type_server
+    RUNTIME DESTINATION bin
+)
