@@ -275,10 +275,6 @@ add_library(MovementSystem SHARED
     src/systems/MovementSystem.cpp
 )
 target_compile_definitions(MovementSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(MovementSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(MovementSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -305,10 +301,6 @@ add_library(InputSystem SHARED
     src/systems/InputSystem.cpp
 )
 target_compile_definitions(InputSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(InputSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(InputSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -324,10 +316,6 @@ add_library(LifetimeSystem SHARED
     src/systems/LifetimeSystem.cpp
 )
 target_compile_definitions(LifetimeSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(LifetimeSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(LifetimeSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -343,10 +331,6 @@ add_library(AnimationSystem SHARED
     src/systems/AnimationSystem.cpp
 )
 target_compile_definitions(AnimationSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(AnimationSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(AnimationSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -362,10 +346,6 @@ add_library(StateMachineAnimationSystem SHARED
     src/systems/StateMachineAnimationSystem.cpp
 )
 target_compile_definitions(StateMachineAnimationSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(StateMachineAnimationSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(StateMachineAnimationSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -384,10 +364,6 @@ add_library(ScrollingBackgroundSystem SHARED
     src/systems/ScrollingBackgroundSystem.cpp
 )
 target_compile_definitions(ScrollingBackgroundSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(ScrollingBackgroundSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(ScrollingBackgroundSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -403,10 +379,6 @@ add_library(BoundarySystem SHARED
     src/systems/BoundarySystem.cpp
 )
 target_compile_definitions(BoundarySystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(BoundarySystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(BoundarySystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -422,10 +394,6 @@ add_library(HealthSystem SHARED
     src/systems/HealthSystem.cpp
 )
 target_compile_definitions(HealthSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(HealthSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(HealthSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
@@ -444,10 +412,6 @@ if(LUA_FOUND)
         src/systems/UISystemEntities.cpp
     )
     target_compile_definitions(UISystem PRIVATE RTYPE_BUILD_DLL)
-    set_target_properties(UISystem PROPERTIES 
-        CXX_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN ON
-    )
     if(WIN32 OR MINGW)
         target_link_options(UISystem PRIVATE "-Wl,--exclude-libs,ALL")
     endif()
@@ -472,10 +436,6 @@ add_library(AudioSystem SHARED
     src/systems/AudioSystem.cpp
 )
 target_compile_definitions(AudioSystem PRIVATE RTYPE_BUILD_DLL)
-set_target_properties(AudioSystem PROPERTIES 
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-)
 if(WIN32 OR MINGW)
     target_link_options(AudioSystem PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
