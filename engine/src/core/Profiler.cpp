@@ -20,8 +20,16 @@
 
 #include <fstream>
 #elif defined(_WIN32)
-#include <psapi.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
+// Note: psapi.h is problematic with MinGW cross-compilation
+// We disable memory profiling on Windows for cross-compiled builds
+#if !defined(__MINGW32__) && !defined(__MINGW64__)
+#include <psapi.h>
+#define RTYPE_HAS_PSAPI 1
+#endif
 #endif
 
 namespace rtype {
@@ -250,11 +258,16 @@ size_t Profiler::estimateMemoryUsage() const {
     }
     return 0;
 #elif defined(_WIN32)
+#ifdef RTYPE_HAS_PSAPI
     PROCESS_MEMORY_COUNTERS pmc;
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
         return pmc.WorkingSetSize;
     }
     return 0;
+#else
+    // Memory profiling unavailable for MinGW cross-compiled builds
+    return 0;
+#endif
 #else
     return 0;
 #endif
