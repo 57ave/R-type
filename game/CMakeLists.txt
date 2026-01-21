@@ -15,7 +15,13 @@ file(GLOB_RECURSE GAME_SOURCES
 )
 
 if(GAME_SOURCES)
-    add_library(game STATIC ${GAME_SOURCES})
+    if(WIN32 OR MINGW)
+        add_library(game SHARED ${GAME_SOURCES})
+        target_compile_definitions(game PRIVATE RTYPE_BUILD_DLL)
+        target_link_options(game PRIVATE -Wl,--export-all-symbols)
+    else()
+        add_library(game STATIC ${GAME_SOURCES})
+    endif()
 
     target_include_directories(game PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
