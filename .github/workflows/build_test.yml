@@ -110,11 +110,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: '8eb57355a4ffac410d60f6b9c0e4e8e06c9f7cfd'
-
       - name: Install Dependencies via vcpkg
         run: |
           vcpkg install sfml:x64-windows
@@ -125,7 +120,7 @@ jobs:
         run: |
           cmake -B build `
             -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
             -DBUILD_TESTS=ON
 
       - name: Build
