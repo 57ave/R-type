@@ -62,6 +62,9 @@ Field semantics
 * `magic` MUST be 0x5254 (ASCII 'RT' in big-endian view). Implementations SHOULD verify this field and discard packets with an unexpected magic value.
 * `version` indicates the protocol version. If a receiver does not understand the version, it SHOULD drop the packet and MAY log the event.
 * `flags` is an 8-bit flags field. Bit 0 is reserved to signal compressed payloads; other bits are reserved for future use. Receivers MUST ignore unknown flag bits.
+
+* Bit 1 (flags & 0x02) RECOMMENDED usage: optional checksum present (see Section 5.6). When this bit is set the sender appends a fixed-size checksum field after the payload bytes; receivers MUST validate the checksum before deserializing the payload and MUST reject the packet if the checksum is invalid.
+
 * `type` is a 16-bit identifier that selects how the payload is interpreted (see Section 3).
 * `seq` is a monotonic sequence number assigned by the sender to help detect duplicates and reordering.
 * `timestamp` contains the sender's notion of time in milliseconds (server start epoch). It is advisory and MAY be used for smoothing/latency estimation.
@@ -223,11 +226,44 @@ Booleans serialized by `write(bool)` are encoded as a single byte: 0x00 for fals
 5.5 Payload framing
 A `NetworkPacket` on the wire is the header followed by payload bytes. The receiver MUST verify that the total UDP datagram length is at least 14 bytes (header size). The remaining bytes (datagram_len - 14) are the payload length. Each packet type defines its required payload shape and size; the receiver MUST validate that the payload length matches expected sizes for fixed-size payloads or that the `Deserializer` operations do not underflow for variable-length payloads (strings/lists).
 
+5.6 Optional checksum (recommended)
+----------------------------------
+To detect accidental corruption in transit and provide a safe rejection path, implementations MAY include a checksum appended to the payload and indicated by the header `flags` bit 1 (0x02). When present the checksum covers the entire packet from the first header byte up to the last payload byte (i.e. header + payload), excluding the checksum field itself.
+
+Checksum format and requirements:
+* Algorithm: CRC32 (IEEE 802.3 / CRC-32-IEEE). The checksum value is encoded as a 4-byte little-endian uint32.
+* Placement: The 4-byte checksum MUST be appended immediately after the payload bytes. When `flags & 0x02` is set, receivers MUST ensure the UDP datagram contains at least 14 + payload_len + 4 bytes before attempting to read the checksum.
+* Validation: Receivers MUST compute CRC32 over the header (14 bytes) followed by the payload bytes and compare it to the appended checksum. If the computed and transmitted checksums differ the receiver MUST discard the packet and MAY increment a metrics counter and log the event for diagnostics. Under no circumstance MUST an invalid-checksum packet be deserialized or processed.
+
+Compatibility note: Because checksum usage is opt-in and indicated by `flags`, older implementations that do not understand bit 1 will ignore the bit and behave as before. Newer implementations MUST accept packets without a checksum unless policy mandates otherwise.
+
+5.7 Compression (notes)
+-----------------------
+Bit 0 of `flags` signals that the payload bytes are compressed (implementation-defined compression; currently zlib/DEFLATE is RECOMMENDED). When set, the receiver MUST NOT attempt to parse or checksum the payload until it has validated the packet header and (if present) the checksum. If checksum is used it MUST be computed over the uncompressed bytes or the compressed bytes? The protocol MUST choose one; the current implementation uses CRC32 over the serialized (pre-compression) bytes for stronger guarantees. Therefore, when `flags & 0x01` (compressed) and `flags & 0x02` (checksum) are both set, the sender MUST append the checksum for the uncompressed header+payload and then compress only the payload bytes; the exact wire layout is: header (14) | compressed-payload-bytes | checksum (4). Receivers with compression support MUST decompress the payload before deserialization. Receivers that do not support compression MUST drop packets with the compressed flag set.
+
 6. Sequence, Timestamp and Reliability Notes
 -------------------------------------------
 * Sequence (`seq`) is used to detect duplicates, reorder and drop late packets. Receivers SHOULD ignore packets with sequence numbers older than their current acknowledged sequence window.
 * Timestamp is advisory and may be used by clients for interpolation and latency estimation. Clocks are not synchronized; timestamp values are measured from server start and are not absolute wall-clock time.
 * UDP is used for low-latency streaming. The protocol implements application-level measures (sequence numbers, periodic keepalive pings) rather than reliable, in-order delivery for every message.
+
++6.1 Reconnection and resume behavior
++------------------------------------
++Clients MAY disconnect and reconnect due to network changes. The protocol provides light-weight reconnection semantics built on the existing `CLIENT_HELLO` (0x0001) handshake and server-side session tracking:
++
++* CLIENT_HELLO MAY include the client's last known `seq` (uint32) and an optional `resumeToken` string (writeString) produced by the server during a prior welcome. The server MAY accept a `resumeToken` and, if accepted, resume delivering deltas from `lastKnownSeq` or send a fresh `WORLD_SNAPSHOT` if the gap is too large.
++* If the server cannot resume (token invalid, gap too large, or the server has no session), it SHOULD respond with a `SERVER_WELCOME` containing the assigned player id and a snapshot or indicate that the client must request a full snapshot via an explicit request.
++* Clients MUST be prepared to receive a full `WORLD_SNAPSHOT` after reconnection and replace their local world state accordingly. Partial resume behavior is an optimization and MUST be treated as best-effort; the server MAY fall back to sending a full snapshot if it cannot reconstruct the delta stream.
++
++6.2 Version upgrades and compatibility
++--------------------------------------
++The `version` byte in the header advertises the protocol version. Servers and clients MUST implement a clear compatibility policy:
++* Backwards-compatible changes (additive packet types, optional fields, longer strings) SHOULD be chosen where possible so older clients can continue to interoperate with newer servers.
++* If a server receives a packet with `version` it does not support, it SHOULD drop the packet and MAY respond (if applicable) with a `SERVER_WELCOME` or an out-of-band control message indicating the required client version.
++* For breaking changes, the server SHOULD publish a version compatibility table and either support multiple versions concurrently (by detecting `version` and branching in code) or migrate clients to a new version using an out-of-band update mechanism.
++* Servers MAY include a `minCompatibleVersion` in their server announcement (e.g., `SERVER_WELCOME` payload) to indicate the lowest supported client version. Clients detecting that their version is lower than `minCompatibleVersion` SHOULD prompt the user to update.
++
++Compatibility testing: Implementers MUST test with mixed-version topologies (older client <-> newer server and newer client <-> older server where supported) and document any unsupported interactions.
 
 7. Error Handling and Validation (MUST requirements)
 --------------------------------------------------
@@ -239,9 +275,23 @@ Receivers MUST:
 * For variable-length payloads, use the `Deserializer` and handle buffer underflow errors by discarding the packet; underflow MUST NOT crash the process.
 * Ignore unknown packet `type` values (log as appropriate), but MUST NOT crash.
 
-Senders SHOULD:
-* Set reserved bits and fields to zero.
-* Avoid sending excessively large strings; servers MAY impose maximum lengths and disconnect clients that exceed sane thresholds.
++Additional mandatory validation and rejection rules:
++* Header integrity: Receivers MUST validate header fields before performing any allocations or processing. This includes bounds-checking the claimed payload length (datagram_len - header_len) and verifying flags do not encode impossible combinations (for example, compressed flag set while receiver lacks compression support).
++* Checksum validation: If the checksum flag (flags & 0x02) is set, receivers MUST verify the appended checksum (Section 5.6). If checksum validation fails the packet MUST be rejected and NOT deserialized. Receivers SHOULD increment a counter for invalid-checksum events and MAY apply soft rate-limiting or temporarily ignore repeated invalid- checksum sources to avoid wasted CPU.
++* Malformed header or payload: If any header field appears malformed (e.g., payload length inconsistent with packet type requirements, entityCount causing integer overflow when multiplied by record size, or string length exceeding configured maxima) the receiver MUST discard the packet and MAY log a warning. Implementations MUST avoid throwing unhandled exceptions on malformed input; all deserialization errors MUST be caught and handled.
++* Unknown/unsupported flags: Unknown flag bits MUST be ignored, but invalid combinations (such as a checksum present but insufficient datagram length to contain the checksum) MUST cause the packet to be discarded.
++
++Rejection policy and diagnostics:
++* Log and metrics: Servers and clients SHOULD log rejected packets at an appropriate level (debug/info for occasional events, warn for repeated events) and expose counters for dropped-by-header, dropped-by-checksum, dropped-by-size, and deserialization-errors.
++* Rate-limiting: To mitigate malicious or noisy peers, receivers SHOULD apply rate limits on malformed or invalid packets per source IP/port (for UDP). Excessive invalid packets from a peer MAY lead to temporary blacklisting or connection termination for stateful sessions.
++* Recovery: When rejecting a packet, receivers MUST remain in a consistent state; partial state updates MUST NOT happen. If a rejection indicates persistent corruption from a source, higher-level session logic SHOULD trigger a reconnect or ask the client to re-authenticate.
++
++Failure handling summary (quick checklist):
++1. Validate header length and magic.
++2. Verify version compatibility.
++3. Ensure payload length matches type expectations.
++4. If checksum flag set, verify checksum; reject on mismatch.
++5. Attempt deserialization in bounds-checked context; catch and handle errors.
 
 8. Security Considerations
 --------------------------
@@ -250,6 +300,8 @@ Senders SHOULD:
 * Implementations SHOULD rate-limit resource-intensive operations triggered by client packets (e.g., large room lists, expensive name operations) to mitigate abusive clients.
 * The `magic` value prevents accidental processing of unrelated UDP traffic but is not a security measure. Do not rely on magic as authentication.
 * Consider integrating an authenticated handshake (out of scope for this document) over TCP or a secure UDP layer if stronger authentication or anti-spoofing is required.
+
++* Use of checksum and header validation reduces accidental corruption processing but does not authenticate the sender. Consider cryptographic authentication (HMAC or authenticated encryption) if you need to prevent spoofing or tampering.
 
 9. Examples
 -----------
