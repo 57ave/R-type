@@ -10,12 +10,14 @@
 #include <components/Animation.hpp>
 #include <components/NetworkId.hpp>
 #include <components/ShootEmUpTags.hpp>
+#include <components/Collider.hpp>
 #include <rendering/Types.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <algorithm>
 
 
 namespace RType {
@@ -442,43 +444,104 @@ void GameRefactored::SetupNetworkCallbacks() {
                 sprite->setTexture(missileTexIt->second);
                 
                 // Vérifier le niveau de charge pour le bon sprite
-                IntRect rect(249, 88, 16, 12);  // Missile normal
+                int chargeLevel = 0;
                 if (coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
                     auto& projTag = coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(entity);
-                    if (projTag.chargeLevel > 0) {
-                        rect = IntRect(232, 103, 32, 14);  // Missile chargé
-                    }
+                    chargeLevel = projTag.chargeLevel;
+                }
+                
+                IntRect rect;
+                float scaleX = 3.0f;
+                float scaleY = 3.0f;
+                
+                if (chargeLevel <= 0) {
+                    // Missile normal
+                    rect = IntRect(245, 85, 20, 20);
+                } else {
+                    // Charged missile sprites - same as local GameplayManager
+                    struct ChargeData {
+                        int xPos, yPos, width, height;
+                    };
+                    ChargeData chargeLevels[5] = {
+                        {233, 100, 15, 15},  // Level 1
+                        {202, 117, 31, 15},  // Level 2
+                        {170, 135, 47, 15},  // Level 3
+                        {138, 155, 63, 15},  // Level 4
+                        {105, 170, 79, 17}   // Level 5
+                    };
+                    int idx = std::clamp(chargeLevel - 1, 0, 4);
+                    ChargeData& data = chargeLevels[idx];
+                    rect = IntRect(data.xPos, data.yPos, data.width, data.height);
                 }
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.0f;
-                spriteComp.scaleY = 2.0f;
+                spriteComp.scaleX = scaleX;
+                spriteComp.scaleY = scaleY;
                 spriteComp.layer = 8;
                 coordinator->AddComponent(entity, spriteComp);
                 
-                logger.debug("Network", "✅ PlayerBullet sprite created for entity " + std::to_string(entity));
+                // Ajouter Collider pour la collision
+                Collider collider;
+                collider.width = rect.width * scaleX;
+                collider.height = rect.height * scaleY;
+                collider.tag = (chargeLevel > 0) ? "charged_bullet" : "bullet";
+                coordinator->AddComponent(entity, collider);
+                
+                // Animation pour les missiles chargés
+                if (chargeLevel > 0) {
+                    Animation anim;
+                    anim.frameTime = 0.1f;
+                    anim.currentFrame = 0;
+                    anim.frameCount = 2;
+                    anim.loop = true;
+                    anim.frameWidth = rect.width;
+                    anim.frameHeight = rect.height;
+                    anim.startX = rect.left;
+                    anim.startY = rect.top;
+                    anim.spacing = 2;
+                    coordinator->AddComponent(entity, anim);
+                }
+                
+                logger.debug("Network", "✅ PlayerBullet sprite created for entity " + std::to_string(entity) + 
+                            " (chargeLevel: " + std::to_string(chargeLevel) + ")");
             }
         }
         else if (tag.name == "EnemyBullet") {
-            auto missileTexIt = texMap.find("missile");
-            if (missileTexIt != texMap.end()) {
+            auto enemyBulletTexIt = texMap.find("enemy_bullets");
+            if (enemyBulletTexIt != texMap.end()) {
                 auto* sprite = new SFMLSprite();
                 sprites.push_back(sprite);
-                sprite->setTexture(missileTexIt->second);
+                sprite->setTexture(enemyBulletTexIt->second);
                 
-                IntRect rect(200, 88, 16, 12);  // Missile ennemi
+                // Orange ball: first row at x=166, y=3, each frame ~12x12 pixels
+                IntRect rect(166, 3, 12, 12);
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.0f;
-                spriteComp.scaleY = 2.0f;
-                spriteComp.layer = 7;
+                spriteComp.scaleX = 2.5f;
+                spriteComp.scaleY = 2.5f;
+                spriteComp.layer = 8;
                 coordinator->AddComponent(entity, spriteComp);
+                
+                // Animation - 4 frames looping
+                Animation anim;
+                anim.frameTime = 0.1f;
+                anim.currentFrame = 0;
+                anim.frameCount = 4;
+                anim.loop = true;
+                anim.frameWidth = 12;
+                anim.frameHeight = 12;
+                anim.startX = 166;
+                anim.startY = 3;
+                anim.spacing = 5;  // Spacing between frames (17 - 12 = 5)
+                coordinator->AddComponent(entity, anim);
+                
+                logger.debug("Network", "✅ EnemyBullet sprite created for entity " + std::to_string(entity));
             }
         }
         else if (tag.name == "Explosion") {
