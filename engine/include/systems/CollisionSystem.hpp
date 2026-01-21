@@ -1,5 +1,6 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <components/Position.hpp>

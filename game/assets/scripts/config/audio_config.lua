@@ -93,8 +93,8 @@ AudioConfig = {
     -- PATHS
     -- ========================================
     paths = {
-        music = "game/assets/sounds/",
-        sfx = "game/assets/vfx/"
+        music = "assets/sounds/",
+        sfx = "assets/vfx/"
     }
 }
 

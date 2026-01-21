@@ -126,7 +126,7 @@
             int Run(int argc, char* argv[]);
 
             ECS::Entity CreatePlayer(float x, float y, int line = 0);
-            ECS::Entity CreateBackground(float x, float y, float windowHeight, bool isFirst);
+            void CreateBackground(float y, float windowHeight);
             ECS::Entity CreateEnemy(float x, float y, std::string patternType = "straight");
             ECS::Entity CreateMissile(float x, float y, bool isCharged, int chargeLevel);
             ECS::Entity CreateEnemyMissile(float x, float y);  // Enemy projectile
@@ -175,7 +175,7 @@
 
             bool isNetworkClient = false;  // Track if running as network client
 
-            std::unique_ptr<SFMLTexture> backgroundTexture;
+            std::vector<std::unique_ptr<SFMLTexture>> backgroundTiles;
             std::unique_ptr<SFMLTexture> playerTexture;
             std::unique_ptr<SFMLTexture> missileTexture;
             std::unique_ptr<SFMLTexture> enemyTexture;
