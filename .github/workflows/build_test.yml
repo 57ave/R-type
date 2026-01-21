@@ -105,3 +105,20 @@ jobs:
         run: |
           chmod +x scripts/format.sh
           ./scripts/format.sh --check
+
+  windows-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-mingw-w64 python3
+      - name: Build Windows
+        run: |
+          chmod +x scripts/build_windows.sh
+          ./scripts/build_windows.sh
