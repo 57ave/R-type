@@ -1,6 +1,7 @@
 #ifndef RTYPE_ENGINE_COMPONENTS_BOSS_HPP
 #define RTYPE_ENGINE_COMPONENTS_BOSS_HPP
 
+#include <ecs/Types.hpp>
 #include <string>
 #include <vector>
 
