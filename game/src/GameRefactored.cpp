@@ -606,6 +606,29 @@ void GameRefactored::SetupLuaBindings() {
     // Override Network.Connect to use the refactored Core::NetworkManager + NetworkSystem.
     // This ensures incoming packets are processed and forwarded to Lua callbacks.
     auto netTable = lua["Network"].get_or_create<sol::table>();
+    
+    // Expose server configuration (from command line or config)
+    netTable["GetServerAddress"] = [this]() -> std::string {
+        if (!cmdLineServerAddress.empty()) {
+            return cmdLineServerAddress;
+        }
+        const auto& config = Core::GameConfig::GetConfiguration();
+        return config.network.server.defaultAddress;
+    };
+    
+    netTable["GetServerPort"] = [this]() -> int {
+        if (cmdLineServerPort > 0) {
+            return cmdLineServerPort;
+        }
+        const auto& config = Core::GameConfig::GetConfiguration();
+        return config.network.server.defaultPort;
+    };
+    
+    netTable["ShouldAutoConnect"] = [this]() -> bool {
+        // Auto-connect si l'utilisateur a passé --network en argument
+        return !cmdLineServerAddress.empty() && cmdLineServerPort > 0;
+    };
+    
     netTable["Connect"] = [this](const std::string& host, int port) {
         if (!luaState) {
             std::cerr << "[GameRefactored] LuaState not available" << std::endl;

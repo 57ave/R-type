@@ -1033,18 +1033,17 @@ function OnMultiplayerClicked()
     UI.ShowMenu("server_browser")
     UI.SetActiveMenu("server_browser")
     
-    -- Connect to default server if not already connected
-    -- This is required because NetworkClient is NULL until we call Connect
-    if Network and Network.Connect then
-        local defaultHost = "127.0.0.1"
-        local defaultPort = 12345
-        print("[UI] Connecting to server: " .. defaultHost .. ":" .. defaultPort)
-        Network.Connect(defaultHost, defaultPort)
-        -- Note: RefreshServerList will be called from OnConnected callback
+    -- Auto-connexion uniquement si l'utilisateur a passé --network en argument
+    if Network and Network.ShouldAutoConnect and Network.ShouldAutoConnect() then
+        local host = Network.GetServerAddress()
+        local port = Network.GetServerPort()
+        print("[UI] Auto-connecting to command-line server: " .. host .. ":" .. port)
+        if Network.Connect then
+            Network.Connect(host, port)
+        end
     else
-        print("[UI] WARNING: Network.Connect not available")
-        -- Try to refresh anyway (will show error)
-        RefreshServerList()
+        -- Sinon, afficher le menu server browser sans connexion auto
+        print("[UI] Server browser opened - use JOIN, REFRESH, or CREATE ROOM")
     end
 end
 
