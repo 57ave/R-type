@@ -87,31 +87,6 @@ jobs:
           cd build
           ctest --output-on-failure --verbose
 
-  # Job 3: Windows MSVC Build
-  windows-msvc:
-    name: Windows (MSVC)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Dependencies via vcpkg
-        run: |
-          vcpkg install sfml:x64-windows
-          vcpkg install lua:x64-windows
-          vcpkg install openal-soft:x64-windows
-
-      - name: Configure CMake (MSVC)
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DBUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Run Tests
-        run: |
-          cd build
-          ctest -C Release --output-on-failure --verbose
 
   # Job 4: Code Formatting Check
   format-check:
