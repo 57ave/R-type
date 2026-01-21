@@ -569,24 +569,34 @@ int Game::Run(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
 
-    // Parse command line arguments
+    // Configuration variables (will be loaded from Lua)
+    int windowWidth = 1920;   // Default values
+    int windowHeight = 1080;
+    std::string windowTitle = "R-Type - ECS Version";
+
+    // Network configuration will be loaded from Lua instead of CLI arguments
+    // Legacy --network flag is still supported for backward compatibility
     bool networkMode = false;
     std::string serverAddress = "127.0.0.1";
     short serverPort = 12345;
+    bool legacyNetworkFlag = false;
 
+    // Check for legacy --network flag (backward compatibility)
     if (argc > 1 && std::string(argv[1]) == "--network") {
+        legacyNetworkFlag = true;
         networkMode = true;
-        isNetworkClient = true;  // Mark as network client
+        isNetworkClient = true;
         if (argc > 2) {
             serverAddress = argv[2];
         }
         if (argc > 3) {
             serverPort = static_cast<short>(std::stoi(argv[3]));
         }
-        std::cout << "[Game] Network mode enabled. Server: " << serverAddress << ":" << serverPort << std::endl;
+        std::cout << "[Game] Legacy --network flag detected. Server: " << serverAddress << ":" << serverPort << std::endl;
+        std::cout << "[Game] Note: Consider using NetworkConfig.startMode in network_config.lua instead" << std::endl;
         std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     } else {
-        std::cout << "[Game] Local mode (use --network <ip> <port> for multiplayer)" << std::endl;
+        std::cout << "[Game] Starting in local mode. Network configuration will be loaded from Lua." << std::endl;
         std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     }
 
@@ -725,7 +735,7 @@ int Game::Run(int argc, char* argv[])
 
     boundarySystem = gCoordinator.RegisterSystem<BoundarySystem>();
     boundarySystem->SetCoordinator(&gCoordinator);
-    boundarySystem->SetWindowSize(1920.0f, 1080.0f);
+    boundarySystem->SetWindowSize(static_cast<float>(windowWidth), static_cast<float>(windowHeight));
     ECS::Signature boundarySig;
     boundarySig.set(gCoordinator.GetComponentType<Position>());
     boundarySig.set(gCoordinator.GetComponentType<Boundary>());
@@ -1212,7 +1222,7 @@ int Game::Run(int argc, char* argv[])
 
     // Create window and renderer
     SFMLWindow window;
-    window.create(1920, 1080, "R-Type - ECS Version");
+    window.create(windowWidth, windowHeight, windowTitle);
 
     SFMLRenderer renderer(&window.getSFMLWindow());
 
@@ -1428,8 +1438,66 @@ int Game::Run(int argc, char* argv[])
     } else {
         std::cout << "[Game] ✓ init.lua loaded - All configurations initialized" << std::endl;
         
-        // Initialize mode based on network setting
+        // Read network configuration from Lua (if not overridden by legacy --network flag)
         sol::state& lua = luaState.GetState();
+        if (!legacyNetworkFlag) {
+            try {
+                // Get network configuration from Lua
+                sol::table networkConfig = lua["NetworkConfig"];
+                if (networkConfig.valid()) {
+                    std::string startMode = networkConfig["startMode"].get<sol::optional<std::string>>().value_or("local");
+                    bool autoConnect = networkConfig["autoConnect"].get<sol::optional<bool>>().value_or(false);
+                    
+                    if (startMode == "network") {
+                        networkMode = true;
+                        
+                        // Get server configuration
+                        sol::table serverConfig = networkConfig["server"];
+                        if (serverConfig.valid()) {
+                            serverAddress = serverConfig["defaultAddress"].get<sol::optional<std::string>>().value_or("127.0.0.1");
+                            serverPort = serverConfig["defaultPort"].get<sol::optional<int>>().value_or(12345);
+                        }
+                        
+                        if (autoConnect) {
+                            isNetworkClient = true;
+                            std::cout << "[Game] NetworkConfig: Auto-connecting to " << serverAddress << ":" << serverPort << std::endl;
+                        } else {
+                            std::cout << "[Game] NetworkConfig: Network mode enabled, manual connection required" << std::endl;
+                        }
+                    } else {
+                        std::cout << "[Game] NetworkConfig: Starting in local mode (can connect via UI)" << std::endl;
+                    }
+                } else {
+                    std::cout << "[Game] Warning: NetworkConfig not found in Lua, using defaults" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[Game] Error reading NetworkConfig: " << e.what() << std::endl;
+            }
+        }
+        
+        // Read window/game configuration from Lua
+        try {
+            sol::table gameConfig = lua["GameConfig"];
+            if (gameConfig.valid()) {
+                sol::table windowConfig = gameConfig["window"];
+                if (windowConfig.valid()) {
+                    windowWidth = windowConfig["width"].get<sol::optional<int>>().value_or(1920);
+                    windowHeight = windowConfig["height"].get<sol::optional<int>>().value_or(1080);
+                    windowTitle = windowConfig["title"].get<sol::optional<std::string>>().value_or("R-Type - ECS Version");
+                    
+                    std::cout << "[Game] GameConfig: Window " << windowWidth << "x" << windowHeight << std::endl;
+                    std::cout << "[Game] GameConfig: Title '" << windowTitle << "'" << std::endl;
+                } else {
+                    std::cout << "[Game] Warning: GameConfig.window not found, using defaults" << std::endl;
+                }
+            } else {
+                std::cout << "[Game] Warning: GameConfig not found, using defaults" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[Game] Error reading GameConfig: " << e.what() << std::endl;
+        }
+        
+        // Initialize mode based on network setting
         if (networkMode) {
             sol::protected_function initNetwork = lua["InitNetworkMode"];
             if (initNetwork.valid()) {
@@ -1762,7 +1830,7 @@ int Game::Run(int argc, char* argv[])
     bool playerCreated = false;
     
     // Only create background for now - player will be created when game starts
-    CreateBackground(0.0f, 0.0f, 1080.0f, true);
+    CreateBackground(0.0f, 0.0f, static_cast<float>(windowHeight), true);
 
     // Game variables using engine abstractions
     eng::engine::Clock clock;
@@ -2817,7 +2885,7 @@ int Game::Run(int argc, char* argv[])
                     if (enemyConfig.valid()) {
                         sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
                                 if (createEnemy.valid()) {
-                                    auto result = createEnemy(1920.0f, randomY, enemyConfig);
+                                    auto result = createEnemy(static_cast<float>(windowWidth), randomY, enemyConfig);
                                     if (result.valid()) {
                                         ECS::Entity enemy = result;
                                         if (enemy != 0) {
@@ -2827,13 +2895,13 @@ int Game::Run(int argc, char* argv[])
                                     } else {
                                         // Lua factory failed at runtime - fallback to C++ CreateEnemy
                                         std::cerr << "[Game] WARNING: Lua CreateEnemy failed, using C++ fallback" << std::endl;
-                                        ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
+                                        ECS::Entity fallback = CreateEnemy(static_cast<float>(windowWidth), randomY, enemyType);
                                         (void)fallback;
                                     }
                                 } else {
                                     // Factory function missing - fallback to C++ CreateEnemy
                                     std::cerr << "[Game] WARNING: Lua factory not available, using C++ fallback for enemy spawn" << std::endl;
-                                    ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
+                                    ECS::Entity fallback = CreateEnemy(static_cast<float>(windowWidth), randomY, enemyType);
                                     (void)fallback;
                                 }
                     }
@@ -3101,7 +3169,7 @@ int Game::Run(int argc, char* argv[])
         // ========================================
         if (currentState == GameState::Victory && gameFontLoaded) {
             // Semi-transparent overlay
-            sf::RectangleShape overlay(sf::Vector2f(1920.0f, 1080.0f));
+            sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
             overlay.setFillColor(sf::Color(0, 0, 0, 180));  // Dark overlay
             window.getSFMLWindow().draw(overlay);
             
@@ -3117,7 +3185,7 @@ int Game::Run(int argc, char* argv[])
             sf::FloatRect textBounds = victoryText.getLocalBounds();
             victoryText.setOrigin(textBounds.left + textBounds.width / 2.0f,
                                  textBounds.top + textBounds.height / 2.0f);
-            victoryText.setPosition(1920.0f / 2.0f, 400.0f);
+            victoryText.setPosition(static_cast<float>(windowWidth) / 2.0f, 400.0f);
             window.getSFMLWindow().draw(victoryText);
             
             // "You survived 30 seconds!" text
@@ -3130,7 +3198,7 @@ int Game::Run(int argc, char* argv[])
             sf::FloatRect subBounds = subText.getLocalBounds();
             subText.setOrigin(subBounds.left + subBounds.width / 2.0f,
                              subBounds.top + subBounds.height / 2.0f);
-            subText.setPosition(1920.0f / 2.0f, 550.0f);
+            subText.setPosition(static_cast<float>(windowWidth) / 2.0f, 550.0f);
             window.getSFMLWindow().draw(subText);
             
             // "Returning to menu..." text
@@ -3143,7 +3211,7 @@ int Game::Run(int argc, char* argv[])
             sf::FloatRect menuBounds = menuText.getLocalBounds();
             menuText.setOrigin(menuBounds.left + menuBounds.width / 2.0f,
                               menuBounds.top + menuBounds.height / 2.0f);
-            menuText.setPosition(1920.0f / 2.0f, 650.0f);
+            menuText.setPosition(static_cast<float>(windowWidth) / 2.0f, 650.0f);
             window.getSFMLWindow().draw(menuText);
         }
 

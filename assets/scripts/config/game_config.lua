@@ -7,7 +7,14 @@ GameConfig = {
         height = 1080,
         title = "R-Type - Lua Edition",
         fullscreen = false,
-        vsync = true
+        vsync = true,
+        availableResolutions = {
+            {1920, 1080},
+            {1280, 720},
+            {1600, 900},
+            {2560, 1440},
+            {3840, 2160}
+        }
     },
     
     player = {

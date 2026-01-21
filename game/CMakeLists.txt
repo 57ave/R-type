@@ -9,12 +9,20 @@ if(NOT DEFINED LUA_FOUND OR NOT LUA_FOUND)
     find_package(Lua REQUIRED)
 endif()
 
+# Collect all source files
 file(GLOB_RECURSE GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/entities/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/states/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/gameplay/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/components/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/network/*.cpp"
 )
+
+# Exclude old files to avoid conflicts
+list(FILTER GAME_SOURCES EXCLUDE REGEX ".*Game\\.cpp$")  # Exclude old monolithic Game.cpp
 
 if(GAME_SOURCES)
     add_library(game STATIC ${GAME_SOURCES})
@@ -34,6 +42,20 @@ if(GAME_SOURCES)
         shootemup
         ${LUA_LIBRARIES}
     )
+
+    # Enable debug symbols for development
+    target_compile_options(game PRIVATE
+        $<$<CONFIG:Debug>:-g>
+        $<$<CONFIG:RelWithDebInfo>:-g>
+    )
+
+    # Define preprocessor flags
+    target_compile_definitions(game PRIVATE
+        $<$<CONFIG:Debug>:DEBUG>
+        $<$<CONFIG:Release>:NDEBUG>
+    )
+
+    message(STATUS "Game library created with ${list_length_result} source files")
 else()
     # Placeholder si pas de fichiers game encore
     add_library(game INTERFACE)
@@ -47,7 +69,12 @@ else()
         engine
         shootemup
     )
+    
+    message(WARNING "No game source files found, creating interface library")
 endif()
+
+# Helper to get source count
+list(LENGTH GAME_SOURCES list_length_result)
 
 # ==================== Game Executable ====================
 add_executable(r-type_game main.cpp)

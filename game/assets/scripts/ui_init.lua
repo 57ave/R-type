@@ -3,6 +3,116 @@
 -- ============================================
 
 -- ============================================
+-- UI STUB IMPLEMENTATION (Temporary until C++ bindings are ready)
+-- ============================================
+UI = UI or {}
+
+-- Stub counter for fake entity IDs
+local stubEntityId = 1000
+
+-- Stub functions that return fake entity IDs
+function UI.CreateText(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateButton(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateSlider(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreatePanel(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateInputField(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateCheckbox(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateDropdown(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.SetVisible(entity, visible)
+    -- Stub: do nothing
+end
+
+function UI.SetText(entity, text)
+    -- Stub: do nothing
+end
+
+function UI.SetPosition(entity, x, y)
+    -- Stub: do nothing
+end
+
+function UI.ShowMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.HideMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.HideAllMenus()
+    -- Stub: do nothing
+end
+
+function UI.SetActiveMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.GetSliderValue(entity)
+    -- Stub: return default value
+    return 50
+end
+
+function UI.SetSliderValue(entity, value)
+    -- Stub: do nothing
+end
+
+function UI.GetInputText(entity)
+    -- Stub: return empty string
+    return ""
+end
+
+function UI.SetInputText(entity, text)
+    -- Stub: do nothing
+end
+
+function UI.GetCheckboxState(entity)
+    -- Stub: return false
+    return false
+end
+
+function UI.SetCheckboxState(entity, checked)
+    -- Stub: do nothing
+end
+
+function UI.GetDropdownIndex(entity)
+    -- Stub: return 0
+    return 0
+end
+
+function UI.SetDropdownIndex(entity, index)
+    -- Stub: do nothing
+end
+
+print("[UI] Stub UI functions loaded - UI rendering disabled until C++ bindings ready")
+
+-- ============================================
 -- GLOBAL VARIABLES
 -- ============================================
 

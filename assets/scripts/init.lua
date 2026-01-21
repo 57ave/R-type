@@ -38,6 +38,8 @@ end
 
 -- Charger tous les fichiers de configuration
 print("\n--- Configuration Files ---")
+LoadConfig("assets/scripts/config/network_config.lua", true)     -- Network configuration
+LoadConfig("assets/scripts/config/game_config.lua", false)       -- Game configuration  
 LoadConfig("assets/scripts/master_config.lua", false)
 LoadConfig("assets/scripts/gameplay_config.lua", false)
 LoadConfig("assets/scripts/enemies_config.lua", true)   -- Required

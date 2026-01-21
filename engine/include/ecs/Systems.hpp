@@ -6,12 +6,18 @@
 #include "RenderSystem.hpp"
 #include <components/Collider.hpp>
 #include <components/Position.hpp>
+#include <components/Velocity.hpp>
+#include <components/Lifetime.hpp>
 #include <cmath>
 #include <vector>
 #include <algorithm>
 #include <functional>
 
 namespace ECS {
+
+    // Use types from engine namespace
+    using eng::engine::ECS::Transform;
+    using eng::engine::ECS::Velocity;
 
     /**
      * @brief MovementSystem - Handles entity movement based on velocity
@@ -141,11 +147,11 @@ namespace ECS {
             std::vector<Entity> toDestroy;
             
             for (auto entity : mEntities) {
-                auto& projectile = m_Coordinator->GetComponent<Projectile>(entity);
+                auto& lifetime = m_Coordinator->GetComponent<Lifetime>(entity);
                 
-                projectile.lifetime -= deltaTime;
+                lifetime.timeAlive += deltaTime;
                 
-                if (projectile.lifetime <= 0) {
+                if (lifetime.destroyOnExpire && lifetime.timeAlive >= lifetime.maxLifetime) {
                     toDestroy.push_back(entity);
                 }
             }
