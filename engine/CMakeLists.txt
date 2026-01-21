@@ -77,7 +77,7 @@ if(ENABLE_SCRIPTING)
         CPMAddPackage(
             NAME sol2
             GITHUB_REPOSITORY "ThePhD/sol2"
-            GIT_TAG "v3.3.1"
+            GIT_TAG "develop"
         )
         
         if(sol2_ADDED)
