@@ -131,7 +131,7 @@ set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 
 if(USE_SYSTEM_SFML)
-    find_package(SFML 2.6 COMPONENTS graphics window system audio CONFIG)
+    find_package(SFML 2.6 COMPONENTS Graphics Window System Audio Network CONFIG)
 endif()
 if (NOT SFML_FOUND)
     message(STATUS "Using CPM to download SFML 2.6.0")
