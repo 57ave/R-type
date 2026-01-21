@@ -24,13 +24,17 @@ namespace eng {
 namespace engine {
 namespace systems {
 
-class NetworkSystem : public ECS::System {
+// Alias for ECS types used in this file
+using Entity = ::ECS::Entity;
+using Coordinator = ::ECS::Coordinator;
+
+class NetworkSystem : public ::ECS::System {
 public:
-    using EntityCallback = std::function<void(ECS::Entity)>;
-    using EntityDestroyCallback = std::function<void(ECS::Entity, uint32_t)>;  // entity, networkId
+    using EntityCallback = std::function<void(Entity)>;
+    using EntityDestroyCallback = std::function<void(Entity, uint32_t)>;  // entity, networkId
     using GameStartCallback = std::function<void()>;  // Called when GAME_START is received
 
-    NetworkSystem(ECS::Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
+    NetworkSystem(Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
         : coordinator_(coordinator), networkClient_(client), localPlayerId_(0) {}
 
     void setEntityCreatedCallback(EntityCallback callback) { entityCreatedCallback_ = callback; }
@@ -206,7 +210,7 @@ private:
 
             auto it = networkIdToEntity_.find(networkId);
             if (it != networkIdToEntity_.end()) {
-                ECS::Entity entity = it->second;
+                Entity entity = it->second;
 
                 // Notify callback before destroying (for explosion effects)
                 if (entityDestroyedCallback_) {
@@ -219,13 +223,52 @@ private:
         }
     }
 
-    void handlePlayerDied(const NetworkPacket&) {
-        std::cout << "[NetworkSystem] Player died" << std::endl;
+    void handlePlayerDied(const NetworkPacket& packet) {
+        std::cout << "[NetworkSystem] 💀 Player died notification received!" << std::endl;
+        
+        // Le payload contient l'ID du joueur mort
+        if (packet.payload.size() >= sizeof(uint32_t)) {
+            uint32_t deadPlayerId;
+            std::memcpy(&deadPlayerId, packet.payload.data(), sizeof(uint32_t));
+            
+            std::cout << "[NetworkSystem] Player " << deadPlayerId << " died" << std::endl;
+            
+            // Trouver l'entité du joueur mort et mettre sa vie à 0
+            auto it = networkIdToEntity_.find(deadPlayerId);
+            if (it != networkIdToEntity_.end()) {
+                ::ECS::Entity entity = it->second;
+                if (coordinator_->HasComponent<Health>(entity)) {
+                    auto& health = coordinator_->GetComponent<Health>(entity);
+                    health.current = 0;
+                    std::cout << "[NetworkSystem] Set health to 0 for player entity " << entity << std::endl;
+                }
+            }
+            
+            // Vérifier si c'est nous qui sommes morts
+            if (deadPlayerId == localPlayerId_) {
+                std::cout << "[NetworkSystem] 💀 LOCAL PLAYER DIED!" << std::endl;
+            }
+        }
+        
+        // Callback pour notifier le jeu
+        if (playerDiedCallback_) {
+            playerDiedCallback_();
+        }
     }
 
     void handleClientLeft(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Client left" << std::endl;
     }
+    
+    // Callback pour la mort d'un joueur
+    std::function<void()> playerDiedCallback_;
+    
+public:
+    void setPlayerDiedCallback(std::function<void()> callback) {
+        playerDiedCallback_ = callback;
+    }
+    
+private:
 
     void handleRoomListReply(const NetworkPacket& packet) {
         std::cout << "[NetworkSystem] Received ROOM_LIST_REPLY" << std::endl;
@@ -345,7 +388,7 @@ private:
 
         if (it != networkIdToEntity_.end()) {
             // Update existing entity
-            ECS::Entity entity = it->second;
+            Entity entity = it->second;
 
             if (coordinator_->HasComponent<Position>(entity)) {
                 auto& pos = coordinator_->GetComponent<Position>(entity);
@@ -370,7 +413,7 @@ private:
     }
 
     void createEntityFromState(const EntityState& state) {
-        ECS::Entity entity = coordinator_->CreateEntity();
+        Entity entity = coordinator_->CreateEntity();
 
         // Add NetworkId component. Use state.playerId to determine ownership
         bool isLocal =
@@ -475,9 +518,9 @@ private:
     }
 
 private:
-    ECS::Coordinator* coordinator_;
+    ::ECS::Coordinator* coordinator_;
     std::shared_ptr<NetworkClient> networkClient_;
-    std::unordered_map<uint32_t, ECS::Entity> networkIdToEntity_;
+    std::unordered_map<uint32_t, ::ECS::Entity> networkIdToEntity_;
     uint8_t localPlayerId_;
     EntityCallback entityCreatedCallback_;
     EntityDestroyCallback entityDestroyedCallback_;

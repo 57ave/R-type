@@ -39,7 +39,10 @@ struct GameStateCallbacks {
 
     /// Callback to go back to previous state
     std::function<void()> goBack;
-
+    
+    /// Callback to reset game state (clear entities, restart)
+    std::function<void()> resetGame;
+    
     /// Check if callbacks are properly set
     bool isValid() const { return setState && getState; }
 };

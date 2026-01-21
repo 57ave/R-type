@@ -1,10 +1,116 @@
 -- ============================================
 -- R-TYPE UI INITIALIZATION SCRIPT
 -- ============================================
--- UI bindings are provided by C++ UIBindings::RegisterAll()
--- Functions available: UI.CreateButton, UI.CreateText, UI.CreatePanel, etc.
 
-print("[UI] UI system loaded - using C++ UI bindings")
+-- ============================================
+-- UI STUB IMPLEMENTATION (Temporary until C++ bindings are ready)
+-- ============================================
+UI = UI or {}
+
+-- Stub counter for fake entity IDs
+local stubEntityId = 1000
+
+-- Stub functions that return fake entity IDs
+function UI.CreateText(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateButton(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateSlider(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreatePanel(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateInputField(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateCheckbox(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.CreateDropdown(params)
+    stubEntityId = stubEntityId + 1
+    return stubEntityId
+end
+
+function UI.SetVisible(entity, visible)
+    -- Stub: do nothing
+end
+
+function UI.SetText(entity, text)
+    -- Stub: do nothing
+end
+
+function UI.SetPosition(entity, x, y)
+    -- Stub: do nothing
+end
+
+function UI.ShowMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.HideMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.HideAllMenus()
+    -- Stub: do nothing
+end
+
+function UI.SetActiveMenu(menuGroup)
+    -- Stub: do nothing
+end
+
+function UI.GetSliderValue(entity)
+    -- Stub: return default value
+    return 50
+end
+
+function UI.SetSliderValue(entity, value)
+    -- Stub: do nothing
+end
+
+function UI.GetInputText(entity)
+    -- Stub: return empty string
+    return ""
+end
+
+function UI.SetInputText(entity, text)
+    -- Stub: do nothing
+end
+
+function UI.GetCheckboxState(entity)
+    -- Stub: return false
+    return false
+end
+
+function UI.SetCheckboxState(entity, checked)
+    -- Stub: do nothing
+end
+
+function UI.GetDropdownIndex(entity)
+    -- Stub: return 0
+    return 0
+end
+
+function UI.SetDropdownIndex(entity, index)
+    -- Stub: do nothing
+end
+
+print("[UI] Stub UI functions loaded - UI rendering disabled until C++ bindings ready")
 
 -- ============================================
 -- GLOBAL VARIABLES
@@ -17,8 +123,6 @@ local createRoomElements = {}
 local lobbyElements = {}
 local settingsElements = {}
 local pauseElements = {}
-local victoryElements = {}
-local gameOverElements = {}
 
 -- Lobby data (will be synchronized with server later)
 local lobbyData = {
@@ -527,32 +631,18 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
         width = 200,
         height = 35,
         placeholder = "Type message...",
-        onSubmit = "OnSendChatMessage",
         menuGroup = menuGroup
     })
     
     lobbyElements.chatSendBtn = UI.CreateButton({
         x = width - 100,
-        y = 495,    
+        y = 495,
         width = 80,
         height = 35,
         text = "Send",
         onClick = "OnSendChatMessage",
         menuGroup = menuGroup
     })
-
-    -- Chat history lines (initially empty)
-    lobbyElements.chatLines = {}
-    for i = 1, 10 do
-        lobbyElements.chatLines[i] = UI.CreateText({
-            x = width - 340,
-            y = 230 + (i - 1) * 20,
-            text = "",
-            fontSize = 14,
-            color = COLORS.LIGHT_GRAY,
-            menuGroup = menuGroup
-        })
-    end
 end
 
 -- ============================================
@@ -803,190 +893,6 @@ function CreatePauseMenu(centerX, centerY, width, height)
 end
 
 -- ============================================
--- VICTORY MENU
--- ============================================
-function CreateVictoryMenu(centerX, centerY, width, height)
-    local menuGroup = "victory_menu"
-    
-    -- Semi-transparent overlay (green tint for victory)
-    victoryElements.overlay = UI.CreatePanel({
-        x = 0,
-        y = 0,
-        width = width,
-        height = height,
-        backgroundColor = 0x00440088,
-        modal = true,
-        menuGroup = menuGroup
-    })
-    
-    -- Center panel
-    victoryElements.panel = UI.CreatePanel({
-        x = centerX - 300,
-        y = centerY - 250,
-        width = 600,
-        height = 500,
-        backgroundColor = COLORS.PANEL_BG,
-        modal = false,
-        menuGroup = menuGroup
-    })
-    
-    -- BIG VICTORY Title
-    victoryElements.bigTitle = UI.CreateText({
-        x = centerX,
-        y = centerY - 200,
-        text = "VICTORY!",
-        fontSize = 80,
-        color = COLORS.SUCCESS_GREEN,
-        menuGroup = menuGroup
-    })
-    
-    -- Congratulation message
-    victoryElements.subtitle = UI.CreateText({
-        x = centerX,
-        y = centerY - 100,
-        text = "Congratulations! You survived!",
-        fontSize = 28,
-        color = COLORS.WHITE,
-        menuGroup = menuGroup
-    })
-    
-    -- Score display (will be updated dynamically)
-    victoryElements.scoreText = UI.CreateText({
-        x = centerX,
-        y = centerY - 40,
-        text = "Final Score: 0",
-        fontSize = 36,
-        color = COLORS.PRIMARY_BLUE,
-        menuGroup = menuGroup
-    })
-    
-    -- Time display
-    victoryElements.timeText = UI.CreateText({
-        x = centerX,
-        y = centerY + 10,
-        text = "Time: 00:00",
-        fontSize = 24,
-        color = COLORS.LIGHT_GRAY,
-        menuGroup = menuGroup
-    })
-    
-    -- Buttons
-    local buttonY = centerY + 100
-    
-    victoryElements.playAgainBtn = UI.CreateButton({
-        x = centerX - 110,
-        y = buttonY,
-        width = 200,
-        height = 60,
-        text = "PLAY AGAIN",
-        onClick = "OnVictoryPlayAgain",
-        menuGroup = menuGroup
-    })
-    
-    victoryElements.mainMenuBtn = UI.CreateButton({
-        x = centerX + 110,
-        y = buttonY,
-        width = 200,
-        height = 60,
-        text = "MAIN MENU",
-        onClick = "OnVictoryMainMenu",
-        menuGroup = menuGroup
-    })
-end
-
--- ============================================
--- GAME OVER MENU
--- ============================================
-function CreateGameOverMenu(centerX, centerY, width, height)
-    local menuGroup = "gameover_menu"
-    
-    -- Semi-transparent overlay (red tint for game over)
-    gameOverElements.overlay = UI.CreatePanel({
-        x = 0,
-        y = 0,
-        width = width,
-        height = height,
-        backgroundColor = 0x440000AA,
-        modal = true,
-        menuGroup = menuGroup
-    })
-    
-    -- Center panel
-    gameOverElements.panel = UI.CreatePanel({
-        x = centerX - 300,
-        y = centerY - 250,
-        width = 600,
-        height = 500,
-        backgroundColor = COLORS.PANEL_BG,
-        modal = false,
-        menuGroup = menuGroup
-    })
-    
-    -- BIG GAME OVER Title
-    gameOverElements.bigTitle = UI.CreateText({
-        x = centerX,
-        y = centerY - 200,
-        text = "GAME OVER",
-        fontSize = 80,
-        color = COLORS.ERROR_RED,
-        menuGroup = menuGroup
-    })
-    
-    -- Message
-    gameOverElements.subtitle = UI.CreateText({
-        x = centerX,
-        y = centerY - 100,
-        text = "All players have been destroyed!",
-        fontSize = 28,
-        color = COLORS.WHITE,
-        menuGroup = menuGroup
-    })
-    
-    -- Score display
-    gameOverElements.scoreText = UI.CreateText({
-        x = centerX,
-        y = centerY - 40,
-        text = "Final Score: 0",
-        fontSize = 36,
-        color = COLORS.PRIMARY_BLUE,
-        menuGroup = menuGroup
-    })
-    
-    -- Wave reached
-    gameOverElements.waveText = UI.CreateText({
-        x = centerX,
-        y = centerY + 10,
-        text = "Wave Reached: 1",
-        fontSize = 24,
-        color = COLORS.LIGHT_GRAY,
-        menuGroup = menuGroup
-    })
-    
-    -- Buttons
-    local buttonY = centerY + 100
-    
-    gameOverElements.retryBtn = UI.CreateButton({
-        x = centerX - 110,
-        y = buttonY,
-        width = 200,
-        height = 60,
-        text = "RETRY",
-        onClick = "OnGameOverRetry",
-        menuGroup = menuGroup
-    })
-    
-    gameOverElements.mainMenuBtn = UI.CreateButton({
-        x = centerX + 110,
-        y = buttonY,
-        width = 200,
-        height = 60,
-        text = "MAIN MENU",
-        onClick = "OnGameOverMainMenu",
-        menuGroup = menuGroup
-    })
-end
-
--- ============================================
 -- MAIN INITIALIZATION FUNCTION
 -- ============================================
 function InitUI(width, height)
@@ -1005,8 +911,6 @@ function InitUI(width, height)
     CreateLobbyWaiting(centerX, centerY, screenWidth, screenHeight)
     CreateSettingsMenu(centerX, centerY, screenWidth, screenHeight)
     CreatePauseMenu(centerX, centerY, screenWidth, screenHeight)
-    CreateVictoryMenu(centerX, centerY, screenWidth, screenHeight)
-    CreateGameOverMenu(centerX, centerY, screenWidth, screenHeight)
     
     -- Hide all menus initially
     UI.HideAllMenus()
@@ -1032,20 +936,7 @@ function OnMultiplayerClicked()
     UI.HideAllMenus()
     UI.ShowMenu("server_browser")
     UI.SetActiveMenu("server_browser")
-    
-    -- Connect to default server if not already connected
-    -- This is required because NetworkClient is NULL until we call Connect
-    if Network and Network.Connect then
-        local defaultHost = "127.0.0.1"
-        local defaultPort = 12345
-        print("[UI] Connecting to server: " .. defaultHost .. ":" .. defaultPort)
-        Network.Connect(defaultHost, defaultPort)
-        -- Note: RefreshServerList will be called from OnConnected callback
-    else
-        print("[UI] WARNING: Network.Connect not available")
-        -- Try to refresh anyway (will show error)
-        RefreshServerList()
-    end
+    RefreshServerList()
 end
 
 function OnSettingsClicked()
@@ -1209,32 +1100,13 @@ function OnLeaveLobby()
     UI.HideAllMenus()
     UI.ShowMenu("server_browser")
     UI.SetActiveMenu("server_browser")
-    
-    -- Clear chat history
-    lobbyData.chatHistory = {}
-    UpdateChatUI()
 end
 
-function OnSendChatMessage(optMsg)
-    local message = optMsg
-    
-    -- If called from button (no arg) or if arg is empty, get from input
-    if not message or message == "" then
-        message = UI.GetInputText(lobbyElements.chatInput)
-    end
-
+function OnSendChatMessage()
+    local message = UI.GetInputText(lobbyElements.chatInput)
     if message and message ~= "" then
         print("[UI] Sending chat: " .. message)
-        
-        -- Get current room ID
-        local roomId = 0
-        if lobbyData.currentRoom and lobbyData.currentRoom.id then
-            roomId = lobbyData.currentRoom.id
-        else
-            print("[UI] WARNING: No current room ID found!")
-        end
-        
-        SendChatMessage(message, roomId)
+        SendChatMessage(message)
         UI.SetInputText(lobbyElements.chatInput, "")
     end
 end
@@ -1427,11 +1299,6 @@ end
 function OnResumeClicked()
     print("[UI] Resuming game")
     UI.HideAllMenus()
-    -- ✅ Resume music when resuming game
-    if Audio and Audio.ResumeMusic then
-        Audio.ResumeMusic()
-        print("[UI] 🎵 Music resumed")
-    end
     GameState.Set("Playing")
 end
 
@@ -1551,13 +1418,9 @@ function StartGame()
     end
 end
 
-function SendChatMessage(message, roomId)
-    print("[UI] Sending chat message to room " .. tostring(roomId) .. ": " .. message)
-    if Network and Network.SendChatMessage then
-        Network.SendChatMessage(message, roomId)
-    else
-        print("[UI] WARNING: Network.SendChatMessage not available!")
-    end
+function SendChatMessage(message)
+    print("[Network Stub] SendChatMessage: " .. message)
+    -- Will be implemented when network is ready
 end
 
 function LeaveRoom()
@@ -1583,7 +1446,6 @@ function OnRoomJoined(roomInfo)
     print("[UI] Joined room: " .. roomInfo.name)
     lobbyData.joiningRoom = false  -- Reset le flag de join
     lobbyData.currentRoom = {
-        id = roomInfo.id,
         name = roomInfo.name,
         isHost = roomInfo.isHost or false,
         maxPlayers = roomInfo.maxPlayers or 4
@@ -1629,6 +1491,7 @@ function OnPlayerReadyChanged(playerId, ready)
     UpdatePlayerListUI()
 end
 
+-- NOUVEAU: Callback pour la mise à jour de la liste des joueurs (Problème 2)
 function OnRoomPlayersUpdated(players)
     print("[UI] Room players updated: " .. #players .. " players")
     lobbyData.players = {}
@@ -1654,64 +1517,18 @@ function OnGameStarting(countdown)
     UI.HideMenu("server_browser")
     UI.HideMenu("create_room_menu")
     UI.HideMenu("main_menu")
-    UI.HideAllMenus()
     
     -- Afficher un compte à rebours si besoin
     if lobbyElements.roomInfo then
         UI.SetText(lobbyElements.roomInfo, "Starting in " .. countdown .. "...")
     end
     
-    -- IMPORTANT: Changer l'état du jeu vers Playing
-    GameState.Set("Playing")
-    
-    print("[UI] Lobby menus hidden, game state set to Playing")
+    print("[UI] Lobby menus hidden, game starting...")
 end
 
 function OnChatMessage(sender, message)
     print("[Chat] " .. sender .. ": " .. message)
-    
-    if not lobbyData.chatHistory then
-        lobbyData.chatHistory = {}
-    end
-    
-    table.insert(lobbyData.chatHistory, {
-        sender = sender,
-        message = message,
-        time = os.date("%H:%M")
-    })
-    
-    -- Keep only last 10 messages
-    if #lobbyData.chatHistory > 10 then
-        table.remove(lobbyData.chatHistory, 1)
-    end
-    
-    UpdateChatUI()
-end
-
-function UpdateChatUI()
-    if not lobbyElements.chatLines then return end
-    
-    local history = lobbyData.chatHistory or {}
-    local startIndex = math.max(1, #history - 9)
-    local lineIndex = 1
-    
-    -- Clear all lines first
-    for i = 1, 10 do
-        if lobbyElements.chatLines[i] then
-            UI.SetText(lobbyElements.chatLines[i], "")
-        end
-    end
-    
-    -- Populate with history
-    for i = 1, #history do
-        local entry = history[i]
-        local displayString = "[" .. (entry.time or "") .. "] " .. entry.sender .. ": " .. entry.message
-        
-        -- Use lines from bottom up or top down? Let's do top down for now
-        if lobbyElements.chatLines[i] then
-           UI.SetText(lobbyElements.chatLines[i], displayString)
-        end
-    end
+    -- Will update chat UI when implemented
 end
 
 -- ============================================
@@ -1876,113 +1693,6 @@ function UpdateUI(deltaTime)
 end
 
 -- ============================================
--- VICTORY / GAME OVER CALLBACKS
--- ============================================
-function OnVictoryPlayAgain()
-    print("[UI] Victory - Play Again clicked")
-    UI.HideAllMenus()
-    -- ✅ IMPORTANT: Reset le jeu AVANT de relancer
-    if GameState.Reset then
-        GameState.Reset()  -- Appel C++ pour nettoyer les entités
-    end
-    -- Reset game state and start new game
-    GameState.Set("Playing")
-end
-
-function OnVictoryMainMenu()
-    print("[UI] Victory - Main Menu clicked")
-    UI.HideAllMenus()
-    -- ✅ IMPORTANT: Reset le jeu et nettoyer toutes les entités
-    if GameState.Reset then
-        GameState.Reset()
-    end
-    -- Stop music and go to main menu
-    if Audio and Audio.StopMusic then
-        Audio.StopMusic()
-    end
-    UI.ShowMenu("main_menu")
-    UI.SetActiveMenu("main_menu")
-    GameState.Set("MainMenu")
-end
-
-function OnGameOverRetry()
-    print("[UI] Game Over - Retry clicked")
-    UI.HideAllMenus()
-    -- ✅ IMPORTANT: Reset le jeu AVANT de relancer
-    if GameState.Reset then
-        GameState.Reset()  -- Appel C++ pour nettoyer les entités
-    end
-    -- Reset game state and start new game
-    GameState.Set("Playing")
-end
-
-function OnGameOverMainMenu()
-    print("[UI] Game Over - Main Menu clicked")
-    UI.HideAllMenus()
-    -- ✅ IMPORTANT: Reset le jeu et nettoyer toutes les entités
-    if GameState.Reset then
-        GameState.Reset()
-    end
-    -- Stop music and go to main menu
-    if Audio and Audio.StopMusic then
-        Audio.StopMusic()
-    end
-    UI.ShowMenu("main_menu")
-    UI.SetActiveMenu("main_menu")
-    GameState.Set("MainMenu")
-end
-
--- Called from C++ when game ends in victory
-function ShowVictoryScreen(score, time)
-    print("[UI] Showing Victory Screen - Score: " .. tostring(score or 0))
-    UI.HideAllMenus()
-    
-    -- Update score display
-    if victoryElements.scoreText then
-        UI.SetText(victoryElements.scoreText, "Final Score: " .. tostring(score or 0))
-    end
-    
-    -- Update time display
-    if victoryElements.timeText and time then
-        local minutes = math.floor(time / 60)
-        local seconds = math.floor(time % 60)
-        UI.SetText(victoryElements.timeText, string.format("Time: %02d:%02d", minutes, seconds))
-    end
-    
-    -- Play victory music
-    if Audio and Audio.OnVictory then
-        Audio.OnVictory()
-    end
-    
-    UI.ShowMenu("victory_menu")
-    UI.SetActiveMenu("victory_menu")
-end
-
--- Called from C++ when game ends in defeat
-function ShowGameOverScreen(score, wave)
-    print("[UI] Showing Game Over Screen - Score: " .. tostring(score or 0))
-    UI.HideAllMenus()
-    
-    -- Update score display
-    if gameOverElements.scoreText then
-        UI.SetText(gameOverElements.scoreText, "Final Score: " .. tostring(score or 0))
-    end
-    
-    -- Update wave display
-    if gameOverElements.waveText then
-        UI.SetText(gameOverElements.waveText, "Wave Reached: " .. tostring(wave or 1))
-    end
-    
-    -- Play game over music
-    if Audio and Audio.OnGameOver then
-        Audio.OnGameOver()
-    end
-    
-    UI.ShowMenu("gameover_menu")
-    UI.SetActiveMenu("gameover_menu")
-end
-
--- ============================================
 -- KEYBOARD NAVIGATION HELPER
 -- ============================================
 function HandleEscape()
@@ -2002,18 +1712,10 @@ function HandleEscape()
         OnLeaveLobby()
     elseif activeMenu == "pause_menu" then
         OnResumeClicked()
-    elseif activeMenu == "victory_menu" or activeMenu == "gameover_menu" then
-        -- Do nothing on escape in victory/gameover screens
-        return
     elseif GameState.IsPlaying() then
-        -- ✅ PAUSE: Toggle pause AND pause audio
         GameState.TogglePause()
-        if Audio and Audio.PauseMusic then
-            Audio.PauseMusic()
-        end
         UI.ShowMenu("pause_menu")
         UI.SetActiveMenu("pause_menu")
-        print("[UI] 🎵 Game paused - music paused")
     end
 end
 

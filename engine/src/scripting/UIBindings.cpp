@@ -345,4 +345,4 @@ void UIBindings::RegisterGameState(sol::state& lua) {
     std::cout << "[UIBindings] GameState bindings registered" << std::endl;
 }
 
-}  // namespace Scripting
+} // namespace Scripting
