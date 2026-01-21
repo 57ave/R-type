@@ -36,7 +36,9 @@ FILES=$(find "$PROJECT_ROOT" \
     ! -path "*/_deps/*" \
     ! -path "*/cmake-build-*/*" \
     ! -path "*/third_party/*" \
-    ! -path "*/external/*")
+    ! -path "*/external/*" \
+    ! -path "*/install*/*" \
+    ! -path "*/release*/*")
 
 FILE_COUNT=$(echo "$FILES" | wc -l)
 echo "📁 Found $FILE_COUNT files to format"
