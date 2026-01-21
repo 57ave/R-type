@@ -12,11 +12,8 @@ namespace sfml {
 
 class SFMLSprite : public ISprite {
 public:
-    SFMLSprite()
-        : currentTexture_(nullptr) {
-              // Initialize sprite
-          };
-    ~SFMLSprite() override = default;
+    SFMLSprite();
+    ~SFMLSprite() override;
 
     // ISprite implementation
     void setTexture(ITexture* texture) override;

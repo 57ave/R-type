@@ -5,6 +5,10 @@ namespace engine {
 namespace rendering {
 namespace sfml {
 
+SFMLSprite::SFMLSprite() : currentTexture_(nullptr) {}
+
+SFMLSprite::~SFMLSprite() = default;
+
 void SFMLSprite::setTexture(ITexture* texture) {
     if (!texture)
         return;
