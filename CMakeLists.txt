@@ -61,13 +61,19 @@ endif()
 # Find SFML (required by all sub-projects)
 find_package(SFML COMPONENTS Graphics Window System Audio Network CONFIG)
 if(NOT SFML_FOUND)
+    # Fix for 'optimized.lib' error: Force SFML to use its own internal dependencies
+    # instead of picking up vcpkg's libraries which may have incompatible usage (keywords).
+    set(SFML_USE_SYSTEM_DEPS OFF CACHE BOOL "" FORCE)
+    
     CPMAddPackage(
         NAME SFML
         GITHUB_REPOSITORY SFML/SFML
         GIT_TAG 2.6.1
-        PATCH_COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/patch_sfml.py
         OPTIONS
             "SFML_INSTALL_PKGCONFIG_FILES OFF"
+            "SFML_BUILD_EXAMPLES OFF"
+            "SFML_BUILD_DOC OFF"
+            "SFML_USE_SYSTEM_DEPS OFF" 
     )
 endif()
 add_subdirectory(engine)
