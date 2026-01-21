@@ -229,6 +229,7 @@ enum class GamePacketType : uint16_t {
     ROOM_LIST = 0x22,
     GAME_START = 0x23,
     RENAME_ROOM = 0x24,
+    ROOM_LEAVE = 0x25,           // Client leaves room
     SERVER_WELCOME = 0x10,
     WORLD_SNAPSHOT = 0x11,
     ENTITY_SPAWN = 0x12,
@@ -242,7 +243,8 @@ enum class GamePacketType : uint16_t {
     ROOM_PLAYERS_UPDATE = 0x33,  // Nouveau: mise à jour de la liste des joueurs
     CLIENT_TOGGLE_PAUSE = 0x34,  // Client requests server to toggle pause for the room (host-only)
     SERVER_SET_PAUSE = 0x35,     // Server informs clients that the room is paused or resumed
-    CHAT_MESSAGE = 0x40          // Nouveau: messages de chat
+    CHAT_MESSAGE = 0x40,         // Nouveau: messages de chat
+    PLAYER_READY = 0x50          // Player marks ready in room
 };
 
 // Enum for EntityType

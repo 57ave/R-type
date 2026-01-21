@@ -2,7 +2,7 @@
  * NetworkManager.hpp - Network Manager (Client & Server)
  * 
  * Manages network connections, hosting, and communication.
- * Phase 5: Network & Multiplayer
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * Phase 5.3: Real ASIO Network Integration
  */
 
 #pragma once
@@ -12,12 +12,21 @@
 #include <vector>
 #include <memory>
 #include "network/GamePackets.hpp"
+#include "network/NetworkClient.hpp"
+
+// Player information in a room
+struct PlayerInfo {
+    uint32_t playerId;
+    std::string playerName;
+    bool isHost;
+    bool isReady;
+};
 
 class NetworkManager
 {
 public:
     NetworkManager() = default;
-    ~NetworkManager() = default;
+    ~NetworkManager();
 
     /**
      * Initialize network subsystem
@@ -90,6 +99,11 @@ public:
      */
     void setReady(bool ready);
 
+    /**
+     * Start game (host only)
+     */
+    void startGame();
+
     // === Data Access ===
     
     /**
@@ -103,6 +117,11 @@ public:
     uint32_t getCurrentRoomId() const { return currentRoomId_; }
 
     /**
+     * Get players in current room
+     */
+    const std::vector<PlayerInfo>& getRoomPlayers() const { return roomPlayers_; }
+
+    /**
      * Get player name
      */
     const std::string& getPlayerName() const { return playerName_; }
@@ -112,10 +131,12 @@ public:
     using ConnectionCallback = std::function<void(bool success, const std::string& message)>;
     using RoomListCallback = std::function<void(const std::vector<Network::RoomInfo>&)>;
     using RoomUpdateCallback = std::function<void(const Network::RoomInfo&)>;
+    using GameStartCallback = std::function<void()>;
     
     void setConnectionCallback(ConnectionCallback callback) { onConnection_ = callback; }
     void setRoomListCallback(RoomListCallback callback) { onRoomList_ = callback; }
     void setRoomUpdateCallback(RoomUpdateCallback callback) { onRoomUpdate_ = callback; }
+    void setGameStartCallback(GameStartCallback callback) { gameStartCallback_ = callback; }
 
     /**
      * Update network (process packets)
@@ -132,13 +153,22 @@ private:
     // Room state
     uint32_t currentRoomId_ = 0;
     std::vector<Network::RoomInfo> roomList_;
+    std::vector<PlayerInfo> roomPlayers_;  // Players in current room
     
     // Callbacks
     ConnectionCallback onConnection_;
     RoomListCallback onRoomList_;
     RoomUpdateCallback onRoomUpdate_;
+    GameStartCallback gameStartCallback_;
     
-    // TODO Phase 5.3: Add actual network client/server
-    // std::unique_ptr<NetworkClient> client_;
-    // std::unique_ptr<NetworkServer> server_;
+    // Phase 5.3: Real network client
+    std::unique_ptr<NetworkClient> client_;
+    
+    // Server info (when hosting)
+    std::string serverAddress_;
+    unsigned short serverPort_ = 0;
+    
+    // Helper methods
+    void processIncomingPackets();
+    void handlePacket(const char* data, size_t length);
 };

@@ -1,176 +1,442 @@
 /**
- * NetworkManager.cpp - Network Manager Implementation (Phase 5)
+ * NetworkManager.cpp - Network Manager Implementation (Real ASIO)
+ * Phase 5.3: Real network using engine's NetworkClient
  */
 
 #include "managers/NetworkManager.hpp"
+#include "network/Serializer.hpp"
 #include <iostream>
+#include <cstring>
+#include <thread>
+#include <chrono>
 
-bool NetworkManager::initialize()
-{
-    std::cout << "[NetworkManager] 🌐 Initializing network subsystem..." << std::endl;
-    // TODO Phase 5.3: Initialize ASIO
-    std::cout << "[NetworkManager] ✅ Network initialized (simulated)" << std::endl;
+NetworkManager::~NetworkManager() {
+    shutdown();
+}
+
+bool NetworkManager::initialize() {
+    std::cout << "[NetworkManager] Initialized" << std::endl;
     return true;
 }
 
-void NetworkManager::shutdown()
-{
-    std::cout << "[NetworkManager] Shutting down network..." << std::endl;
-    disconnect();
-    stopServer();
-}
-
-// === Client Functions ===
-
-bool NetworkManager::connectToServer(const std::string& address, unsigned short port, const std::string& playerName)
-{
-    std::cout << "[NetworkManager] 🔌 Connecting to " << address << ":" << port 
-              << " as '" << playerName << "'..." << std::endl;
-    
-    playerName_ = playerName;
-    
-    // TODO Phase 5.3: Actual network connection with ASIO
-    // For now, simulate connection
-    connected_ = true;
-    clientId_ = 12345; // Simulated ID
-    
-    std::cout << "[NetworkManager] ✅ Connected! Client ID: " << clientId_ << std::endl;
-    
-    if (onConnection_) {
-        onConnection_(true, "Connected successfully");
+void NetworkManager::shutdown() {
+    if (client_) {
+        disconnect();
     }
-    
-    return true;
+    client_.reset();
 }
 
-void NetworkManager::disconnect()
-{
-    if (connected_)
-    {
-        std::cout << "[NetworkManager] Disconnecting from server..." << std::endl;
-        connected_ = false;
-        clientId_ = 0;
-        currentRoomId_ = 0;
+bool NetworkManager::connectToServer(const std::string& address, uint16_t port, const std::string& playerName) {
+    // Disconnect existing connection if any
+    if (client_ && connected_) {
+        std::cout << "[NetworkManager] Disconnecting existing connection..." << std::endl;
+        disconnect();
+    }
+
+    serverAddress_ = address;
+    serverPort_ = port;
+    playerName_ = playerName;
+
+    try {
+        // Create NetworkClient - constructor connects automatically
+        client_ = std::make_unique<NetworkClient>(address, port);
+        client_->start();
+        
+        // Give io_context thread time to start
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Send CLIENT_HELLO packet (uses CLIENT_CONNECT = 0x01 = CLIENT_HELLO)
+        std::cout << "[NetworkManager] Sending CLIENT_HELLO to " << address << ":" << port << std::endl;
+        client_->sendHello();
+        
+        connected_ = true;
+        std::cout << "[NetworkManager] Connected to " << address << ":" << port << " as " << playerName << std::endl;
         
         if (onConnection_) {
-            onConnection_(false, "Disconnected");
+            onConnection_(true, "Connected successfully");
         }
+        return true;
     }
-}
-
-// === Server Functions ===
-
-bool NetworkManager::startServer(unsigned short port, uint8_t maxPlayers)
-{
-    std::cout << "[NetworkManager] 🎮 Starting server on port " << port 
-              << " (max " << static_cast<int>(maxPlayers) << " players)..." << std::endl;
-    
-    // TODO Phase 5.3: Start actual ASIO server
-    hosting_ = true;
-    connected_ = true; // Host is also a client
-    clientId_ = 1; // Host is always ID 1
-    
-    std::cout << "[NetworkManager] ✅ Server started!" << std::endl;
-    return true;
-}
-
-void NetworkManager::stopServer()
-{
-    if (hosting_)
-    {
-        std::cout << "[NetworkManager] Stopping server..." << std::endl;
-        hosting_ = false;
+    catch (const std::exception& e) {
+        std::cerr << "[NetworkManager] Connection error: " << e.what() << std::endl;
+        client_.reset();
         connected_ = false;
+        
+        if (onConnection_) {
+            onConnection_(false, e.what());
+        }
+        return false;
     }
+}
+
+void NetworkManager::disconnect() {
+    if (client_ && connected_) {
+        // Send CLIENT_DISCONNECT packet
+        NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::CLIENT_DISCONNECT));
+        client_->sendPacket(packet);
+        
+        client_->disconnect();
+        std::cout << "[NetworkManager] Disconnected from server" << std::endl;
+    }
+    
+    client_.reset();
+    connected_ = false;
+    hosting_ = false;
+    currentRoomId_ = 0;
+}
+
+bool NetworkManager::startServer(uint16_t port, uint8_t maxPlayers) {
+    std::cout << "[NetworkManager] Server should be started separately" << std::endl;
+    std::cout << "[NetworkManager] Connecting to localhost:" << port << std::endl;
+    
+    // Connect to localhost (server must be running separately)
+    hosting_ = connectToServer("127.0.0.1", port, playerName_);
+    return hosting_;
+}
+
+void NetworkManager::stopServer() {
+    disconnect();
 }
 
 // === Lobby Functions ===
 
-void NetworkManager::requestRoomList()
-{
-    std::cout << "[NetworkManager] 🔍 Requesting room list..." << std::endl;
-    
-    // TODO Phase 5.3: Send LOBBY_LIST_REQUEST packet
-    
-    // Simulate response with fake rooms
-    roomList_.clear();
-    
-    Network::RoomInfo room1;
-    room1.roomId = 1;
-    std::strncpy(room1.roomName, "Bob's Room", sizeof(room1.roomName));
-    room1.currentPlayers = 2;
-    room1.maxPlayers = 4;
-    room1.inGame = false;
-    roomList_.push_back(room1);
-    
-    Network::RoomInfo room2;
-    room2.roomId = 2;
-    std::strncpy(room2.roomName, "Pro Players Only", sizeof(room2.roomName));
-    room2.currentPlayers = 3;
-    room2.maxPlayers = 4;
-    room2.inGame = false;
-    roomList_.push_back(room2);
-    
-    Network::RoomInfo room3;
-    room3.roomId = 3;
-    std::strncpy(room3.roomName, "Casual Game", sizeof(room3.roomName));
-    room3.currentPlayers = 1;
-    room3.maxPlayers = 2;
-    room3.inGame = true; // In progress
-    roomList_.push_back(room3);
-    
-    std::cout << "[NetworkManager] ✅ Found " << roomList_.size() << " rooms" << std::endl;
-    
-    if (onRoomList_) {
-        onRoomList_(roomList_);
+void NetworkManager::requestRoomList() {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
     }
+
+    // Send LOBBY_LIST_REQUEST packet (0x22 = ROOM_LIST)
+    std::cout << "[NetworkManager] Sending ROOM_LIST request (0x22)" << std::endl;
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::LOBBY_LIST_REQUEST));
+    client_->sendPacket(packet);
+    
+    std::cout << "[NetworkManager] Requested room list" << std::endl;
 }
 
-void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers)
-{
-    std::cout << "[NetworkManager] 🏠 Creating room '" << roomName << "' (max " 
-              << static_cast<int>(maxPlayers) << " players)..." << std::endl;
+void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers) {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
+    }
+
+    // Send ROOM_CREATE packet (0x20 = CREATE_ROOM)
+    std::cout << "[NetworkManager] Sending CREATE_ROOM (0x20): " << roomName << ", max " << (int)maxPlayers << std::endl;
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::ROOM_CREATE));
     
-    // TODO Phase 5.3: Send ROOM_CREATE packet
+    // Use Network::Serializer for proper format
+    Network::Serializer serializer;
+    serializer.writeString(roomName);
+    serializer.write(maxPlayers);
     
-    currentRoomId_ = 1; // Simulated room ID
-    std::cout << "[NetworkManager] ✅ Room created! ID: " << currentRoomId_ << std::endl;
+    packet.payload = serializer.getBuffer();
+    std::cout << "[NetworkManager] Packet payload size: " << packet.payload.size() << " bytes" << std::endl;
+    client_->sendPacket(packet);
+    
+    std::cout << "[NetworkManager] Creating room: " << roomName << " (max " << (int)maxPlayers << " players)" << std::endl;
 }
 
-void NetworkManager::joinRoom(uint32_t roomId)
-{
-    std::cout << "[NetworkManager] 🚪 Joining room " << roomId << "..." << std::endl;
+void NetworkManager::joinRoom(uint32_t roomId) {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
+    }
+
+    // Send ROOM_JOIN packet (0x21 = JOIN_ROOM)
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::ROOM_JOIN));
     
-    // TODO Phase 5.3: Send ROOM_JOIN packet
+    // Use Network::Serializer for proper format
+    Network::Serializer serializer;
+    serializer.write(roomId);
     
+    packet.payload = serializer.getBuffer();
+    client_->sendPacket(packet);
+    
+    // Set room ID immediately (will be confirmed by ROOM_JOINED response)
     currentRoomId_ = roomId;
-    std::cout << "[NetworkManager] ✅ Joined room " << roomId << std::endl;
+    
+    std::cout << "[NetworkManager] Joining room " << roomId << std::endl;
 }
 
-void NetworkManager::leaveRoom()
-{
-    if (currentRoomId_ != 0)
-    {
-        std::cout << "[NetworkManager] 🚪 Leaving room " << currentRoomId_ << "..." << std::endl;
+void NetworkManager::leaveRoom() {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
+    }
+
+    // If we're not in a room (no confirmation received), just reset state locally
+    if (currentRoomId_ == 0) {
+        std::cout << "[NetworkManager] Not in a confirmed room, resetting local state only" << std::endl;
+        hosting_ = false;
+        roomPlayers_.clear();
+        return;
+    }
+
+    // Send ROOM_LEAVE packet
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::ROOM_LEAVE));
+    
+    // Payload: roomId (4 bytes)
+    packet.payload.resize(sizeof(uint32_t));
+    std::memcpy(packet.payload.data(), &currentRoomId_, sizeof(uint32_t));
+    
+    client_->sendPacket(packet);
+    
+    std::cout << "[NetworkManager] Leaving room " << currentRoomId_ << std::endl;
+    
+    // Reset local state
+    currentRoomId_ = 0;
+    hosting_ = false;
+    roomPlayers_.clear();
+}
+
+void NetworkManager::setReady(bool ready) {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
+    }
+
+    if (currentRoomId_ == 0) {
+        std::cerr << "[NetworkManager] Not in a room" << std::endl;
+        return;
+    }
+
+    // Send PLAYER_READY packet
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::PLAYER_READY));
+    
+    // Payload: ready (1 byte)
+    packet.payload.resize(1);
+    packet.payload[0] = ready ? 1 : 0;
+    
+    client_->sendPacket(packet);
+    
+    std::cout << "[NetworkManager] Set ready: " << (ready ? "true" : "false") << std::endl;
+}
+
+void NetworkManager::startGame() {
+    if (!connected_ || !client_) {
+        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        return;
+    }
+
+    if (currentRoomId_ == 0) {
+        std::cerr << "[NetworkManager] Not in a room" << std::endl;
+        return;
+    }
+
+    if (!hosting_) {
+        std::cerr << "[NetworkManager] Only host can start game" << std::endl;
+        return;
+    }
+
+    // Send GAME_START packet (0x23)
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::GAME_START));
+    
+    // Payload: roomId (4 bytes)
+    Network::Serializer serializer;
+    serializer.write(currentRoomId_);
+    packet.payload = serializer.getBuffer();
+    
+    client_->sendPacket(packet);
+    
+    std::cout << "[NetworkManager] 🚀 Sending GAME_START for room " << currentRoomId_ << std::endl;
+}
+
+void NetworkManager::update() {
+    if (!client_ || !connected_) {
+        return;
+    }
+
+    // Update client (handles keep-alive pings)
+    client_->update(0.0f);
+
+    // Process incoming packets
+    client_->process();
+    processIncomingPackets();
+}
+
+void NetworkManager::processIncomingPackets() {
+    while (client_->hasReceivedPackets()) {
+        NetworkPacket packet = client_->getNextReceivedPacket();
         
-        // TODO Phase 5.3: Send ROOM_LEAVE packet
-        
-        currentRoomId_ = 0;
-        std::cout << "[NetworkManager] ✅ Left room" << std::endl;
+        // Serialize packet to get raw data for handlePacket
+        auto serialized = packet.serialize();
+        handlePacket(serialized.data(), serialized.size());
     }
 }
 
-void NetworkManager::setReady(bool ready)
-{
-    std::cout << "[NetworkManager] " << (ready ? "✅ Ready!" : "⏸️ Not ready") << std::endl;
-    
-    // TODO Phase 5.3: Send PLAYER_READY/PLAYER_NOT_READY packet
-}
+void NetworkManager::handlePacket(const char* data, size_t length) {
+    if (length < sizeof(PacketHeader)) {
+        return;
+    }
 
-void NetworkManager::update()
-{
-    // TODO Phase 5.3: Process incoming packets
-    // - Handle server responses
-    // - Update room list
-    // - Update game state
+    // Read packet type from header
+    PacketHeader header = PacketHeader::deserialize(data);
+    auto type = static_cast<Network::PacketType>(header.type);
+
+    // Payload starts after header
+    const char* payload = data + sizeof(PacketHeader);
+    size_t payloadSize = length - sizeof(PacketHeader);
+
+    switch (type) {
+        case Network::PacketType::SERVER_ACCEPT: {
+            std::cout << "[NetworkManager] Server accepted connection" << std::endl;
+            break;
+        }
+
+        case Network::PacketType::PING: {
+            // Server sent PING (CLIENT_PING = 0x03), respond with PONG
+            NetworkPacket pong(static_cast<uint16_t>(Network::PacketType::PONG));
+            client_->sendPacket(pong);
+            // Don't log to avoid spam
+            break;
+        }
+
+        case Network::PacketType::PONG: {
+            // Server ping reply (SERVER_PING_REPLY = 0x15)
+            // Don't log to avoid spam
+            break;
+        }
+
+        case Network::PacketType::LOBBY_LIST_RESPONSE: {
+            // Parse room list from payload using Network::Deserializer
+            std::vector<Network::RoomInfo> rooms;
+            
+            try {
+                Network::Deserializer deserializer(payload, payloadSize);
+                uint32_t count = deserializer.read<uint32_t>();
+                
+                for (uint32_t i = 0; i < count; ++i) {
+                    Network::RoomInfo room;
+                    room.roomId = deserializer.read<uint32_t>();
+                    
+                    // Read room name (string format: uint32_t length + chars)
+                    std::string name = deserializer.readString();
+                    std::strncpy(room.roomName, name.c_str(), sizeof(room.roomName) - 1);
+                    room.roomName[sizeof(room.roomName) - 1] = '\0';
+                    
+                    room.currentPlayers = deserializer.read<uint8_t>();
+                    room.maxPlayers = deserializer.read<uint8_t>();
+                    room.inGame = false; // Default
+                    
+                    rooms.push_back(room);
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[NetworkManager] Error parsing room list: " << e.what() << std::endl;
+                break;
+            }
+
+            roomList_ = rooms;
+            std::cout << "[NetworkManager] Received " << rooms.size() << " rooms" << std::endl;
+            
+            if (onRoomList_) {
+                onRoomList_(rooms);
+            }
+            break;
+        }
+
+        case Network::PacketType::ROOM_CREATE: {
+            // This is the request packet type we send, not what we receive
+            std::cout << "[NetworkManager] Warning: Received ROOM_CREATE request packet (should only send these)" << std::endl;
+            break;
+        }
+
+        case Network::PacketType::ROOM_CREATED: {
+            // Server confirmation of room creation (ROOM_CREATED = 0x32)
+            if (payloadSize >= sizeof(uint32_t)) {
+                Network::Deserializer deserializer(payload, payloadSize);
+                uint32_t roomId = deserializer.read<uint32_t>();
+                currentRoomId_ = roomId;
+                hosting_ = true;
+
+                std::cout << "[NetworkManager] ✅ Room created with ID " << roomId << std::endl;
+            }
+            break;
+        }
+
+        case Network::PacketType::ROOM_JOIN: {
+            // This is the request packet type we send, not what we receive
+            std::cout << "[NetworkManager] Warning: Received ROOM_JOIN request packet (should only send these)" << std::endl;
+            break;
+        }
+
+        case Network::PacketType::ROOM_JOINED: {
+            // Server confirmation of room join (ROOM_JOINED = 0x30)
+            // Format: roomId(uint32) + roomName(string) + maxPlayers(uint8) + hostPlayerId(uint32)
+            try {
+                Network::Deserializer deserializer(payload, payloadSize);
+                uint32_t roomId = deserializer.read<uint32_t>();
+                std::string roomName = deserializer.readString();
+                uint8_t maxPlayers = deserializer.read<uint8_t>();
+                uint32_t hostPlayerId = deserializer.read<uint32_t>();
+                
+                currentRoomId_ = roomId;
+
+                std::cout << "[NetworkManager] ✅ Joined room " << roomId << " (" << roomName 
+                          << ", " << (int)maxPlayers << " max players, host: " << hostPlayerId << ")" << std::endl;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[NetworkManager] Error parsing ROOM_JOINED: " << e.what() << std::endl;
+            }
+            break;
+        }
+
+        case Network::PacketType::ROOM_UPDATE: {
+            // Room state update (ROOM_PLAYERS_UPDATE - player list, ready states, etc.)
+            try {
+                Network::Deserializer deserializer(payload, payloadSize);
+                uint32_t roomId = deserializer.read<uint32_t>();
+                uint32_t playerCount = deserializer.read<uint32_t>();
+                
+                roomPlayers_.clear();
+                
+                for (uint32_t i = 0; i < playerCount; ++i) {
+                    PlayerInfo player;
+                    player.playerId = deserializer.read<uint32_t>();
+                    player.playerName = deserializer.readString();
+                    player.isHost = deserializer.read<bool>();
+                    player.isReady = deserializer.read<bool>();
+                    roomPlayers_.push_back(player);
+                }
+                
+                std::cout << "[NetworkManager] Room " << roomId << " update: " << playerCount << " players" << std::endl;
+                for (const auto& player : roomPlayers_) {
+                    std::cout << "  - " << player.playerName << " (ID:" << player.playerId 
+                              << ", Host:" << (player.isHost ? "Yes" : "No")
+                              << ", Ready:" << (player.isReady ? "Yes" : "No") << ")" << std::endl;
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[NetworkManager] Error parsing ROOM_UPDATE: " << e.what() << std::endl;
+            }
+            break;
+        }
+
+        case Network::PacketType::ROOM_LEAVE: {
+            // Confirmation of leaving room
+            currentRoomId_ = 0;
+            hosting_ = false;
+
+            std::cout << "[NetworkManager] Left room" << std::endl;
+            break;
+        }
+
+        case Network::PacketType::GAME_START: {
+            std::cout << "[NetworkManager] Game starting!" << std::endl;
+            if (gameStartCallback_) {
+                gameStartCallback_();
+            }
+            break;
+        }
+
+        case Network::PacketType::ENTITY_UPDATE: {
+            // WORLD_SNAPSHOT (0x11) - Game state updates
+            // Ignore during lobby, will be handled in PlayState
+            break;
+        }
+
+        default:
+            std::cout << "[NetworkManager] Received unknown packet type: " << header.type << std::endl;
+            break;
+    }
 }

@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <Packet.hpp>
+#include <network/Packet.hpp>
 
 namespace Network {
 
@@ -17,33 +17,35 @@ namespace Network {
      * @brief Packet type IDs
      */
     enum class PacketType : uint16_t {
-        // Connection
-        CLIENT_CONNECT      = 1,    // Client requests connection
-        SERVER_ACCEPT       = 2,    // Server accepts connection
-        SERVER_REJECT       = 3,    // Server rejects connection
-        CLIENT_DISCONNECT   = 4,    // Client disconnects
-        PING                = 5,    // Heartbeat
-        PONG                = 6,    // Heartbeat response
+        // Connection - Compatible with GamePacketType
+        CLIENT_CONNECT      = 0x01, // CLIENT_HELLO - Client requests connection
+        SERVER_ACCEPT       = 0x10, // SERVER_WELCOME - Server accepts connection
+        SERVER_REJECT       = 0x03, // Server rejects connection
+        CLIENT_DISCONNECT   = 0x04, // Client disconnects
+        PING                = 0x03, // CLIENT_PING - Heartbeat
+        PONG                = 0x15, // SERVER_PING_REPLY - Heartbeat response
         
-        // Lobby
-        LOBBY_LIST_REQUEST  = 10,   // Request list of available rooms
-        LOBBY_LIST_RESPONSE = 11,   // Server sends room list
-        ROOM_CREATE         = 12,   // Create a new room
-        ROOM_JOIN           = 13,   // Join existing room
-        ROOM_LEAVE          = 14,   // Leave current room
-        ROOM_UPDATE         = 15,   // Room state update (players, ready status)
+        // Lobby - Compatible with GamePacketType
+        LOBBY_LIST_REQUEST  = 0x22, // ROOM_LIST - Request list of available rooms
+        LOBBY_LIST_RESPONSE = 0x31, // ROOM_LIST_REPLY - Server sends room list
+        ROOM_CREATE         = 0x20, // CREATE_ROOM - Create a new room
+        ROOM_CREATED        = 0x32, // ROOM_CREATED - Server confirms room creation
+        ROOM_JOIN           = 0x21, // JOIN_ROOM - Join existing room
+        ROOM_JOINED         = 0x30, // ROOM_JOINED - Server confirms room join
+        ROOM_LEAVE          = 0x25, // ROOM_LEAVE - Leave current room
+        ROOM_UPDATE         = 0x33, // ROOM_PLAYERS_UPDATE - Room state update
         
-        // Game
-        GAME_START          = 20,   // Server signals game start
-        PLAYER_INPUT        = 21,   // Client sends input
-        ENTITY_SPAWN        = 22,   // Server spawns entity
-        ENTITY_UPDATE       = 23,   // Server updates entity state
-        ENTITY_DESTROY      = 24,   // Server destroys entity
-        GAME_STATE          = 25,   // Full game state snapshot
+        // Game - Compatible with GamePacketType
+        GAME_START          = 0x23, // GAME_START - Server signals game start
+        PLAYER_INPUT        = 0x02, // CLIENT_INPUT - Client sends input
+        ENTITY_SPAWN        = 0x12, // ENTITY_SPAWN - Server spawns entity
+        ENTITY_UPDATE       = 0x11, // WORLD_SNAPSHOT - Server updates entity state
+        ENTITY_DESTROY      = 0x13, // ENTITY_DESTROY - Server destroys entity
+        GAME_STATE          = 0x11, // WORLD_SNAPSHOT - Full game state snapshot
         
-        // Player
-        PLAYER_READY        = 30,   // Player marks ready
-        PLAYER_NOT_READY    = 31,   // Player marks not ready
+        // Player (no direct equivalent, using custom IDs)
+        PLAYER_READY        = 0x50, // Player marks ready
+        PLAYER_NOT_READY    = 0x51, // Player marks not ready
     };
 
     /**

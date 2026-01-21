@@ -1,5 +1,5 @@
 /**
- * PlayState.cpp - Gameplay State Implementation (Placeholder Phase 4)
+ * PlayState.cpp - Gameplay State Implementation (Phase 6 - TODO)
  */
 
 #include "states/PlayState.hpp"
@@ -15,7 +15,7 @@ PlayState::PlayState(Game* game)
 void PlayState::onEnter()
 {
     std::cout << "[PlayState] 🎮 Entering gameplay (PLACEHOLDER - Phase 6)" << std::endl;
-    std::cout << "[PlayState] This will be implemented in Phase 6: Gameplay Core" << std::endl;
+    std::cout << "[PlayState] This will be implemented after Phase 5 is complete" << std::endl;
     std::cout << "[PlayState] Press ESC to return to menu" << std::endl;
 }
 
@@ -44,10 +44,5 @@ void PlayState::update(float deltaTime)
 
 void PlayState::render()
 {
-    // Draw placeholder text
-    auto window = game_->getWindow();
-    if (!window) return;
-    
-    // For now, just show a message that this is coming in Phase 6
-    // The actual rendering will be implemented in Phase 6
+    // Gameplay rendering will be in Phase 6
 }

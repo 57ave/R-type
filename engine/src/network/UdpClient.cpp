@@ -26,6 +26,8 @@ void UdpClient::start() {
 void UdpClient::send(const NetworkPacket& packet) {
     try {
         auto buffer = packet.serialize();
+        std::cout << "[UdpClient] Sending packet type " << packet.header.type 
+                  << " (" << buffer.size() << " bytes) to " << serverEndpoint_ << std::endl;
         socket_.async_send_to(
             asio::buffer(buffer),
             serverEndpoint_,
@@ -85,8 +87,10 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
     startReceive();
 }
 
-void UdpClient::handleSend(const std::error_code& error, std::size_t) {
+void UdpClient::handleSend(const std::error_code& error, std::size_t bytes_transferred) {
     if (error) {
         std::cerr << "[UdpClient] Send error: " << error.message() << std::endl;
+    } else {
+        std::cout << "[UdpClient] Successfully sent " << bytes_transferred << " bytes" << std::endl;
     }
 }

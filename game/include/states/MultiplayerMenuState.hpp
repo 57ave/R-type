@@ -38,8 +38,11 @@ private:
     // Network state
     std::string playerName_ = "Player";
     std::string serverAddress_ = "127.0.0.1";
-    uint16_t serverPort_ = 8080;
+    uint16_t serverPort_ = 12345;  // Match server port
     bool isReady_ = false;  // Local player ready state
+    bool waitingForRoomList_ = false;  // True when we requested room list
+    size_t lastRoomCount_ = 0;  // Track if room list changed
+    bool isConnecting_ = false;  // True during connection process
     
     void createMainMenu();
     void createHostMenu();

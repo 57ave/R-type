@@ -142,6 +142,12 @@ private:
                 case GamePacketType::JOIN_ROOM:
                     handleJoinRoom(packet, sender);
                     break;
+                case GamePacketType::ROOM_LEAVE:
+                    handleLeaveRoom(packet, sender);
+                    break;
+                case GamePacketType::PLAYER_READY:
+                    handlePlayerReady(packet, sender);
+                    break;
                 case GamePacketType::GAME_START:
                     handleGameStart(packet, sender);
                     break;
@@ -822,6 +828,70 @@ private:
         }
     }
     
+    void handleLeaveRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        auto session = server_.getSession(sender);
+        if (!session) {
+            std::cerr << "[GameServer] ROOM_LEAVE from unknown client" << std::endl;
+            return;
+        }
+        
+        uint32_t roomId = session->roomId;
+        if (roomId == 0) {
+            std::cout << "[GameServer] Player " << static_cast<int>(session->playerId) 
+                      << " tried to leave but not in a room" << std::endl;
+            return;
+        }
+        
+        uint8_t playerId = session->playerId;
+        
+        std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
+                  << " leaving room " << roomId << std::endl;
+        
+        // Remove player from room (void return, always succeeds)
+        server_.getRoomManager().leaveRoom(roomId, playerId);
+        
+        // Clear session room info
+        session->roomId = 0;
+        playerToRoom_.erase(playerId);
+        
+        // Broadcast updated player list to remaining room members
+        broadcastRoomPlayers(roomId);
+        
+        // Note: Room cleanup (if empty) is handled by RoomManager
+    }
+    
+    void handlePlayerReady(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
+        auto session = server_.getSession(sender);
+        if (!session || session->roomId == 0) {
+            std::cerr << "[GameServer] PLAYER_READY from player not in a room" << std::endl;
+            return;
+        }
+        
+        // Parse ready state from payload (1 byte: 0 or 1)
+        bool ready = false;
+        if (packet.payload.size() >= 1) {
+            ready = (packet.payload[0] != 0);
+        }
+        
+        uint8_t playerId = session->playerId;
+        uint32_t roomId = session->roomId;
+        
+        // Update ready state in room manager
+        bool success = server_.getRoomManager().setPlayerReady(roomId, playerId, ready);
+        
+        if (success) {
+            std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
+                      << " in room " << roomId 
+                      << " set ready: " << (ready ? "true" : "false") << std::endl;
+            
+            // Broadcast updated player list to all room members
+            broadcastRoomPlayers(roomId);
+        } else {
+            std::cerr << "[GameServer] Failed to set ready state for player " 
+                      << static_cast<int>(playerId) << " in room " << roomId << std::endl;
+        }
+    }
+    
     void handleGameStart(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (!session || session->roomId == 0) {
@@ -980,7 +1050,7 @@ private:
             info.playerId = playerId;
             info.playerName = "Player " + std::to_string(playerIndex);
             info.isHost = (playerId == room->hostPlayerId);
-            info.isReady = false;  // TODO: ajouter système de ready
+            info.isReady = room->isPlayerReady(playerId);
             payload.players.push_back(info);
             playerIndex++;
         }

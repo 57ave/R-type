@@ -22,8 +22,15 @@ void NetworkClient::start() {
     client_.start();
     
     // Start io_context in a separate thread
+    std::cout << "[NetworkClient] Starting io_context thread..." << std::endl;
     io_thread_ = std::thread([this]() {
-        io_context_.run();
+        std::cout << "[NetworkClient] io_context thread started, running io_context..." << std::endl;
+        try {
+            io_context_.run();
+            std::cout << "[NetworkClient] io_context.run() exited" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkClient] io_context exception: " << e.what() << std::endl;
+        }
     });
     
     connected_ = true;
@@ -93,12 +100,19 @@ void NetworkClient::update(float) {
     if (!connected_) return;
 
     auto now = std::chrono::steady_clock::now();
-    auto timeSinceLastInput = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInputSent_).count();
+    auto timeSinceLastPing = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPingSent_).count();
 
-    // Keep-alive: send empty packet if no input for 1 second
-    if (timeSinceLastInput > 1000) {
+    // Send ping every 2 seconds to prevent server timeout (server has 5s timeout)
+    if (timeSinceLastPing > 2000) {
         // Send a ping/keep-alive packet (type 0x03 is CLIENT_PING)
         NetworkPacket pingPacket(0x03);
-        sendPacket(pingPacket);
+        pingPacket.header.seq = sequenceNumber_++;
+        pingPacket.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        
+        client_.send(pingPacket);
+        lastPingSent_ = now;
+        std::cout << "[NetworkClient] Sent CLIENT_PING (keep-alive)" << std::endl;
     }
 }

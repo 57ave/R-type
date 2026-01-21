@@ -13,6 +13,8 @@
 #include <components/UIInputField.hpp>
 #include <components/Tag.hpp>
 #include <scripting/LuaState.hpp>
+#include <thread>
+#include <chrono>
 #include <SFML/Graphics.hpp>
 #include <iostream>
 
@@ -24,6 +26,17 @@ MultiplayerMenuState::MultiplayerMenuState(Game* game)
 void MultiplayerMenuState::onEnter()
 {
     std::cout << "[MultiplayerMenuState] 🌐 Entering multiplayer menu" << std::endl;
+    
+    // Setup network callback for game start
+    auto networkMgr = game_->getNetworkManager();
+    if (networkMgr) {
+        networkMgr->setGameStartCallback([this]() {
+            std::cout << "[MultiplayerMenuState] 🎮 GAME_START received from server!" << std::endl;
+            // TODO Phase 6: Transition to PlayState
+            // game_->getStateManager().pushState(std::make_unique<PlayState>(game_));
+        });
+    }
+    
     createMainMenu();
 }
 
@@ -250,15 +263,43 @@ void MultiplayerMenuState::createJoinMenu()
                                  subtitleConfig["fontSize"].get<int>());
         menuEntities_.push_back(subtitleEntity);
         
-        // Request room list from NetworkManager
-        size_t roomCount = 0;
+        // Connect to server if not already connected
         auto networkMgr = game_->getNetworkManager();
-        if (networkMgr) {
-            networkMgr->requestRoomList();
+        
+        if (!networkMgr) {
+            std::cerr << "[MultiplayerMenuState] ❌ NetworkManager is null!" << std::endl;
+            return;
+        }
+        
+        // IMPORTANT: Only connect if NOT already connected or connecting
+        // Calling connectToServer() while connected will disconnect first!
+        if (!networkMgr->isConnected() && !isConnecting_) {
+            std::cout << "[MultiplayerMenuState] Auto-connecting to server..." << std::endl;
+            isConnecting_ = true;
+            networkMgr->connectToServer(serverAddress_, serverPort_, playerName_);
+            isConnecting_ = false;
             
-            // Create room list items
+            // Wait a bit for connection to establish
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        } else {
+            std::cout << "[MultiplayerMenuState] Already connected/connecting to server" << std::endl;
+        }
+        
+        // Request fresh room list (non-blocking)
+        size_t roomCount = 0;
+        if (networkMgr->isConnected()) {
+            std::cout << "[MultiplayerMenuState] Requesting room list (non-blocking)..." << std::endl;
+            networkMgr->requestRoomList();
+            waitingForRoomList_ = true;
+            
+            // Use cached list for now, will auto-refresh when response arrives
             const auto& rooms = networkMgr->getRoomList();
             roomCount = rooms.size();
+            lastRoomCount_ = roomCount;
+            
+            std::cout << "[MultiplayerMenuState] Creating menu with " << roomCount << " cached rooms" << std::endl;
+            
+            // Create room list items
             auto roomListConfig = menuConfig["room_list"];
             float startY = roomListConfig["y"].get<float>();
             float itemHeight = roomListConfig["item_height"].get<float>();
@@ -283,8 +324,16 @@ void MultiplayerMenuState::createJoinMenu()
                                            70.0f,
                                            roomText,
                                            "on_room_select");
+                
+                // Store room ID in a Tag component for later retrieval
+                coordinator->AddComponent<Tag>(roomEntity, Tag{
+                    "room_" + std::to_string(room.roomId)
+                });
+                
                 menuEntities_.push_back(roomEntity);
             }
+        } else {
+            std::cerr << "[MultiplayerMenuState] ❌ Not connected, cannot request room list" << std::endl;
         }
         
         // Create buttons
@@ -381,9 +430,28 @@ void MultiplayerMenuState::createLobbyMenu()
         menuEntities_.push_back(listTitleEntity);
         
         // TODO Phase 5.3: Get real player list from NetworkManager
-        // For now, create simulated player entries
-        std::vector<std::string> players = {playerName_ + " (You)", "Player 2", "Player 3"};
-        std::vector<bool> readyStates = {isReady_, true, false};  // Use local ready state
+        std::vector<std::string> players;
+        std::vector<bool> readyStates;
+        
+        if (networkMgr && networkMgr->getCurrentRoomId() != 0) {
+            // Use real player data from NetworkManager
+            const auto& roomPlayers = networkMgr->getRoomPlayers();
+            for (const auto& player : roomPlayers) {
+                std::string displayName = player.playerName;
+                // Mark "You" for local player (simple heuristic: first player or host if hosting)
+                if (players.empty() || (player.isHost && networkMgr->isHosting())) {
+                    displayName += " (You)";
+                }
+                players.push_back(displayName);
+                readyStates.push_back(player.isReady);
+            }
+        }
+        
+        // Fallback: If no players yet, show local player only
+        if (players.empty()) {
+            players.push_back(playerName_ + " (You)");
+            readyStates.push_back(isReady_);
+        }
         
         float startY = playerListConfig["y"].get<float>() + 40.0f;
         float itemHeight = playerListConfig["item_height"].get<float>();
@@ -584,8 +652,10 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                     {
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr) {
+                            std::cout << "[MultiplayerMenuState] Refreshing room list..." << std::endl;
                             networkMgr->requestRoomList();
-                            createJoinMenu(); // Refresh the room list
+                            std::cout << "[MultiplayerMenuState] Room list request sent. Room list will update automatically." << std::endl;
+                            // Don't recreate the menu - the list will update on next frame when response arrives
                         }
                     }
                     
@@ -593,12 +663,51 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                     else if (currentMode_ == MenuMode::JOIN && button.text.find("(") != std::string::npos)
                     {
                         std::cout << "[MultiplayerMenuState] Selected room: " << button.text << std::endl;
-                        // TODO: Extract room ID and join
+                        
+                        // Extract room ID from Tag component
+                        uint32_t roomId = 0;
+                        if (coordinator->HasComponent<Tag>(entity)) {
+                            auto& tag = coordinator->GetComponent<Tag>(entity);
+                            // Tag format: "room_123"
+                            if (tag.name.find("room_") == 0) {
+                                try {
+                                    roomId = std::stoul(tag.name.substr(5));
+                                } catch (...) {
+                                    std::cerr << "[MultiplayerMenuState] Failed to extract room ID from tag: " << tag.name << std::endl;
+                                }
+                            }
+                        }
+                        
+                        if (roomId == 0) {
+                            std::cerr << "[MultiplayerMenuState] Invalid room ID" << std::endl;
+                            break;
+                        }
+                        
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr) {
-                            networkMgr->connectToServer(serverAddress_, serverPort_, playerName_);
-                            networkMgr->joinRoom(1); // Simulated room ID
-                            createLobbyMenu();
+                            // Already connected in createJoinMenu(), just join the room
+                            std::cout << "[MultiplayerMenuState] Joining room " << roomId << std::endl;
+                            networkMgr->joinRoom(roomId);
+                            
+                            // Process packets while waiting for ROOM_JOINED response (max 300ms)
+                            auto startTime = std::chrono::steady_clock::now();
+                            bool joined = false;
+                            while (std::chrono::steady_clock::now() - startTime < std::chrono::milliseconds(300)) {
+                                networkMgr->update();  // Process incoming packets
+                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                // Check if we got room players (means ROOM_UPDATE was received)
+                                if (!networkMgr->getRoomPlayers().empty()) {
+                                    joined = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (joined) {
+                                std::cout << "[MultiplayerMenuState] ✅ Successfully joined room " << roomId << std::endl;
+                                createLobbyMenu();
+                            } else {
+                                std::cerr << "[MultiplayerMenuState] ❌ Failed to join room (timeout)" << std::endl;
+                            }
                         }
                     }
                     
@@ -619,12 +728,11 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                     else if (button.text == "Start Game")
                     {
                         std::cout << "[MultiplayerMenuState] 🚀 Starting game..." << std::endl;
-                        // TODO Phase 5.3: Send START_GAME packet to server
-                        // TODO Phase 6: Transition to PlayState with multiplayer mode
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr && networkMgr->isHosting()) {
-                            std::cout << "[MultiplayerMenuState] ✅ Host starting game!" << std::endl;
-                            // For now just log, Phase 6 will implement PlayState
+                            networkMgr->startGame();
+                            std::cout << "[MultiplayerMenuState] ✅ Host sent GAME_START packet" << std::endl;
+                            // TODO Phase 6: Transition to PlayState when GAME_START is received
                         }
                     }
                     else if (button.text == "Leave Room")
@@ -633,7 +741,7 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr) {
                             networkMgr->leaveRoom();
-                            networkMgr->disconnect();
+                            // Don't disconnect - stay connected to browse rooms
                         }
                         isReady_ = false;  // Reset ready state
                         createMainMenu(); // Return to multiplayer main menu
@@ -695,7 +803,20 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
 void MultiplayerMenuState::update(float deltaTime)
 {
     (void)deltaTime;
-    // TODO Phase 5: Network updates, lobby updates
+    
+    // Auto-refresh Join menu when room list arrives
+    if (currentMode_ == MenuMode::JOIN && waitingForRoomList_) {
+        auto networkMgr = game_->getNetworkManager();
+        if (networkMgr) {
+            const auto& rooms = networkMgr->getRoomList();
+            if (rooms.size() != lastRoomCount_) {
+                std::cout << "[MultiplayerMenuState] Room list updated (" << lastRoomCount_ 
+                          << " -> " << rooms.size() << "), refreshing menu..." << std::endl;
+                waitingForRoomList_ = false;
+                createJoinMenu();  // Recreate menu with new room list
+            }
+        }
+    }
 }
 
 void MultiplayerMenuState::render()

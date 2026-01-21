@@ -1,5 +1,5 @@
 /**
- * PlayState.hpp - Gameplay State (Placeholder Phase 4)
+ * PlayState.hpp - Gameplay State (Phase 6 - TODO)
  */
 
 #pragma once
