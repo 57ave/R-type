@@ -1369,7 +1369,7 @@ private:
             player.y = 200.0f + (playerIndex * 200.0f);  // Offset players vertically
             player.vx = 0.0f;
             player.vy = 0.0f;
-            player.hp = 50;  // Player starts with 50 HP
+            player.hp =200;  // Player starts with 100 HP
             player.playerId = playerId;
             player.playerLine = playerIndex % 5;  // Cycle through 5 different ship colors
 

@@ -444,9 +444,37 @@ void GameLoop::UpdateWinCondition(float dt) {
         // ========================================
         // CHECK LOSE CONDITION FIRST (BEFORE win condition!)
         // ========================================
-        // Also check directly if the local player is dead
+        // Check if the local player is dead
         bool playerDead = false;
-        if (player != 0 && playerCreated && coordinator) {
+        
+        // In network mode, find the local player via NetworkSystem
+        if (networkMode && networkSystem && coordinator) {
+            ECS::Entity localPlayerEntity = networkSystem->getLocalPlayerEntity();
+            if (localPlayerEntity != 0) {
+                if (coordinator->HasComponent<Health>(localPlayerEntity)) {
+                    auto& health = coordinator->GetComponent<Health>(localPlayerEntity);
+                    if (health.current <= 0) {
+                        playerDead = true;
+                        std::cout << "[GameLoop] 💀 Network player health is 0! (entity " << localPlayerEntity << ", HP: " << health.current << ")" << std::endl;
+                    }
+                }
+            } else {
+                // Local player entity not found yet - could mean player was destroyed
+                // Check if we had a player before (game started)
+                static bool hadPlayerBefore = false;
+                if (gamePlayTime > 2.0f) {  // Give 2 seconds for initial spawn
+                    if (!hadPlayerBefore) {
+                        hadPlayerBefore = true;
+                    } else {
+                        // Player was there but now gone - likely dead
+                        std::cout << "[GameLoop] 💀 Network player entity not found - player likely dead!" << std::endl;
+                        playerDead = true;
+                    }
+                }
+            }
+        }
+        // In solo mode, check the player variable directly
+        else if (player != 0 && playerCreated && coordinator) {
             if (coordinator->HasComponent<Health>(player)) {
                 auto& health = coordinator->GetComponent<Health>(player);
                 if (health.current <= 0) {
@@ -456,7 +484,7 @@ void GameLoop::UpdateWinCondition(float dt) {
             }
         }
         
-        if (playerDead || (gameplayManager && gameplayManager->CheckLoseCondition())) {
+        if (playerDead || (!networkMode && gameplayManager && gameplayManager->CheckLoseCondition())) {
             std::cout << "[GameLoop] 💀 GAME OVER! Player dead!" << std::endl;
             winConditionTriggered = true;  // Prevent further checks
             
