@@ -1,6 +1,7 @@
 #include "core/AudioManager.hpp"
 #include <iostream>
 #include <filesystem>
+#include <algorithm>
 
 namespace RType::Core {
 

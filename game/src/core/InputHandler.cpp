@@ -2,6 +2,9 @@
 #include <engine/Keyboard.hpp>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <sstream>
+#include <math.h>
 
 namespace RType::Core {
 
