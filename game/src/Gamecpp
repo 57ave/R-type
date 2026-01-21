@@ -1,42 +1,46 @@
 #include "Game.hpp"
 #include <filesystem>
 #include <fstream>
-#include <SFML/Graphics/Image.hpp>
 #include <core/GameStateCallbacks.hpp>
 #include "network/NetworkBindings.hpp"
 #include "network/RTypeProtocol.hpp"  // Pour RoomPlayersPayload et ChatMessagePayload
 
+// Cache for the resolved base path
 static std::string g_basePath = "";
 
+// Static pointers for menu music control from Lua
 static eng::engine::Sound* g_menuMusic = nullptr;
 static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
 
+// Helper function to resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
-    namespace fs = std::filesystem;
-    if (fs::exists(relativePath)) return relativePath;
-
-    std::string strippedPath = relativePath;
-    if (relativePath.rfind("game/", 0) == 0) {
-        strippedPath = relativePath.substr(5);
-        if (fs::exists(strippedPath)) return strippedPath;
-    }
-
+    // If we already found the base path, use it
     if (!g_basePath.empty()) {
-        if (fs::exists(g_basePath + relativePath)) return g_basePath + relativePath;
-        if (fs::exists(g_basePath + strippedPath)) return g_basePath + strippedPath;
+        return g_basePath + relativePath;
     }
 
-    if (g_basePath.empty()) {
-        std::vector<std::string> basePaths = {"", "../../", "../../../", "../", "assets/"};
-        std::string testFile = "assets/fonts/Roboto-Regular.ttf";
+    // List of possible base paths to check
+    std::vector<std::string> basePaths = {
+        "",                    // Current directory (running from project root)
+        "../../",              // Running from build/game/
+        "../../../",           // Running from deeper build directories
+    };
 
-        for (const auto& base : basePaths) {
-            if (fs::exists(base + testFile) || fs::exists(base + "game/" + testFile)) {
-                g_basePath = base;
-                return ResolveAssetPath(relativePath);
-            }
+    // Test file to check if we're in the right directory
+    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
+
+    for (const auto& base : basePaths) {
+        std::string fullPath = base + testFile;
+        std::ifstream file(fullPath);
+        if (file.good()) {
+            g_basePath = base;
+            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
+            return g_basePath + relativePath;
         }
     }
+
+    // Fallback: return the path as-is
+    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
     return relativePath;
 }
 
@@ -152,55 +156,50 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     return player;
 }
 
-// Helper function to create background entities (tiled)
-void Game::CreateBackground(float y, float windowHeight) {
-    if (backgroundTiles.empty()) return;
+// Helper function to create background entity
+ECS::Entity Game::CreateBackground(float x, float y, float windowHeight, bool isFirst) {
+    ECS::Entity bg = gCoordinator.CreateEntity();
+    RegisterEntity(bg);
 
-    // Calculate total width of all tiles
-    float totalWidth = 0;
-    std::vector<float> tileWidths;
-    float scale = 1.0f;
+    // Position
+    gCoordinator.AddComponent(bg, Position{x, y});
 
-    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
-        Vector2u texSize = backgroundTiles[i]->getSize();
-        if (i == 0) {
-            scale = windowHeight / texSize.y;
-        }
-        float w = texSize.x * scale;
-        tileWidths.push_back(w);
-        totalWidth += w;
+    // Sprite
+    auto* sprite = new SFMLSprite();
+    allSprites.push_back(sprite);
+    sprite->setTexture(backgroundTexture.get());
+    sprite->setPosition(Vector2f(x, y));
+
+    // Calculate scale to fit window height
+    Vector2u texSize = backgroundTexture->getSize();
+    float scale = windowHeight / texSize.y;
+
+    Sprite spriteComp;
+    spriteComp.sprite = sprite;
+    spriteComp.layer = -10;
+    spriteComp.scaleX = scale;
+    spriteComp.scaleY = scale;
+    gCoordinator.AddComponent(bg, spriteComp);
+
+    // Scrolling background
+    ScrollingBackground scrolling;
+    scrolling.scrollSpeed = 200.0f;
+    scrolling.horizontal = true;
+    scrolling.loop = true;
+    scrolling.spriteWidth = texSize.x * scale;
+
+    if (isFirst) {
+        scrolling.sprite1X = 0.0f;
+        scrolling.sprite2X = scrolling.spriteWidth;
+    } else {
+        scrolling.sprite1X = scrolling.spriteWidth;
+        scrolling.sprite2X = 0.0f;
     }
 
-    float currentX = 0;
-    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
-        ECS::Entity bg = gCoordinator.CreateEntity();
-        RegisterEntity(bg);
+    gCoordinator.AddComponent(bg, scrolling);
+    gCoordinator.AddComponent(bg, Tag{"background"});
 
-        gCoordinator.AddComponent(bg, Position{currentX, y});
-
-        auto* sprite = new SFMLSprite();
-        allSprites.push_back(sprite);
-        sprite->setTexture(backgroundTiles[i].get());
-        sprite->setPosition(Vector2f(currentX, y));
-
-        Sprite spriteComp;
-        spriteComp.sprite = sprite;
-        spriteComp.layer = -10;
-        spriteComp.scaleX = scale;
-        spriteComp.scaleY = scale;
-        gCoordinator.AddComponent(bg, spriteComp);
-
-        ScrollingBackground scrolling;
-        scrolling.scrollSpeed = 200.0f;
-        scrolling.horizontal = true;
-        scrolling.loop = true;
-        scrolling.spriteWidth = totalWidth;
-        
-        gCoordinator.AddComponent(bg, scrolling);
-        gCoordinator.AddComponent(bg, Tag{"background"});
-
-        currentX += tileWidths[i];
-    }
+    return bg;
 }
 
 // Helper function to create enemy entity
@@ -570,36 +569,32 @@ int Game::Run(int argc, char* argv[])
 {
     std::cout << "R-Type Game Starting with ECS Engine (Refactored)..." << std::endl;
 
-    // Configuration variables (will be loaded from Lua)
-    int windowWidth = 1920;   // Default values
-    int windowHeight = 1080;
-    std::string windowTitle = "R-Type - ECS Version";
-
-    // Network configuration will be loaded from Lua instead of CLI arguments
-    // Legacy --network flag is still supported for backward compatibility
+    // Network mode is now OFF by default - enabled when clicking Multiplayer
     bool networkMode = false;
     std::string serverAddress = "127.0.0.1";
     short serverPort = 12345;
-    bool legacyNetworkFlag = false;
 
-    // Check for legacy --network flag (backward compatibility)
+    // Optional: Allow override to force network mode via command line
+    // Usage: ./r-type_game --network [server_ip] [port]
     if (argc > 1 && std::string(argv[1]) == "--network") {
-        legacyNetworkFlag = true;
         networkMode = true;
-        isNetworkClient = true;
         if (argc > 2) {
             serverAddress = argv[2];
+            std::cout << "[Game] Custom server address: " << serverAddress << std::endl;
         }
         if (argc > 3) {
             serverPort = static_cast<short>(std::stoi(argv[3]));
+            std::cout << "[Game] Custom server port: " << serverPort << std::endl;
         }
-        std::cout << "[Game] Legacy --network flag detected. Server: " << serverAddress << ":" << serverPort << std::endl;
-        std::cout << "[Game] Note: Consider using NetworkConfig.startMode in network_config.lua instead" << std::endl;
-        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
-    } else {
-        std::cout << "[Game] Starting in local mode. Network configuration will be loaded from Lua." << std::endl;
-        std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
     }
+
+    isNetworkClient = networkMode;
+    if (networkMode) {
+        std::cout << "[Game] Network mode ENABLED. Server: " << serverAddress << ":" << serverPort << std::endl;
+    } else {
+        std::cout << "[Game] SOLO LOCAL mode - Network DISABLED" << std::endl;
+    }
+    std::cout << "[Game] *** isNetworkClient = " << (isNetworkClient ? "TRUE" : "FALSE") << " ***" << std::endl;
 
     // Initialize ECS Coordinator
     gCoordinator.Init();
@@ -736,7 +731,7 @@ int Game::Run(int argc, char* argv[])
 
     boundarySystem = gCoordinator.RegisterSystem<BoundarySystem>();
     boundarySystem->SetCoordinator(&gCoordinator);
-    boundarySystem->SetWindowSize(static_cast<float>(windowWidth), static_cast<float>(windowHeight));
+    boundarySystem->SetWindowSize(1920.0f, 1080.0f);
     ECS::Signature boundarySig;
     boundarySig.set(gCoordinator.GetComponentType<Position>());
     boundarySig.set(gCoordinator.GetComponentType<Boundary>());
@@ -1011,29 +1006,16 @@ int Game::Run(int argc, char* argv[])
 
     std::cout << "[Game] All Systems initialized!" << std::endl;
 
-    // Network setup (can be initialized on-demand from UI)
+    // Network setup
     std::shared_ptr<NetworkClient> networkClient;
     std::shared_ptr<eng::engine::systems::NetworkSystem> networkSystem;
-    
-    // Lambda to initialize network mode dynamically
-    auto initializeNetworkMode = [&](const std::string& address, short port) {
-        if (networkClient && networkClient->isConnected()) {
-            std::cout << "[Game] Network already initialized, skipping" << std::endl;
-            return;
-        }
-        
-        std::cout << "[Game] 🌐 Initializing network mode dynamically..." << std::endl;
-        std::cout << "[Game] Connecting to " << address << ":" << port << std::endl;
-        
-        try {
-            networkClient = std::make_shared<NetworkClient>(address, port);
-            networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
-            
-            // Mark as network client
-            networkMode = true;
-            isNetworkClient = true;
 
-            // Set the NetworkClient for bindings
+    if (networkMode) {
+        try {
+            networkClient = std::make_shared<NetworkClient>(serverAddress, serverPort);
+            networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
+
+            // Set the NetworkClient for bindings (we already registered bindings earlier)
             RType::Network::NetworkBindings::SetNetworkClient(networkClient);
             std::cout << "[Game] Network client set for Lua bindings" << std::endl;
 
@@ -1041,13 +1023,15 @@ int Game::Run(int argc, char* argv[])
             networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
                 allEntities.push_back(entity);
                 
-                // Only add sprite if it doesn't already have one
+                // Only add sprite if it doesn't already have one (network entities only)
                 if (gCoordinator.HasComponent<Sprite>(entity)) {
+                    std::cout << "[Game] Entity " << entity << " already has sprite, skipping" << std::endl;
                     return;
                 }
                 
                 // Add sprite based on entity tag
                 if (!gCoordinator.HasComponent<Tag>(entity)) {
+                    std::cout << "[Game] ⚠️  Network entity " << entity << " has NO Tag component!" << std::endl;
                     return;
                 }
                 
@@ -1055,6 +1039,7 @@ int Game::Run(int argc, char* argv[])
                 std::cout << "[Game] 🎨 Creating sprite for network entity " << entity << " (Tag: " << tag.name << ")" << std::endl;
                     
                 if (tag.name == "Player" && gCoordinator.HasComponent<NetworkId>(entity)) {
+                    // Create player sprite
                     auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
@@ -1065,8 +1050,10 @@ int Game::Run(int argc, char* argv[])
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
                     gCoordinator.AddComponent(entity, spriteComp);
+                    std::cout << "[Game] Created player sprite for entity " << entity << " (line " << (int)netId.playerLine << ")" << std::endl;
                 }
                 else if (tag.name == "Enemy") {
+                    // Create enemy sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(textureMap["enemy"]);
@@ -1079,6 +1066,7 @@ int Game::Run(int argc, char* argv[])
                     spriteComp.scaleY = 2.5f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
+                    // Add animation for enemy (8 frames horizontally)
                     Animation anim;
                     anim.frameCount = 8;
                     anim.currentFrame = 0;
@@ -1087,62 +1075,72 @@ int Game::Run(int argc, char* argv[])
                     anim.loop = true;
                     anim.frameWidth = 33;
                     anim.frameHeight = 32;
-                    anim.startX = 0;
+                    anim.startX = 0;  // Start at frame 0 - les 8 premières frames
                     anim.startY = 0;
-                    anim.spacing = 0;
+                    anim.spacing = 0;  // Frames are adjacent (no gap between them)
                     gCoordinator.AddComponent(entity, anim);
+                    
+                    std::cout << "[Game] Created enemy sprite for entity " << entity << " with animation" << std::endl;
                 }
                 else if (tag.name == "PlayerBullet") {
+                    // Create player missile sprite
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(missileTexture.get());
-                    IntRect rect(245, 85, 20, 20);
+                    IntRect rect(245, 85, 20, 20);  // Correct rect from CreateMissile!
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 3.0f;
+                    spriteComp.scaleX = 3.0f;  // Same as local mode
                     spriteComp.scaleY = 3.0f;
                     gCoordinator.AddComponent(entity, spriteComp);
+                    std::cout << "[Game] Created player bullet sprite for entity " << entity << std::endl;
                 }
                 else if (tag.name == "EnemyBullet") {
+                    // Create enemy bullet sprite - orange balls with animation
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(enemyBulletTexture.get());
-                    IntRect rect(135, 0, 17, 17);
+                    IntRect rect(135, 0, 17, 17);  // First frame position (17x17 frames)
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 4.0f;
+                    spriteComp.scaleX = 4.0f;  // Scale for visibility
                     spriteComp.scaleY = 4.0f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
+                    // Add animation - 4 frames of orange balls (17x17 each)
                     Animation anim;
                     anim.frameTime = 0.1f;
                     anim.currentFrame = 0;
                     anim.frameCount = 4;
                     anim.loop = true;
-                    anim.frameWidth = 17;
+                    anim.frameWidth = 17;   // 17 pixels per frame (includes 1px padding)
                     anim.frameHeight = 17;
                     anim.startX = 135;
                     anim.startY = 0;
                     anim.spacing = 0;
                     gCoordinator.AddComponent(entity, anim);
+                    
+                    std::cout << "[Game] Created enemy bullet sprite for entity " << entity << " with animation (17x17)" << std::endl;
                 }
                 else if (tag.name == "Explosion") {
+                    // Create explosion sprite with animation
                     auto* sprite = new SFMLSprite();
                     allSprites.push_back(sprite);
                     sprite->setTexture(explosionTexture.get());
-                    IntRect rect(130, 1, 33, 32);
+                    IntRect rect(130, 1, 33, 32);  // Match CreateExplosion!
                     sprite->setTextureRect(rect);
                     Sprite spriteComp;
                     spriteComp.sprite = sprite;
                     spriteComp.textureRect = rect;
-                    spriteComp.scaleX = 2.5f;
+                    spriteComp.scaleX = 2.5f;  // Match CreateExplosion scale
                     spriteComp.scaleY = 2.5f;
                     gCoordinator.AddComponent(entity, spriteComp);
                     
+                    // Add animation - Match CreateExplosion parameters
                     Animation anim;
                     anim.frameCount = 6;
                     anim.frameTime = 0.08f;
@@ -1155,23 +1153,36 @@ int Game::Run(int argc, char* argv[])
                     anim.spacing = 1.5;
                     gCoordinator.AddComponent(entity, anim);
                     
+                    // Add lifetime - very short
                     gCoordinator.AddComponent(entity, Lifetime{0.05f});
+                    
+                    std::cout << "[Game] Created explosion sprite for entity " << entity << std::endl;
+                }
+                else {
+                    std::cout << "[Game] ⚠️  Unknown tag '" << tag.name << "' for entity " << entity << ", no sprite created" << std::endl;
                 }
             });
 
+            // Set callback for entity destruction
+            // NOTE: We do NOT create explosions here on the client side!
+            // The server creates explosion entities and sends them to clients.
             networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
-                std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed" << std::endl;
+                std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed by server" << std::endl;
+                // Just log, don't create explosions - server handles that
             });
 
+            // Set callback for game start
             networkSystem->setGameStartCallback([this]() {
-                std::cout << "[Game] GAME_START received from NetworkSystem" << std::endl;
+                std::cout << "[Game] GAME_START received - transitioning to Playing state" << std::endl;
                 GameStateManager::Instance().SetState(GameState::Playing);
             });
 
             networkClient->start();
             networkClient->sendHello();
-            
-            std::cout << "[Game] Waiting for SERVER_WELCOME..." << std::endl;
+
+            std::cout << "[Game] Network client started, waiting for SERVER_WELCOME..." << std::endl;
+
+            // Wait for server welcome (with timeout)
             auto startTime = std::chrono::steady_clock::now();
             bool connected = false;
             while (!connected) {
@@ -1182,7 +1193,7 @@ int Game::Run(int argc, char* argv[])
                         if (packet.payload.size() >= 1) {
                             uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
                             networkSystem->setLocalPlayerId(playerId);
-                            std::cout << "[Game] ✅ Connected! Player ID: " << (int)playerId << std::endl;
+                            std::cout << "[Game] Connected! Player ID: " << (int)playerId << std::endl;
                             connected = true;
                         }
                     }
@@ -1190,40 +1201,21 @@ int Game::Run(int argc, char* argv[])
 
                 auto now = std::chrono::steady_clock::now();
                 if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 5) {
-                    std::cerr << "[Game] ⚠️  Connection timeout!" << std::endl;
-                    networkClient.reset();
-                    networkSystem.reset();
-                    networkMode = false;
-                    isNetworkClient = false;
-                    return;
+                    std::cerr << "[Game] Connection timeout!" << std::endl;
+                    return 1;
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            
-            std::cout << "[Game] ✅ Network mode successfully initialized!" << std::endl;
-            
         } catch (const std::exception& e) {
-            std::cerr << "[Game] ❌ Network initialization error: " << e.what() << std::endl;
-            networkClient.reset();
-            networkSystem.reset();
-            networkMode = false;
-            isNetworkClient = false;
-        }
-    };
-
-    if (networkMode) {
-        // Initialize network from command line arguments
-        initializeNetworkMode(serverAddress, serverPort);
-        if (!networkClient || !networkClient->isConnected()) {
-            std::cerr << "[Game] Failed to initialize network mode" << std::endl;
+            std::cerr << "[Game] Network error: " << e.what() << std::endl;
             return 1;
         }
     }
 
     // Create window and renderer
     SFMLWindow window;
-    window.create(windowWidth, windowHeight, windowTitle);
+    window.create(1920, 1080, "R-Type - ECS Version");
 
     SFMLRenderer renderer(&window.getSFMLWindow());
 
@@ -1293,91 +1285,13 @@ int Game::Run(int argc, char* argv[])
         gameFontLoaded = true;
         std::cout << "[Game] Loaded game font: " << fontPath << std::endl;
     }
-    
-    // ========================================
-    // INITIALIZE DEVELOPER TOOLS
-    // ========================================
-    std::cout << "🛠️  Initializing Developer Tools..." << std::endl;
-    
-    devConsole = std::make_unique<rtype::core::DevConsole>();
-    profilerOverlay = std::make_unique<rtype::core::ProfilerOverlay>();
-    
-    // Register console commands
-    devConsole->registerCommand("help", "Show available commands", "help", 
-        [this](const std::vector<std::string>& args) -> std::string {
-            return "Available Commands:\n"
-                   "  help - Show this help message\n"
-                   "  spawn <enemy_type> - Spawn an enemy\n"
-                   "  health <value> - Set player health\n"
-                   "  win - Trigger win condition\n"
-                   "  clear - Clear console";
-        });
-    
-    devConsole->registerCommand("spawn", "Spawn an enemy", "spawn <enemy_type>",
-        [this](const std::vector<std::string>& args) -> std::string {
-            if (args.size() < 2) {
-                return "Usage: spawn <enemy_type>";
-            }
-            std::string enemyType = args[1];
-            CreateEnemy(800.0f, 540.0f, enemyType);
-            return "Spawned enemy: " + enemyType;
-        });
-    
-    devConsole->registerCommand("health", "Set player health", "health <value>",
-        [this](const std::vector<std::string>& args) -> std::string {
-            if (args.size() < 2) {
-                return "Usage: health <value>";
-            }
-            int healthValue = std::stoi(args[1]);
-            // Find player entity and set health
-            for (auto entity : allEntities) {
-                if (gCoordinator.HasComponent<ShootEmUp::Components::PlayerTag>(entity) && 
-                    gCoordinator.HasComponent<Health>(entity)) {
-                    auto& health = gCoordinator.GetComponent<Health>(entity);
-                    health.current = healthValue;
-                    health.max = std::max(health.max, healthValue);
-                    return "Player health set to: " + std::to_string(healthValue);
-                }
-            }
-            return "Error: Player not found";
-        });
-    
-    devConsole->registerCommand("win", "Trigger win condition", "win",
-        [this](const std::vector<std::string>& args) -> std::string {
-            gamePlayTime = WIN_TIME_THRESHOLD;
-            return "Win condition triggered!";
-        });
-    
-    devConsole->registerCommand("clear", "Clear console", "clear",
-        [this](const std::vector<std::string>& args) -> std::string {
-            devConsole->clear();
-            return "";
-        });
-    
-    std::cout << "[Game] Developer Tools initialized" << std::endl;
 
-    sf::Image bgImage;
-    if (!bgImage.loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
+    // Load textures using resolved asset paths
+    backgroundTexture = std::make_unique<SFMLTexture>();
+    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
         return 1;
     }
-    unsigned int maxTextureSize = sf::Texture::getMaximumSize();
-    if (maxTextureSize < 512) maxTextureSize = 1024;
-    unsigned int tileWidth = std::min(maxTextureSize, 1024u);
-    unsigned int imgWidth = bgImage.getSize().x;
-    unsigned int imgHeight = bgImage.getSize().y;
-
-    backgroundTiles.clear();
-    for (unsigned int x = 0; x < imgWidth; x += tileWidth) {
-        unsigned int currentTileWidth = std::min(tileWidth, imgWidth - x);
-        auto tex = std::make_unique<SFMLTexture>();
-        if (!tex->loadFromImage(bgImage, sf::IntRect(x, 0, currentTileWidth, imgHeight))) {
-            std::cerr << "Error: Could not create background tile at x=" << x << std::endl;
-            return 1;
-        }
-        backgroundTiles.push_back(std::move(tex));
-    }
-    std::cout << "[Game] Background split into " << backgroundTiles.size() << " tiles (MAX_TEXTURE_SIZE=" << maxTextureSize << ")" << std::endl;
 
     playerTexture = std::make_unique<SFMLTexture>();
     if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
@@ -1391,12 +1305,13 @@ int Game::Run(int argc, char* argv[])
         return 1;
     }
 
+    // Note: enemy textures are loaded per-enemy from Lua config later
+    // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
     if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
         std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
-
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
@@ -1413,23 +1328,29 @@ int Game::Run(int argc, char* argv[])
         shootSound.setVolume(80.f);
     }
 
+    // Load menu music (from feature/game_menu)
     std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
     std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
     
     if (!menuMusicBuffer.loadFromFile(menuMusicPath)) {
         std::cerr << "ERROR: Could not load menu music from: " << menuMusicPath << std::endl;
+        std::cerr << "       Please verify the file exists and is readable." << std::endl;
     } else {
         menuMusic.setBuffer(menuMusicBuffer);
-        menuMusic.setVolume(70.f);
-        menuMusic.setLoop(true);
+        menuMusic.setVolume(70.f);  // Set to match default in Lua (70%)
+        menuMusic.setLoop(true);  // Loop continuously
         
+        // Set static pointers for Lua access
         g_menuMusic = &menuMusic;
         g_menuMusicBuffer = &menuMusicBuffer;
         
         std::cout << "[Game] ✓ Menu music loaded successfully from: " << menuMusicPath << std::endl;
+        std::cout << "[Game]   Volume: 70%, Loop: enabled" << std::endl;
         
+        // Start menu music immediately since we're in MainMenu state
         if (GameStateManager::Instance().GetState() == GameState::MainMenu) {
             menuMusic.play();
+            std::cout << "[Game] ♪ Menu music started!" << std::endl;
         }
     }
 
@@ -1448,66 +1369,8 @@ int Game::Run(int argc, char* argv[])
     } else {
         std::cout << "[Game] ✓ init.lua loaded - All configurations initialized" << std::endl;
         
-        // Read network configuration from Lua (if not overridden by legacy --network flag)
-        sol::state& lua = luaState.GetState();
-        if (!legacyNetworkFlag) {
-            try {
-                // Get network configuration from Lua
-                sol::table networkConfig = lua["NetworkConfig"];
-                if (networkConfig.valid()) {
-                    std::string startMode = networkConfig["startMode"].get<sol::optional<std::string>>().value_or("local");
-                    bool autoConnect = networkConfig["autoConnect"].get<sol::optional<bool>>().value_or(false);
-                    
-                    if (startMode == "network") {
-                        networkMode = true;
-                        
-                        // Get server configuration
-                        sol::table serverConfig = networkConfig["server"];
-                        if (serverConfig.valid()) {
-                            serverAddress = serverConfig["defaultAddress"].get<sol::optional<std::string>>().value_or("127.0.0.1");
-                            serverPort = serverConfig["defaultPort"].get<sol::optional<int>>().value_or(12345);
-                        }
-                        
-                        if (autoConnect) {
-                            isNetworkClient = true;
-                            std::cout << "[Game] NetworkConfig: Auto-connecting to " << serverAddress << ":" << serverPort << std::endl;
-                        } else {
-                            std::cout << "[Game] NetworkConfig: Network mode enabled, manual connection required" << std::endl;
-                        }
-                    } else {
-                        std::cout << "[Game] NetworkConfig: Starting in local mode (can connect via UI)" << std::endl;
-                    }
-                } else {
-                    std::cout << "[Game] Warning: NetworkConfig not found in Lua, using defaults" << std::endl;
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "[Game] Error reading NetworkConfig: " << e.what() << std::endl;
-            }
-        }
-        
-        // Read window/game configuration from Lua
-        try {
-            sol::table gameConfig = lua["GameConfig"];
-            if (gameConfig.valid()) {
-                sol::table windowConfig = gameConfig["window"];
-                if (windowConfig.valid()) {
-                    windowWidth = windowConfig["width"].get<sol::optional<int>>().value_or(1920);
-                    windowHeight = windowConfig["height"].get<sol::optional<int>>().value_or(1080);
-                    windowTitle = windowConfig["title"].get<sol::optional<std::string>>().value_or("R-Type - ECS Version");
-                    
-                    std::cout << "[Game] GameConfig: Window " << windowWidth << "x" << windowHeight << std::endl;
-                    std::cout << "[Game] GameConfig: Title '" << windowTitle << "'" << std::endl;
-                } else {
-                    std::cout << "[Game] Warning: GameConfig.window not found, using defaults" << std::endl;
-                }
-            } else {
-                std::cout << "[Game] Warning: GameConfig not found, using defaults" << std::endl;
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[Game] Error reading GameConfig: " << e.what() << std::endl;
-        }
-        
         // Initialize mode based on network setting
+        sol::state& lua = luaState.GetState();
         if (networkMode) {
             sol::protected_function initNetwork = lua["InitNetworkMode"];
             if (initNetwork.valid()) {
@@ -1730,7 +1593,7 @@ int Game::Run(int argc, char* argv[])
     std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
 
     // Core textures we already loaded earlier
-    if (!backgroundTiles.empty()) textureMap["background"] = backgroundTiles[0].get();
+    textureMap["background"] = backgroundTexture.get();
     textureMap["player"] = playerTexture.get();
     textureMap["missile"] = missileTexture.get();
     textureMap["explosion"] = explosionTexture.get();
@@ -1739,9 +1602,8 @@ int Game::Run(int argc, char* argv[])
     // Load enemy-specific textures referenced in EnemiesConfig (if available)
     try {
         sol::state& lua = luaState.GetState();
-        sol::optional<sol::table> enemiesConfigOpt = lua["EnemiesConfig"];
-        if (enemiesConfigOpt) {
-            sol::table& enemiesConfig = enemiesConfigOpt.value();
+        sol::table enemiesConfig = lua["EnemiesConfig"];
+        if (enemiesConfig.valid()) {
             for (auto& kv : enemiesConfig) {
                 // kv.first = key, kv.second = value
                 sol::object key = kv.first;
@@ -1841,7 +1703,7 @@ int Game::Run(int argc, char* argv[])
     bool playerCreated = false;
     
     // Only create background for now - player will be created when game starts
-    CreateBackground(0.0f, 0.0f, static_cast<float>(windowHeight), true);
+    CreateBackground(0.0f, 0.0f, 1080.0f, true);
 
     // Game variables using engine abstractions
     eng::engine::Clock clock;
@@ -1990,63 +1852,6 @@ int Game::Run(int argc, char* argv[])
         }
         
         // ========================================
-        // WIN CONDITION TIMER (30 seconds)
-        // ========================================
-        if (currentState == GameState::Playing && !winConditionTriggered) {
-            gamePlayTime += deltaTime;
-            
-            // Check if 30 seconds have elapsed
-            if (gamePlayTime >= WIN_TIME_THRESHOLD) {
-                std::cout << "[Game] 🎉 WIN! Player survived for " << gamePlayTime << " seconds!" << std::endl;
-                winConditionTriggered = true;
-                winDisplayTimer = 0.0f;
-                
-                // Transition to Victory state
-                GameStateManager::Instance().SetState(GameState::Victory);
-                
-                // Play victory music/sound if available
-                sol::state& lua = luaState.GetState();
-                sol::protected_function onVictory = lua["OnVictory"];
-                if (onVictory.valid()) {
-                    onVictory();
-                }
-            }
-        }
-        
-        // Handle victory display timer (show win screen for a few seconds, then return to menu)
-        if (currentState == GameState::Victory && winConditionTriggered) {
-            winDisplayTimer += deltaTime;
-            
-            if (winDisplayTimer >= WIN_DISPLAY_DURATION) {
-                std::cout << "[Game] Returning to main menu after victory..." << std::endl;
-                
-                // Reset game state
-                winConditionTriggered = false;
-                gamePlayTime = 0.0f;
-                winDisplayTimer = 0.0f;
-                playerCreated = false;
-                
-                // Destroy all game entities except backgrounds
-                for (auto entity : allEntities) {
-                    if (gCoordinator.HasComponent<Tag>(entity)) {
-                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
-                        if (tag.name != "Background") {
-                            entitiesToDestroy.push_back(entity);
-                        }
-                    }
-                }
-                
-                // Return to main menu
-                GameStateManager::Instance().SetState(GameState::MainMenu);
-            }
-        }
-        
-        // Reset timer when leaving Playing state
-        if (currentState != GameState::Playing && gamePlayTime > 0.0f && !winConditionTriggered) {
-            gamePlayTime = 0.0f;
-        }
-        
-        // ========================================
         // RUNTIME NETWORK CLIENT UPDATE (for UI connections without --network flag)
         // ========================================
         // If we have a NetworkClient created at runtime (not from --network flag),
@@ -2055,184 +1860,8 @@ int Game::Run(int argc, char* argv[])
         if (!networkMode) {
             auto runtimeClient = RType::Network::NetworkBindings::GetNetworkClient();
             if (runtimeClient && runtimeClient->isConnected()) {
-                // Initialize network system if needed (first time we have a connected runtime client)
-                if (!networkSystem && !networkClient) {
-                    std::cout << "[Game] 🌐 Runtime client detected - initializing network mode..." << std::endl;
-                    
-                    // Assign the runtime client
-                    networkClient = runtimeClient;
-                    networkSystem = std::make_shared<eng::engine::systems::NetworkSystem>(&gCoordinator, networkClient);
-                    
-                    // Mark as network client
-                    networkMode = true;
-                    isNetworkClient = true;
-                    
-                    // Setup all callbacks (same as in initializeNetworkMode lambda)
-                    networkSystem->setEntityCreatedCallback([this](ECS::Entity entity) {
-                        allEntities.push_back(entity);
-                        
-                        if (gCoordinator.HasComponent<Sprite>(entity)) {
-                            return;
-                        }
-                        
-                        if (!gCoordinator.HasComponent<Tag>(entity)) {
-                            return;
-                        }
-                        
-                        auto& tag = gCoordinator.GetComponent<Tag>(entity);
-                        std::cout << "[Game] 🎨 Creating sprite for network entity " << entity << " (Tag: " << tag.name << ")" << std::endl;
-                            
-                        if (tag.name == "Player" && gCoordinator.HasComponent<NetworkId>(entity)) {
-                            auto& netId = gCoordinator.GetComponent<NetworkId>(entity);
-                            auto* sprite = new SFMLSprite();
-                            allSprites.push_back(sprite);
-                            sprite->setTexture(playerTexture.get());
-                            IntRect rect(33 * 2, netId.playerLine * 17, 33, 17);
-                            sprite->setTextureRect(rect);
-                            Sprite spriteComp;
-                            spriteComp.sprite = sprite;
-                            spriteComp.textureRect = rect;
-                            gCoordinator.AddComponent(entity, spriteComp);
-                        }
-                        else if (tag.name == "Enemy") {
-                            auto* sprite = new SFMLSprite();
-                            allSprites.push_back(sprite);
-                            sprite->setTexture(textureMap["enemy"]);
-                            IntRect rect(0, 0, 33, 36);
-                            sprite->setTextureRect(rect);
-                            Sprite spriteComp;
-                            spriteComp.sprite = sprite;
-                            spriteComp.textureRect = rect;
-                            spriteComp.scaleX = 2.5f;
-                            spriteComp.scaleY = 2.5f;
-                            gCoordinator.AddComponent(entity, spriteComp);
-                            
-                            Animation anim;
-                            anim.frameCount = 8;
-                            anim.currentFrame = 0;
-                            anim.frameTime = 0.1f;
-                            anim.currentTime = 0.0f;
-                            anim.loop = true;
-                            anim.frameWidth = 33;
-                            anim.frameHeight = 32;
-                            anim.startX = 0;
-                            anim.startY = 0;
-                            anim.spacing = 0;
-                            gCoordinator.AddComponent(entity, anim);
-                        }
-                        else if (tag.name == "PlayerBullet") {
-                            auto* sprite = new SFMLSprite();
-                            allSprites.push_back(sprite);
-                            sprite->setTexture(missileTexture.get());
-                            IntRect rect(245, 85, 20, 20);
-                            sprite->setTextureRect(rect);
-                            Sprite spriteComp;
-                            spriteComp.sprite = sprite;
-                            spriteComp.textureRect = rect;
-                            spriteComp.scaleX = 3.0f;
-                            spriteComp.scaleY = 3.0f;
-                            gCoordinator.AddComponent(entity, spriteComp);
-                        }
-                        else if (tag.name == "EnemyBullet") {
-                            auto* sprite = new SFMLSprite();
-                            allSprites.push_back(sprite);
-                            sprite->setTexture(enemyBulletTexture.get());
-                            IntRect rect(135, 0, 17, 17);
-                            sprite->setTextureRect(rect);
-                            Sprite spriteComp;
-                            spriteComp.sprite = sprite;
-                            spriteComp.textureRect = rect;
-                            spriteComp.scaleX = 4.0f;
-                            spriteComp.scaleY = 4.0f;
-                            gCoordinator.AddComponent(entity, spriteComp);
-                            
-                            Animation anim;
-                            anim.frameTime = 0.1f;
-                            anim.currentFrame = 0;
-                            anim.frameCount = 4;
-                            anim.loop = true;
-                            anim.frameWidth = 17;
-                            anim.frameHeight = 17;
-                            anim.startX = 135;
-                            anim.startY = 0;
-                            anim.spacing = 0;
-                            gCoordinator.AddComponent(entity, anim);
-                        }
-                        else if (tag.name == "Explosion") {
-                            auto* sprite = new SFMLSprite();
-                            allSprites.push_back(sprite);
-                            sprite->setTexture(explosionTexture.get());
-                            IntRect rect(130, 1, 33, 32);
-                            sprite->setTextureRect(rect);
-                            Sprite spriteComp;
-                            spriteComp.sprite = sprite;
-                            spriteComp.textureRect = rect;
-                            spriteComp.scaleX = 2.5f;
-                            spriteComp.scaleY = 2.5f;
-                            gCoordinator.AddComponent(entity, spriteComp);
-                            
-                            Animation anim;
-                            anim.frameCount = 6;
-                            anim.frameTime = 0.08f;
-                            anim.currentFrame = 0;
-                            anim.loop = false;
-                            anim.frameWidth = 32;
-                            anim.frameHeight = 32;
-                            anim.startX = 130;
-                            anim.startY = 1;
-                            anim.spacing = 1.5;
-                            gCoordinator.AddComponent(entity, anim);
-                            
-                            gCoordinator.AddComponent(entity, Lifetime{0.05f});
-                        }
-                    });
-
-                    networkSystem->setEntityDestroyedCallback([this](ECS::Entity entity, uint32_t networkId) {
-                        std::cout << "[Game] Network entity " << entity << " (ID: " << networkId << ") destroyed" << std::endl;
-                    });
-
-                    networkSystem->setGameStartCallback([this]() {
-                        std::cout << "[Game] GAME_START received from NetworkSystem" << std::endl;
-                        GameStateManager::Instance().SetState(GameState::Playing);
-                    });
-                    
-                    // Wait for SERVER_WELCOME to get player ID
-                    std::cout << "[Game] Waiting for SERVER_WELCOME from server..." << std::endl;
-                    auto startTime = std::chrono::steady_clock::now();
-                    bool gotPlayerId = false;
-                    while (!gotPlayerId) {
-                        networkClient->process();
-                        if (networkClient->hasReceivedPackets()) {
-                            auto packet = networkClient->getNextReceivedPacket();
-                            if (static_cast<GamePacketType>(packet.header.type) == GamePacketType::SERVER_WELCOME) {
-                                if (packet.payload.size() >= 1) {
-                                    uint8_t playerId = static_cast<uint8_t>(packet.payload[0]);
-                                    networkSystem->setLocalPlayerId(playerId);
-                                    std::cout << "[Game] ✅ Received player ID: " << (int)playerId << std::endl;
-                                    gotPlayerId = true;
-                                }
-                            }
-                        }
-
-                        auto now = std::chrono::steady_clock::now();
-                        if (std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count() > 3) {
-                            std::cout << "[Game] ⏱️  Timeout waiting for player ID (will continue anyway)" << std::endl;
-                            break;
-                        }
-
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
-                    
-                    std::cout << "[Game] ✅ Network mode fully initialized from runtime connection!" << std::endl;
-                }
-                
-                // Update network system
-                if (networkSystem) {
-                    networkSystem->Update(deltaTime);
-                } else {
-                    runtimeClient->update(deltaTime);
-                    runtimeClient->process();
-                }
+                runtimeClient->update(deltaTime);
+                runtimeClient->process();
                 activeClient = runtimeClient;  // Will process packets below
             }
         } else if (networkMode && networkSystem) {
@@ -2593,42 +2222,6 @@ int Game::Run(int argc, char* argv[])
             if (event.type == eng::engine::EventType::Closed) {
                 window.close();
             }
-            
-            // ========================================
-            // DEVELOPER TOOLS INPUT HANDLING
-            // ========================================
-            // F1 to toggle dev console
-            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::F1) {
-                showDevConsole = !showDevConsole;
-                std::cout << "[DevTools] Console " << (showDevConsole ? "opened" : "closed") << std::endl;
-            }
-            
-            // F2 to toggle profiler overlay
-            if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::F2) {
-                showProfiler = !showProfiler;
-                std::cout << "[DevTools] Profiler " << (showProfiler ? "opened" : "closed") << std::endl;
-            }
-            
-            // Handle dev console text input
-            if (showDevConsole && devConsole) {
-                if (event.type == eng::engine::EventType::TextEntered) {
-                    if (event.text.unicode < 128) {
-                        devConsole->handleTextInput(event.text.unicode);
-                    }
-                } else if (event.type == eng::engine::EventType::KeyPressed) {
-                    // Convert our key codes to SFML key codes for special keys
-                    sf::Keyboard::Key sfmlKey = sf::Keyboard::Unknown;
-                    if (event.key.code == eng::engine::Key::Enter) sfmlKey = sf::Keyboard::Return;
-                    else if (event.key.code == eng::engine::Key::Backspace) sfmlKey = sf::Keyboard::BackSpace;
-                    else if (event.key.code == eng::engine::Key::Up) sfmlKey = sf::Keyboard::Up;
-                    else if (event.key.code == eng::engine::Key::Down) sfmlKey = sf::Keyboard::Down;
-                    else if (event.key.code == eng::engine::Key::Tab) sfmlKey = sf::Keyboard::Tab;
-                    
-                    if (sfmlKey != sf::Keyboard::Unknown) {
-                        devConsole->handleSpecialKey(sfmlKey);
-                    }
-                }
-            }
 
             // Handle Escape key for pause menu toggle
             if (event.type == eng::engine::EventType::KeyReleased && event.key.code == eng::engine::Key::Escape) {
@@ -2896,7 +2489,7 @@ int Game::Run(int argc, char* argv[])
                     if (enemyConfig.valid()) {
                         sol::protected_function createEnemy = lua["Factory"]["CreateEnemyFromConfig"];
                                 if (createEnemy.valid()) {
-                                    auto result = createEnemy(static_cast<float>(windowWidth), randomY, enemyConfig);
+                                    auto result = createEnemy(1920.0f, randomY, enemyConfig);
                                     if (result.valid()) {
                                         ECS::Entity enemy = result;
                                         if (enemy != 0) {
@@ -2906,13 +2499,13 @@ int Game::Run(int argc, char* argv[])
                                     } else {
                                         // Lua factory failed at runtime - fallback to C++ CreateEnemy
                                         std::cerr << "[Game] WARNING: Lua CreateEnemy failed, using C++ fallback" << std::endl;
-                                        ECS::Entity fallback = CreateEnemy(static_cast<float>(windowWidth), randomY, enemyType);
+                                        ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
                                         (void)fallback;
                                     }
                                 } else {
                                     // Factory function missing - fallback to C++ CreateEnemy
                                     std::cerr << "[Game] WARNING: Lua factory not available, using C++ fallback for enemy spawn" << std::endl;
-                                    ECS::Entity fallback = CreateEnemy(static_cast<float>(windowWidth), randomY, enemyType);
+                                    ECS::Entity fallback = CreateEnemy(1920.0f, randomY, enemyType);
                                     (void)fallback;
                                 }
                     }
@@ -3136,13 +2729,6 @@ int Game::Run(int argc, char* argv[])
 
         // Process destroyed entities
         ProcessDestroyedEntities();
-        
-        // ========================================
-        // UPDATE DEVELOPER TOOLS
-        // ========================================
-        if (showProfiler && profilerOverlay) {
-            profilerOverlay->update();
-        }
 
         // ========================================
         // 6. UI SYSTEM UPDATE
@@ -3174,71 +2760,9 @@ int Game::Run(int argc, char* argv[])
             //     healthBar.Render(window.getSFMLWindow());
             // }
         }
-        
-        // ========================================
-        // RENDER VICTORY SCREEN
-        // ========================================
-        if (currentState == GameState::Victory && gameFontLoaded) {
-            // Semi-transparent overlay
-            sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
-            overlay.setFillColor(sf::Color(0, 0, 0, 180));  // Dark overlay
-            window.getSFMLWindow().draw(overlay);
-            
-            // "VICTORY!" text
-            sf::Text victoryText;
-            victoryText.setFont(gameFont);
-            victoryText.setString("VICTORY!");
-            victoryText.setCharacterSize(120);
-            victoryText.setFillColor(sf::Color(255, 215, 0));  // Gold color
-            victoryText.setStyle(sf::Text::Bold);
-            
-            // Center the text
-            sf::FloatRect textBounds = victoryText.getLocalBounds();
-            victoryText.setOrigin(textBounds.left + textBounds.width / 2.0f,
-                                 textBounds.top + textBounds.height / 2.0f);
-            victoryText.setPosition(static_cast<float>(windowWidth) / 2.0f, 400.0f);
-            window.getSFMLWindow().draw(victoryText);
-            
-            // "You survived 30 seconds!" text
-            sf::Text subText;
-            subText.setFont(gameFont);
-            subText.setString("You survived 30 seconds!");
-            subText.setCharacterSize(48);
-            subText.setFillColor(sf::Color::White);
-            
-            sf::FloatRect subBounds = subText.getLocalBounds();
-            subText.setOrigin(subBounds.left + subBounds.width / 2.0f,
-                             subBounds.top + subBounds.height / 2.0f);
-            subText.setPosition(static_cast<float>(windowWidth) / 2.0f, 550.0f);
-            window.getSFMLWindow().draw(subText);
-            
-            // "Returning to menu..." text
-            sf::Text menuText;
-            menuText.setFont(gameFont);
-            menuText.setString("Returning to menu...");
-            menuText.setCharacterSize(32);
-            menuText.setFillColor(sf::Color(200, 200, 200));
-            
-            sf::FloatRect menuBounds = menuText.getLocalBounds();
-            menuText.setOrigin(menuBounds.left + menuBounds.width / 2.0f,
-                              menuBounds.top + menuBounds.height / 2.0f);
-            menuText.setPosition(static_cast<float>(windowWidth) / 2.0f, 650.0f);
-            window.getSFMLWindow().draw(menuText);
-        }
 
         // Render UI on top of game (always, so menus are visible)
         uiSystem->Render(&window);
-        
-        // ========================================
-        // RENDER DEVELOPER TOOLS (on top of everything)
-        // ========================================
-        if (showProfiler && profilerOverlay) {
-            profilerOverlay->render(window.getSFMLWindow());
-        }
-        
-        if (showDevConsole && devConsole) {
-            devConsole->render(window.getSFMLWindow());
-        }
 
         window.display();
     }

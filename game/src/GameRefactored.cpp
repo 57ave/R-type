@@ -2,14 +2,20 @@
 #include "core/GameStateCallbacks.hpp"
 #include "network/NetworkBindings.hpp"
 #include "core/Logger.hpp"
+#include <scripting/UIBindings.hpp>
 #include <components/Position.hpp>
 #include <components/Sprite.hpp>
 #include <components/ScrollingBackground.hpp>
 #include <components/Tag.hpp>
+#include <components/Animation.hpp>
+#include <components/NetworkId.hpp>
+#include <components/ShootEmUpTags.hpp>
 #include <rendering/Types.hpp>
+#include <rendering/sfml/SFMLSprite.hpp>
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <vector>
 
 
 namespace RType {
@@ -98,6 +104,11 @@ bool GameRefactored::Initialize() {
     if (!audioManager->Initialize(assetLoader->GetBasePath())) {
         logger.warning("Game", "Audio manager initialization failed, continuing without audio");
     }
+
+    // Load user settings (volumes, etc.)
+    if (audioManager && assetLoader) {
+        audioManager->LoadUserSettings(assetLoader->ResolveAssetPath("user_settings.lua"));
+    }
     
     // Input Handler
     inputHandler = std::make_shared<Core::InputHandler>();
@@ -146,6 +157,9 @@ bool GameRefactored::Initialize() {
     if (networkManager->IsConnected()) {
         gameLoop->SetNetworkSystem(networkManager->GetNetworkSystem());
     }
+    
+    // Setup collision callback (doit être fait après que les systèmes soient initialisés)
+    gameLoop->SetupCollisionCallback();
 
     // ========================================
     // SCRIPTS ET UI
@@ -160,8 +174,8 @@ bool GameRefactored::Initialize() {
         gsm.SetState(GameState::Lobby);  // Attendre la connexion en mode réseau
         logger.info("Game", "Initial game state: Lobby");
     } else {
-        gsm.SetState(GameState::Playing);  // Directement en jeu en mode solo
-        logger.info("Game", "Initial game state: Playing");
+        gsm.SetState(GameState::MainMenu);  // ✅ Démarrer au menu principal
+        logger.info("Game", "Initial game state: MainMenu");
     }
 
     // ========================================
@@ -280,19 +294,209 @@ void GameRefactored::SetupNetworkCallbacks() {
 
     auto& logger = rtype::core::Logger::getInstance();
 
-    // Callback de création d'entité
-    networkManager->SetEntityCreatedCallback([&logger](ECS::Entity entity) {
+    // Callback de création d'entité - AJOUTER SPRITES ET ANIMATIONS
+    networkManager->SetEntityCreatedCallback([this, &logger](ECS::Entity entity) {
         logger.debug("Network", "Entity created: " + std::to_string(entity));
+        
+        // Vérifier si l'entité a déjà un sprite
+        if (coordinator->HasComponent<Sprite>(entity)) {
+            return;
+        }
+        
+        // Récupérer le tag pour savoir quel type d'entité
+        if (!coordinator->HasComponent<Tag>(entity)) {
+            return;
+        }
+        
+        auto& tag = coordinator->GetComponent<Tag>(entity);
+        auto& texMap = assetLoader->GetTextureMap();
+        auto& sprites = assetLoader->GetAllSprites();
+        
+        logger.debug("Network", "Creating sprite for entity " + std::to_string(entity) + " (Tag: " + tag.name + ")");
+        
+        using namespace eng::engine::rendering;
+        using eng::engine::rendering::sfml::SFMLSprite;
+        
+        if (tag.name == "Player") {
+            auto playerTexIt = texMap.find("player");
+            if (playerTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(playerTexIt->second);
+                
+                // Récupérer la ligne du joueur depuis NetworkId si disponible
+                int playerLine = 0;
+                if (coordinator->HasComponent<NetworkId>(entity)) {
+                    auto& netId = coordinator->GetComponent<NetworkId>(entity);
+                    playerLine = netId.playerLine;
+                }
+                
+                IntRect rect(33 * 2, playerLine * 17, 33, 17);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 3.0f;
+                spriteComp.scaleY = 3.0f;
+                spriteComp.layer = 10;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Ajouter animation de state machine pour le joueur
+                StateMachineAnimation anim;
+                anim.currentColumn = 2;
+                anim.targetColumn = 2;
+                anim.transitionSpeed = 0.15f;
+                anim.spriteWidth = 33;
+                anim.spriteHeight = 17;
+                anim.currentRow = playerLine;
+                coordinator->AddComponent(entity, anim);
+                
+                logger.info("Network", "✅ Player sprite created for entity " + std::to_string(entity));
+            }
+        }
+        else if (tag.name == "Enemy") {
+            auto enemyTexIt = texMap.find("enemy");
+            if (enemyTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(enemyTexIt->second);
+                
+                IntRect rect(0, 0, 33, 32);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.5f;
+                spriteComp.scaleY = 2.5f;
+                spriteComp.layer = 5;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Ajouter animation pour l'ennemi
+                Animation anim;
+                anim.frameCount = 8;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.1f;
+                anim.currentTime = 0.0f;
+                anim.loop = true;
+                anim.frameWidth = 33;
+                anim.frameHeight = 32;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+                
+                logger.info("Network", "✅ Enemy sprite created for entity " + std::to_string(entity));
+            }
+        }
+        else if (tag.name == "PlayerBullet") {
+            auto missileTexIt = texMap.find("missile");
+            if (missileTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(missileTexIt->second);
+                
+                // Vérifier le niveau de charge pour le bon sprite
+                IntRect rect(249, 88, 16, 12);  // Missile normal
+                if (coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
+                    auto& projTag = coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(entity);
+                    if (projTag.chargeLevel > 0) {
+                        rect = IntRect(232, 103, 32, 14);  // Missile chargé
+                    }
+                }
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.0f;
+                spriteComp.scaleY = 2.0f;
+                spriteComp.layer = 8;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                logger.debug("Network", "✅ PlayerBullet sprite created for entity " + std::to_string(entity));
+            }
+        }
+        else if (tag.name == "EnemyBullet") {
+            auto missileTexIt = texMap.find("missile");
+            if (missileTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(missileTexIt->second);
+                
+                IntRect rect(200, 88, 16, 12);  // Missile ennemi
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.0f;
+                spriteComp.scaleY = 2.0f;
+                spriteComp.layer = 7;
+                coordinator->AddComponent(entity, spriteComp);
+            }
+        }
+        else if (tag.name == "Explosion") {
+            auto explosionTexIt = texMap.find("explosion");
+            if (explosionTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(explosionTexIt->second);
+                
+                IntRect rect(0, 0, 33, 30);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 3.0f;
+                spriteComp.scaleY = 3.0f;
+                spriteComp.layer = 15;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Animation d'explosion
+                Animation anim;
+                anim.frameCount = 6;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.08f;
+                anim.currentTime = 0.0f;
+                anim.loop = false;
+                anim.frameWidth = 33;
+                anim.frameHeight = 30;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+            }
+        }
     });
 
-    // Callback de destruction d'entité
-    networkManager->SetEntityDestroyedCallback([&logger](ECS::Entity entity, uint32_t /*networkId*/) {
-        logger.debug("Network", "Entity destroyed: " + std::to_string(entity));
+    // Callback de destruction d'entité - EFFET D'EXPLOSION
+    networkManager->SetEntityDestroyedCallback([this, &logger](ECS::Entity entity, uint32_t networkId) {
+        logger.debug("Network", "Entity destroyed: " + std::to_string(entity) + " (netId: " + std::to_string(networkId) + ")");
+        
+        // Créer un effet d'explosion à la position de l'entité si c'est un ennemi ou joueur
+        if (coordinator->HasComponent<Tag>(entity)) {
+            auto& tag = coordinator->GetComponent<Tag>(entity);
+            
+            if (tag.name == "Enemy" || tag.name == "Player") {
+                // Jouer le son d'explosion
+                if (audioManager) {
+                    audioManager->PlaySFX("explosion");
+                }
+            }
+        }
     });
 
     // Callback de début de partie
-    networkManager->SetGameStartCallback([]() {
+    networkManager->SetGameStartCallback([this]() {
         GameStateManager::Instance().SetState(GameState::Playing);
+        
+        // Jouer la musique de jeu
+        if (audioManager) {
+            audioManager->FadeToMusic("stage_one_music", 1.5f);
+        }
     });
 
     // Callback de statut de connexion
@@ -355,12 +559,123 @@ void GameRefactored::SetupLuaBindings() {
         RType::Network::NetworkBindings::SetNetworkClient(networkManager->GetNetworkClient());
     }
 
+    // Override Network.Connect to use the refactored Core::NetworkManager + NetworkSystem.
+    // This ensures incoming packets are processed and forwarded to Lua callbacks.
+    auto netTable = lua["Network"].get_or_create<sol::table>();
+    netTable["Connect"] = [this](const std::string& host, int port) {
+        if (!luaState) {
+            std::cerr << "[GameRefactored] LuaState not available" << std::endl;
+            return;
+        }
+
+        sol::state& lua = luaState->GetState();
+        if (!networkManager || !coordinator) {
+            std::cerr << "[GameRefactored] NetworkManager/Coordinator not available" << std::endl;
+            return;
+        }
+
+        if (host.empty() || port <= 0) {
+            std::cerr << "[GameRefactored] Invalid host/port" << std::endl;
+            return;
+        }
+
+        // If already connected, just notify UI.
+        if (networkManager->IsConnected()) {
+            if (gameLoop) {
+                gameLoop->SetNetworkSystem(networkManager->GetNetworkSystem());
+                gameLoop->SetNetworkMode(true);
+            }
+            RType::Network::NetworkBindings::SetNetworkClient(networkManager->GetNetworkClient());
+
+            sol::protected_function onConnected = lua["OnConnected"];
+            if (onConnected.valid()) {
+                onConnected(host, port);
+            }
+            GameStateManager::Instance().SetState(GameState::Lobby);
+            return;
+        }
+
+        const bool ok = networkManager->ConnectToServer(host, static_cast<short>(port), coordinator.get());
+        if (!ok) {
+            std::cerr << "[GameRefactored] Connection failed" << std::endl;
+            return;
+        }
+
+        networkMode = true;
+        isNetworkClient = true;
+
+        // Hook the live client/system into the game loop and Lua bindings.
+        if (gameLoop) {
+            gameLoop->SetNetworkSystem(networkManager->GetNetworkSystem());
+            gameLoop->SetNetworkMode(true);
+        }
+        RType::Network::NetworkBindings::SetNetworkClient(networkManager->GetNetworkClient());
+
+        // Notify Lua UI
+        sol::protected_function onConnected = lua["OnConnected"];
+        if (onConnected.valid()) {
+            auto res = onConnected(host, port);
+            if (!res.valid()) {
+                sol::error err = res;
+                std::cerr << "[GameRefactored] Lua OnConnected error: " << err.what() << std::endl;
+            }
+        }
+
+        // Lobby is the multiplayer/menu state.
+        GameStateManager::Instance().SetState(GameState::Lobby);
+    };
+
+    // Settings: apply resolution/fullscreen (used by ui_init.lua)
+    lua["ApplyResolution"] = [this](int resolutionIndex, bool fullscreen) {
+        if (!window) return;
+
+        static int lastAppliedResolution = -1;
+        static bool lastAppliedFullscreen = false;
+
+        if (resolutionIndex == lastAppliedResolution && fullscreen == lastAppliedFullscreen) {
+            return;
+        }
+
+        const std::vector<std::pair<uint32_t, uint32_t>> resolutions = {
+            {1920, 1080},
+            {1280, 720},
+            {1600, 900}
+        };
+
+        if (resolutionIndex < 0 || resolutionIndex >= static_cast<int>(resolutions.size())) {
+            std::cerr << "[GameRefactored] Invalid resolution index: " << resolutionIndex << std::endl;
+            return;
+        }
+
+        auto [w, h] = resolutions[resolutionIndex];
+
+        if (fullscreen) {
+            windowWidth = static_cast<int>(w);
+            windowHeight = static_cast<int>(h);
+            window->setSize(w, h);
+            window->setFullscreen(true);
+        } else {
+            windowWidth = static_cast<int>(w);
+            windowHeight = static_cast<int>(h);
+            window->setSize(w, h);
+            window->setFullscreen(false);
+        }
+
+        if (gameplayManager) {
+            gameplayManager->SetWindowSize(static_cast<float>(w), static_cast<float>(h));
+        }
+
+        lastAppliedResolution = resolutionIndex;
+        lastAppliedFullscreen = fullscreen;
+    };
+
     // Bindings pour l'audio
     SetupAudioBindings();
-
+    
     // Bindings pour l'UI
     if (uiSystem) {
         uiSystem->SetLuaState(&lua);
+        Scripting::UIBindings::RegisterAll(lua, uiSystem.get());
     }
 
     // Callbacks de gestion d'état
@@ -385,6 +700,24 @@ void GameRefactored::SetupLuaBindings() {
         if (!gameplayManager) return 0;
         ECS::Entity enemy = gameplayManager->CreateEnemy(x, y, pattern, type);
         return static_cast<int>(enemy);
+    };
+    
+    gameNamespace["CreateMissile"] = [this](float x, float y, bool isCharged, int chargeLevel) -> int {
+        if (!gameplayManager) return 0;
+        ECS::Entity missile = gameplayManager->CreateMissile(x, y, isCharged, chargeLevel);
+        return static_cast<int>(missile);
+    };
+    
+    gameNamespace["CreateExplosion"] = [this](float x, float y) -> int {
+        if (!gameplayManager) return 0;
+        ECS::Entity explosion = gameplayManager->CreateExplosion(x, y);
+        return static_cast<int>(explosion);
+    };
+    
+    gameNamespace["CreateEnemyMissile"] = [this](float x, float y) -> int {
+        if (!gameplayManager) return 0;
+        ECS::Entity missile = gameplayManager->CreateEnemyMissile(x, y);
+        return static_cast<int>(missile);
     };
 
     // Chemin de base des assets pour Lua
@@ -417,6 +750,22 @@ void GameRefactored::SetupAudioBindings() {
     audioNamespace["PlayMusic"] = [this](const std::string& name, bool loop) {
         audioManager->PlayMusic(name, loop);
     };
+    
+    audioNamespace["FadeToMusic"] = [this](const std::string& name, float duration) {
+        audioManager->FadeToMusic(name, duration);
+    };
+    
+    audioNamespace["StopMusic"] = [this]() {
+        audioManager->StopMusic();
+    };
+    
+    audioNamespace["PauseMusic"] = [this]() {
+        audioManager->PauseMusic();
+    };
+    
+    audioNamespace["ResumeMusic"] = [this]() {
+        audioManager->ResumeMusic();
+    };
 
     audioNamespace["PlaySFX"] = [this](const std::string& name, float volumeMult) {
         audioManager->PlaySFX(name, volumeMult);
@@ -429,6 +778,14 @@ void GameRefactored::SetupAudioBindings() {
     audioNamespace["SetSFXVolume"] = [this](float volume) {
         audioManager->SetSFXVolume(volume);
     };
+    
+    audioNamespace["GetMusicVolume"] = [this]() -> float {
+        return audioManager->GetMusicVolume();
+    };
+    
+    audioNamespace["GetSFXVolume"] = [this]() -> float {
+        return audioManager->GetSFXVolume();
+    };
 
     // Contrôles de contexte musical
     audioNamespace["SetStage"] = [this](int stage) {
@@ -438,16 +795,34 @@ void GameRefactored::SetupAudioBindings() {
     audioNamespace["OnBossSpawned"] = [this]() {
         audioManager->OnBossSpawned();
     };
+    
+    audioNamespace["OnBossDefeated"] = [this]() {
+        audioManager->OnBossDefeated();
+    };
+    
+    audioNamespace["OnGameOver"] = [this]() {
+        audioManager->OnGameOver();
+    };
 
     audioNamespace["OnVictory"] = [this]() {
         audioManager->OnVictory();
     };
+    
+    std::cout << "[GameRefactored] Audio bindings configured" << std::endl;
 }
 
 void GameRefactored::SetupGameStateBindings() {
     if (!luaState) return;
 
     sol::state& lua = luaState->GetState();
+    
+    // Difficulty callback
+    lua["OnDifficultyChanged"] = [this](int index) {
+        std::vector<std::string> difficulties = {"easy", "normal", "hard"};
+        if (index >= 0 && index < 3 && gameplayManager) {
+            gameplayManager->LoadDifficulty(difficulties[index]);
+        }
+    };
     
     // Créer la table GameState pour Lua
     auto gameStateTable = lua["GameState"].get_or_create<sol::table>();
@@ -498,6 +873,18 @@ void GameRefactored::SetupGameStateBindings() {
             }
         }
     };
+
+    // ✅ Reset game state for retry/restart
+    gameStateTable["Reset"] = [this]() {
+        std::cout << "[GameState] Reset called - cleaning up game entities" << std::endl;
+        if (gameLoop) {
+            gameLoop->ResetGameState();
+        }
+        // Also reset gameplay manager entities
+        if (gameplayManager) {
+            gameplayManager->ProcessDestroyedEntities();
+        }
+    };
 }
 
 void GameRefactored::InitializeUI() {
@@ -530,11 +917,12 @@ void GameRefactored::InitializeWorld() {
         return;
     }
 
-    // Créer 2 backgrounds pour le scrolling infini
+    // Créer 2 sprites de background pour le parallaxe infini
+    // Ils doivent être côte à côte pour créer un scrolling continu
     for (int i = 0; i < 2; ++i) {
         ECS::Entity bg = coordinator->CreateEntity();
 
-        // Position
+        // Position : sprite 0 à x=0, sprite 1 à x=windowWidth
         Position pos;
         pos.x = static_cast<float>(i * windowWidth);
         pos.y = 0.0f;
@@ -555,13 +943,11 @@ void GameRefactored::InitializeWorld() {
         spriteComp.scaleY = static_cast<float>(windowHeight) / backgroundTexture->getSize().y;
         coordinator->AddComponent(bg, spriteComp);
 
-        // ScrollingBackground component
+        // ScrollingBackground component - Configuration pour parallaxe infini
         ::ScrollingBackground scrollComp;
-        scrollComp.scrollSpeed = 100.0f;  // Pixels per second
+        scrollComp.scrollSpeed = 50.0f;  // Vitesse réduite pour un meilleur effet
         scrollComp.horizontal = true;
         scrollComp.loop = true;
-        scrollComp.sprite1X = pos.x;
-        scrollComp.sprite2X = pos.x;
         scrollComp.spriteWidth = static_cast<float>(windowWidth);
         coordinator->AddComponent(bg, scrollComp);
 

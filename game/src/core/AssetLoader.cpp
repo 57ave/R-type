@@ -210,16 +210,19 @@ eng::engine::SoundBuffer* AssetLoader::GetSoundBuffer(const std::string& name) {
 bool AssetLoader::PreloadAllSounds() {
     LOG_INFO("AssetLoader", "Preloading all sounds...");
     
-    // Liste des sons de base à précharger
+    // Liste des sons de base à précharger (SFX)
     struct SoundInfo {
         std::string name;
         std::string path;
     };
     
     std::vector<SoundInfo> defaultSounds = {
+        // SFX dans vfx/
         {"shoot", "game/assets/vfx/shoot.ogg"},
-        {"explosion", "game/assets/vfx/Boom.ogg"},  // Changé de explosion.ogg à Boom.ogg
-        {"menu", "game/assets/sounds/Title.ogg"}
+        {"explosion", "game/assets/vfx/Boom.ogg"},
+        {"damage", "game/assets/vfx/damage.ogg"},
+        {"laser_bot", "game/assets/vfx/laser_bot.ogg"},
+        {"multi_laser_bot", "game/assets/vfx/multi_laser_bot.ogg"}
     };
     
     for (const auto& info : defaultSounds) {

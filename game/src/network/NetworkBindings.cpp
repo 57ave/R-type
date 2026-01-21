@@ -37,6 +37,16 @@ std::shared_ptr<NetworkClient> NetworkBindings::GetNetworkClient() {
     return s_networkClient;
 }
 
+void NetworkBindings::Update(float deltaTime) {
+    if (s_networkClient && s_networkClient->isConnected()) {
+        // This calls the NetworkClient's update which sends keepalive pings
+        s_networkClient->update(deltaTime);
+        
+        // Also process any received packets
+        s_networkClient->process();
+    }
+}
+
 // ========== Functions called FROM Lua ==========
 
 void NetworkBindings::RequestRoomList() {

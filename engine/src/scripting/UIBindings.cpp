@@ -326,6 +326,15 @@ namespace Scripting {
             }
         };
 
+        gameState["Reset"] = []() {
+            std::cout << "[GameState] Reset called - cleaning up game entities" << std::endl;
+            if (s_gameStateCallbacks.resetGame) {
+                s_gameStateCallbacks.resetGame();
+            } else {
+                std::cerr << "[GameState] Warning: resetGame callback not set" << std::endl;
+            }
+        };
+
         std::cout << "[UIBindings] GameState bindings registered" << std::endl;
     }
 

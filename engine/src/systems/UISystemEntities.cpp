@@ -160,6 +160,10 @@ ECS::Entity UISystem::CreateInputField(float x, float y, float width, float heig
     mEntities.insert(entity);
     m_navigationDirty = true;
 
+    std::cout << "[UISystem] Created InputField entity " << entity 
+              << " placeholder='" << placeholder << "' menu='" << menuGroup 
+              << "' at (" << x << "," << y << ") size(" << width << "," << height << ")" << std::endl;
+
     return entity;
 }
 

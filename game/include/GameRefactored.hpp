@@ -153,7 +153,7 @@ private:
     void SetupAudioBindings();
     
     /**
-     * @brief Configure les bindings d'état de jeu pour Lua
+     * @brief Configure les bindings réseau étendus pour Lua
      */
     void SetupGameStateBindings();
     

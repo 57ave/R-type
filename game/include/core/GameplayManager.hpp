@@ -159,6 +159,12 @@ public:
      * @param entity Entité à détruire
      */
     void DestroyEntityDeferred(ECS::Entity entity);
+    
+    /**
+     * @brief Supprime toutes les entités de jeu (ennemis, projectiles, powerups)
+     * Appelé lors du reset complet de la partie
+     */
+    void ClearAllGameEntities();
 
     // ========================================
     // STATISTICS ET SCORING

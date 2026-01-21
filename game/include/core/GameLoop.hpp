@@ -14,6 +14,8 @@
 #include <scripting/LuaState.hpp>
 #include <scripting/ScriptSystem.hpp>
 #include <systems/RenderSystem.hpp>
+#include "ui/HealthBarUI.hpp"
+#include "ui/ScoreUI.hpp"
 
 namespace RType::Core {
 
@@ -87,6 +89,11 @@ public:
     void SetSystemsManager(SystemsManager* systems);
     
     /**
+     * @brief Configure le callback de collision
+     */
+    void SetupCollisionCallback();
+    
+    /**
      * @brief Définit la fenêtre
      */
     void SetWindow(eng::engine::rendering::sfml::SFMLWindow* win);
@@ -102,10 +109,11 @@ public:
     bool Update();
     
     /**
-     * @brief Remet à zéro l'état du jeu
+     * @brief Traite les packets réseau
+     * Appelé dans la boucle principale
      */
-    void ResetGameState();
-
+    void ProcessNetworkPackets();
+    
     // ========================================
     // ACCESSEURS
     // ========================================
@@ -124,6 +132,12 @@ public:
      * @brief Vérifie si la condition de victoire est atteinte
      */
     bool IsWinConditionTriggered() const;
+    
+    /**
+     * @brief Réinitialise complètement l'état du jeu pour une nouvelle partie
+     * Détruit toutes les entités sauf le background et remet les compteurs à zéro
+     */
+    void ResetGameState();
 
 private:
     // Références vers les systèmes
@@ -166,6 +180,11 @@ private:
     // Configuration
     bool networkMode;
     
+    // UI du joueur
+    HealthBarUI playerHealthBar;
+    ScoreUI playerScoreUI;
+    bool gameFontLoaded = false;
+    
     // Méthodes privées
     void HandleEvents();
     void UpdateSystems(float dt, bool inMenu);
@@ -174,6 +193,7 @@ private:
     void UpdateNetworking(float dt);
     void UpdateEnemySpawning(float dt);
     void HandleChargingInput(float dt);
+    void UpdatePlayerMovement(float dt);
     void Render();
     
     // Utilitaires pour la charge

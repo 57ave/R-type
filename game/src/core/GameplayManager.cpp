@@ -10,7 +10,9 @@
 #include <ecs/Systems.hpp>
 #include <components/Weapon.hpp>
 #include <components/ShootEmUpTags.hpp>
+#include <components/Score.hpp>
 #include <components/PowerUp.hpp>
+#include <components/Effect.hpp>
 #include <components/AIController.hpp>
 #include <components/Velocity.hpp>
 #include <components/Sprite.hpp>
@@ -89,9 +91,15 @@ ECS::Entity GameplayManager::CreatePlayer(float x, float y, int line) {
         coordinator->AddComponent(player, spriteComp);
     }
 
-    // State machine animation - Component does not exist, skipping
-    // StateMachineAnimation anim;
-    // ...
+    // State machine animation
+    StateMachineAnimation anim;
+    anim.currentColumn = 2;
+    anim.targetColumn = 2;
+    anim.transitionSpeed = 0.15f;
+    anim.spriteWidth = 33;
+    anim.spriteHeight = 17;
+    anim.currentRow = line;
+    coordinator->AddComponent(player, anim);
 
     // Collider
     Collider collider;
@@ -127,9 +135,14 @@ ECS::Entity GameplayManager::CreatePlayer(float x, float y, int line) {
     coordinator->AddComponent(player, Tag{"player"});
     coordinator->AddComponent(player, ShootEmUp::Components::PlayerTag{line});
 
-    // Score - Component does not exist, skip
-    // ShootEmUp::Components::Score score;
-    // ...
+    // Score - Initialize with 0 score
+    ShootEmUp::Components::Score score;
+    score.currentScore = 0;
+    score.highScore = 0;
+    score.comboMultiplier = 1;
+    score.comboTimer = 0.0f;
+    score.consecutiveKills = 0;
+    coordinator->AddComponent(player, score);
 
     std::cout << "[GameplayManager] Player created at (" << x << ", " << y << ") with line " << line << std::endl;
     return player;
@@ -145,10 +158,80 @@ ECS::Entity GameplayManager::CreateEnemy(float x, float y, const std::string& pa
     // Velocity
     coordinator->AddComponent(enemy, Velocity{0.0f, 0.0f});
 
+    // Type d'ennemi - utiliser basic par défaut
+    std::string actualType = enemyType.empty() ? "basic" : enemyType;
+    
+    // Valeurs par défaut
+    std::string textureName = "enemy";
+    IntRect rect(0, 0, 33, 36);
+    float scale = 2.5f;
+    int hp = static_cast<int>(enemyHealth);
+    int scoreValue = 100;
+    float speedMod = 1.0f;
+    int frameCount = 8;
+    std::string actualPattern = patternType.empty() ? "linear" : patternType;
+    float amplitude = 80.0f;
+    float frequency = 2.0f;
+    
+    // Configuration selon le type d'ennemi
+    if (actualType == "basic") {
+        textureName = "enemy";
+        rect = IntRect(0, 0, 33, 36);
+        scale = 2.5f;
+        hp = 1;
+        scoreValue = 100;
+        speedMod = 1.0f;
+        frameCount = 8;
+        actualPattern = patternType.empty() ? "linear" : patternType;
+    } else if (actualType == "zigzag") {
+        textureName = "enemy";
+        rect = IntRect(0, 0, 17, 18);
+        scale = 2.5f;
+        hp = 1;
+        scoreValue = 150;
+        speedMod = 1.1f;
+        frameCount = 12;
+        actualPattern = "zigzag";
+        amplitude = 80.0f;
+        frequency = 2.0f;
+    } else if (actualType == "sinewave") {
+        textureName = "enemy";
+        rect = IntRect(0, 0, 17, 18);
+        scale = 2.0f;
+        hp = 1;
+        scoreValue = 200;
+        speedMod = 0.9f;
+        frameCount = 12;
+        actualPattern = "sine";
+        amplitude = 120.0f;
+        frequency = 1.5f;
+    } else if (actualType == "kamikaze") {
+        textureName = "enemy";
+        rect = IntRect(0, 0, 32, 32);
+        scale = 2.0f;
+        hp = 1;
+        scoreValue = 120;
+        speedMod = 2.0f;  // Très rapide
+        frameCount = 4;
+        actualPattern = "chase";  // Poursuit le joueur
+    } else if (actualType == "shooter") {
+        textureName = "enemy";
+        rect = IntRect(0, 0, 33, 36);
+        scale = 2.5f;
+        hp = 1;
+        scoreValue = 300;
+        speedMod = 0.75f;  // Plus lent mais tire
+        frameCount = 8;
+        actualPattern = "linear";
+    } else {
+        // Type inconnu - utiliser basic
+        hp = 1;
+        scoreValue = 100;
+        speedMod = 1.0f;
+    }
     // Sprite - Utiliser CreateSpriteFromTexture
-    auto* sprite = CreateSpriteFromTexture("enemy");
+    auto* sprite = CreateSpriteFromTexture(textureName);
     if (sprite) {
-        IntRect rect(0, 0, 33, 32);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
 
@@ -156,8 +239,8 @@ ECS::Entity GameplayManager::CreateEnemy(float x, float y, const std::string& pa
         spriteComp.sprite = sprite;
         spriteComp.textureRect = rect;
         spriteComp.layer = 5;
-        spriteComp.scaleX = 2.5f;
-        spriteComp.scaleY = 2.5f;
+        spriteComp.scaleX = scale;
+        spriteComp.scaleY = scale;
         coordinator->AddComponent(enemy, spriteComp);
     }
 
@@ -165,36 +248,36 @@ ECS::Entity GameplayManager::CreateEnemy(float x, float y, const std::string& pa
     Animation anim;
     anim.frameTime = 0.1f;
     anim.currentFrame = 0;
-    anim.frameCount = 8;
+    anim.frameCount = frameCount;
     anim.loop = true;
-    anim.frameWidth = 33;
-    anim.frameHeight = 32;
+    anim.frameWidth = rect.width;
+    anim.frameHeight = rect.height;
     anim.startX = 0;
     anim.startY = 0;
     anim.spacing = 0;
     coordinator->AddComponent(enemy, anim);
 
-    // Movement pattern
+    // Movement pattern - utiliser le pattern selon le type d'ennemi
     ShootEmUp::Components::MovementPattern movementPattern;
-    movementPattern.patternType = patternType;
-    movementPattern.speed = enemySpeed + (rand() % 100);
-    movementPattern.amplitude = 50.0f + (rand() % 100);
-    movementPattern.frequency = 1.0f + (rand() % 3);
+    movementPattern.patternType = actualPattern;
+    movementPattern.speed = (enemySpeed + (rand() % 100)) * speedMod;
+    movementPattern.amplitude = amplitude;
+    movementPattern.frequency = frequency;
     movementPattern.startX = x;
     movementPattern.startY = y;
     coordinator->AddComponent(enemy, movementPattern);
 
-    // Collider
+    // Collider - adapté à la taille
     Collider collider;
-    collider.width = 33 * 2.5f;
-    collider.height = 32 * 2.5f;
+    collider.width = rect.width * scale;
+    collider.height = rect.height * scale;
     collider.tag = "enemy";
     coordinator->AddComponent(enemy, collider);
 
-    // Health
+    // Health - variable selon le type
     Health health;
-    health.current = static_cast<int>(enemyHealth);
-    health.max = static_cast<int>(enemyHealth);
+    health.current = hp;
+    health.max = hp;
     health.destroyOnDeath = true;
     health.deathEffect = "explosion";
     coordinator->AddComponent(enemy, health);
@@ -208,10 +291,14 @@ ECS::Entity GameplayManager::CreateEnemy(float x, float y, const std::string& pa
     // Tags
     coordinator->AddComponent(enemy, Tag{"enemy"});
     ShootEmUp::Components::EnemyTag enemyTag;
-    enemyTag.enemyType = enemyType;
-    enemyTag.scoreValue = 100;
+    enemyTag.enemyType = actualType;
+    enemyTag.scoreValue = scoreValue;
     enemyTag.aiAggressiveness = 1.0f;
     coordinator->AddComponent(enemy, enemyTag);
+
+    std::cout << "[GameplayManager] Created enemy type '" << actualType 
+              << "' (HP:" << hp << ", Score:" << scoreValue << ", Scale:" << scale 
+              << ", Pattern:" << actualPattern << ")" << std::endl;
 
     return enemy;
 }
@@ -317,14 +404,34 @@ ECS::Entity GameplayManager::CreateEnemyMissile(float x, float y, float directio
     // Position
     coordinator->AddComponent(missile, Position{x, y});
 
-    // Velocity
-    float speed = 400.0f;
+    // Velocity - vitesse variable
+    float speed = 350.0f + (rand() % 150);  // 350-500
     coordinator->AddComponent(missile, Velocity{speed * directionX, speed * directionY});
+
+    // ===== DIFFERENT BULLET TYPES =====
+    // Balles plus grosses et visibles pour le multijoueur
+    int bulletType = rand() % 3;
+    float scale = 5.5f;  // Base: balles plus grosses et visibles
+    IntRect rect(166, 3, 12, 12);
+    
+    switch (bulletType) {
+        case 0: // Balle standard - grande
+            rect = IntRect(166, 3, 12, 12);
+            scale = 5.5f;  // Augmenté de 4.0f à 5.5f
+            break;
+        case 1: // Grosse balle orange
+            rect = IntRect(166, 3, 12, 12);
+            scale = 6.5f;  // Augmenté de 5.0f à 6.5f
+            break;
+        case 2: // Très grosse balle (boss-like)
+            rect = IntRect(166, 3, 12, 12);
+            scale = 7.5f;  // Augmenté de 6.0f à 7.5f
+            break;
+    }
 
     // Sprite - Utiliser CreateSpriteFromTexture
     auto* sprite = CreateSpriteFromTexture("enemy_bullets");
     if (sprite) {
-        IntRect rect(166, 3, 12, 12);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
 
@@ -332,28 +439,28 @@ ECS::Entity GameplayManager::CreateEnemyMissile(float x, float y, float directio
         spriteComp.sprite = sprite;
         spriteComp.textureRect = rect;
         spriteComp.layer = 8;
-        spriteComp.scaleX = 2.5f;
-        spriteComp.scaleY = 2.5f;
+        spriteComp.scaleX = scale;
+        spriteComp.scaleY = scale;
         coordinator->AddComponent(missile, spriteComp);
     }
 
     // Animation
     Animation anim;
-    anim.frameTime = 0.1f;
+    anim.frameTime = 0.08f;  // Animation un peu plus rapide
     anim.currentFrame = 0;
     anim.frameCount = 4;
     anim.loop = true;
-    anim.frameWidth = 12;
-    anim.frameHeight = 12;
-    anim.startX = 166;
-    anim.startY = 3;
+    anim.frameWidth = rect.width;
+    anim.frameHeight = rect.height;
+    anim.startX = rect.left;
+    anim.startY = rect.top;
     anim.spacing = 5;
     coordinator->AddComponent(missile, anim);
 
-    // Collider
+    // Collider - adapté à la taille visuelle
     Collider collider;
-    collider.width = 12 * 2.5f;
-    collider.height = 12 * 2.5f;
+    collider.width = rect.width * scale * 0.8f;  // Légèrement plus petit que le sprite
+    collider.height = rect.height * scale * 0.8f;
     collider.tag = "enemy_bullet";
     coordinator->AddComponent(missile, collider);
 
@@ -465,9 +572,11 @@ ECS::Entity GameplayManager::CreateShootEffect(float x, float y, ECS::Entity par
     lifetime.maxLifetime = 0.1f;
     coordinator->AddComponent(effect, lifetime);
 
-    // Effect tag - Component does not exist, skip
-    // ShootEmUp::Components::Effect effectTag;
-    // ...
+    // Effect tag
+    ShootEmUp::Components::Effect effectTag;
+    effectTag.effectType = "shoot";
+    effectTag.followParent = true;
+    coordinator->AddComponent(effect, effectTag);
 
     coordinator->AddComponent(effect, Tag{"effect"});
 
@@ -576,16 +685,31 @@ bool GameplayManager::CheckWinCondition() const {
 }
 
 bool GameplayManager::CheckLoseCondition() const {
-    // Condition de défaite : joueur mort
-    auto playerEntity = GetLocalPlayerEntity();
-    if (playerEntity == 0) return true;  // Pas de joueur = défaite
+    // Condition de défaite : TOUS les joueurs morts
+    // Compter les joueurs vivants
+    int alivePlayers = 0;
+    int totalPlayers = 0;
     
-    if (coordinator->HasComponent<Health>(playerEntity)) {
-        auto& health = coordinator->GetComponent<Health>(playerEntity);
-        return health.current <= 0;
+    for (auto entity : allEntities) {
+        if (coordinator->HasComponent<ShootEmUp::Components::PlayerTag>(entity)) {
+            totalPlayers++;
+            
+            if (coordinator->HasComponent<Health>(entity)) {
+                auto& health = coordinator->GetComponent<Health>(entity);
+                if (health.current > 0) {
+                    alivePlayers++;
+                }
+            }
+        }
     }
     
-    return false;
+    // ✅ S'il n'y a aucun joueur, ce n'est PAS une défaite (le jeu n'a pas encore commencé)
+    if (totalPlayers == 0) {
+        return false;  // Pas encore de joueur = pas de défaite
+    }
+    
+    // Défaite uniquement si tous les joueurs sont morts (health <= 0)
+    return alivePlayers == 0;
 }
 
 void GameplayManager::ProcessDestroyedEntities() {
@@ -611,20 +735,79 @@ void GameplayManager::ProcessDestroyedEntities() {
     entitiesToDestroy.clear();
 }
 
+void GameplayManager::ClearAllGameEntities() {
+    std::cout << "[GameplayManager] Clearing all game entities for reset..." << std::endl;
+    
+    std::vector<ECS::Entity> toDestroy;
+    
+    // Collecter toutes les entités à détruire (ennemis, projectiles, powerups)
+    for (auto entity : allEntities) {
+        // Détruire les ennemis
+        if (coordinator->HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
+            toDestroy.push_back(entity);
+            continue;
+        }
+        // Détruire les projectiles
+        if (coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
+            toDestroy.push_back(entity);
+            continue;
+        }
+        // Détruire les powerups
+        if (coordinator->HasComponent<ShootEmUp::Components::PowerUp>(entity)) {
+            toDestroy.push_back(entity);
+            continue;
+        }
+    }
+    
+    std::cout << "[GameplayManager] Destroying " << toDestroy.size() << " entities" << std::endl;
+    
+    // Ajouter à la liste de destruction différée
+    for (auto entity : toDestroy) {
+        DestroyEntityDeferred(entity);
+    }
+    
+    // Traiter immédiatement
+    ProcessDestroyedEntities();
+    
+    std::cout << "[GameplayManager] Game entities cleared" << std::endl;
+}
+
 void GameplayManager::DestroyEntityDeferred(ECS::Entity entity) {
     entitiesToDestroy.push_back(entity);
 }
 
 uint32_t GameplayManager::GetPlayerScore(int playerId) const {
-    // Score component does not exist, return 0
-    (void)playerId;
+    // Chercher le joueur avec cet ID
+    for (auto entity : allEntities) {
+        if (coordinator->HasComponent<ShootEmUp::Components::PlayerTag>(entity) &&
+            coordinator->HasComponent<ShootEmUp::Components::Score>(entity)) {
+            auto& playerTag = coordinator->GetComponent<ShootEmUp::Components::PlayerTag>(entity);
+            if (playerTag.playerId == playerId) {
+                auto& score = coordinator->GetComponent<ShootEmUp::Components::Score>(entity);
+                return score.currentScore;
+            }
+        }
+    }
     return 0;
 }
 
 void GameplayManager::AddScore(uint32_t points, int playerId) {
-    // Score component does not exist, do nothing
-    (void)points;
-    (void)playerId;
+    // Chercher le joueur avec cet ID
+    for (auto entity : allEntities) {
+        if (coordinator->HasComponent<ShootEmUp::Components::PlayerTag>(entity) &&
+            coordinator->HasComponent<ShootEmUp::Components::Score>(entity)) {
+            auto& playerTag = coordinator->GetComponent<ShootEmUp::Components::PlayerTag>(entity);
+            if (playerTag.playerId == playerId) {
+                auto& score = coordinator->GetComponent<ShootEmUp::Components::Score>(entity);
+                score.AddPoints(points);
+                
+                std::cout << "[GameplayManager] Added " << points << " points to player " << playerId 
+                         << ". Score: " << score.currentScore << " (x" << score.comboMultiplier << " combo)" << std::endl;
+                
+                return;
+            }
+        }
+    }
 }
 
 GameplayManager::GameStats GameplayManager::GetGameStats() const {

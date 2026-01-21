@@ -2,6 +2,8 @@
 #include <iostream>
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 
 namespace RType::Core {
 
@@ -14,6 +16,7 @@ AudioManager::AudioManager()
     , fadeDuration(0.0f)
     , fadeFromVolume(0.0f)
     , fadeToVolume(0.0f)
+    , fadeOutComplete(false)
     , currentStage(0)
     , bossMode(false)
     , debugMode(false)
@@ -34,35 +37,30 @@ bool AudioManager::Initialize(const std::string& assetBasePath) {
     // Chargement des musiques par défaut
     std::string soundsPath = assetBasePath + "game/assets/sounds/";
     
-    // Musique de menu
-    if (!LoadMusic("menu", soundsPath + "Title.ogg", true, 70.0f)) {
+    // Musique de menu (Title screen)
+    if (!LoadMusic("menu_music", soundsPath + "Title.ogg", true, 70.0f)) {
         std::cerr << "[AudioManager] Warning: Could not load menu music" << std::endl;
     }
     
-    // Musiques de stages (si disponibles)
-    for (int i = 1; i <= 5; ++i) {
-        std::string stagePath = soundsPath + "Stage" + std::to_string(i) + ".ogg";
-        if (std::filesystem::exists(stagePath)) {
-            LoadMusic("stage" + std::to_string(i), stagePath, true, 80.0f);
-        }
-    }
+    // Musiques de stages avec les vrais noms de fichiers R-Type
+    LoadMusic("stage_one_music", soundsPath + "BATTLE THEME (STAGE 1 The Encounter).ogg", true, 80.0f);
+    LoadMusic("stage_two_music", soundsPath + "MONSTER BEAT (STAGE 2 Life Forms in a Cave).ogg", true, 80.0f);
+    LoadMusic("stage_three_music", soundsPath + "BATTLE PRESSURE (STAGE 3 Giant Warship).ogg", true, 80.0f);
+    LoadMusic("stage_four_music", soundsPath + "GRANULATIONS (STAGE 4 A Base on The War Front).ogg", true, 80.0f);
+    LoadMusic("stage_five_music", soundsPath + "MONSTER LURKING IN THE CAVE (STAGE 5 The Den).ogg", true, 80.0f);
+    LoadMusic("stage_six_music", soundsPath + "SCRAMBLE CROSSROAD (STAGE 6 Transport System).ogg", true, 80.0f);
+    LoadMusic("stage_seven_music", soundsPath + "DREAM ISLAND (STAGE 7 A City in Decay).ogg", true, 80.0f);
+    LoadMusic("stage_eight_music", soundsPath + "WOMB (STAGE 8 A Star Occupied by The Bydo Empire).ogg", true, 80.0f);
     
-    // Musiques de boss (si disponibles)
-    for (int i = 1; i <= 5; ++i) {
-        std::string bossPath = soundsPath + "Boss" + std::to_string(i) + ".ogg";
-        if (std::filesystem::exists(bossPath)) {
-            LoadMusic("boss" + std::to_string(i), bossPath, true, 85.0f);
-        }
-    }
+    // Musique de boss (même musique pour tous les boss)
+    LoadMusic("boss_music", soundsPath + "BOSS THEME.ogg", true, 85.0f);
     
     // Musiques spéciales
-    if (std::filesystem::exists(soundsPath + "GameOver.ogg")) {
-        LoadMusic("gameover", soundsPath + "GameOver.ogg", false, 75.0f);
-    }
-    
-    if (std::filesystem::exists(soundsPath + "Victory.ogg")) {
-        LoadMusic("victory", soundsPath + "Victory.ogg", false, 80.0f);
-    }
+    LoadMusic("stage_clear", soundsPath + "RETURN IN TRIUMPH (STAGE CLEAR).ogg", false, 80.0f);
+    LoadMusic("all_clear", soundsPath + "LIKE A HERO (ALL STAGE CLEAR).ogg", false, 85.0f);
+    LoadMusic("gameover", soundsPath + "THE END OF WAR (GAME OVER).ogg", false, 75.0f);
+    LoadMusic("credits", soundsPath + "CREDIT.ogg", true, 70.0f);
+    LoadMusic("name_entry", soundsPath + "NAME ENTRY.ogg", true, 70.0f);
     
     // Chargement des SFX par défaut
     std::string vfxPath = assetBasePath + "game/assets/vfx/";
@@ -71,8 +69,11 @@ bool AudioManager::Initialize(const std::string& assetBasePath) {
         std::cerr << "[AudioManager] Warning: Could not load shoot sound" << std::endl;
     }
     
-    if (!LoadSFX("explosion", vfxPath + "explosion.ogg", 90.0f)) {
-        std::cerr << "[AudioManager] Warning: Could not load explosion sound" << std::endl;
+    if (!LoadSFX("explosion", vfxPath + "Boom.ogg", 90.0f)) {
+        // Essayer avec un nom alternatif
+        if (!LoadSFX("explosion", vfxPath + "explosion.ogg", 90.0f)) {
+            std::cerr << "[AudioManager] Warning: Could not load explosion sound" << std::endl;
+        }
     }
     
     initialized = true;
@@ -141,6 +142,7 @@ void AudioManager::FadeToMusic(const std::string& name, float duration) {
     
     if (currentMusic) {
         isFading = true;
+        fadeOutComplete = false;
         fadeFromVolume = currentMusic->sound->getVolume();
         fadeToVolume = 0.0f;
         
@@ -311,18 +313,6 @@ void AudioManager::OnVictory() {
     std::cout << "[AudioManager] Victory!" << std::endl;
 }
 
-bool AudioManager::LoadUserSettings(const std::string& settingsPath) {
-    // TODO: Implémenter le chargement des paramètres
-    std::cout << "[AudioManager] Loading user settings from: " << settingsPath << std::endl;
-    return true;
-}
-
-bool AudioManager::SaveUserSettings(const std::string& settingsPath) {
-    // TODO: Implémenter la sauvegarde des paramètres
-    std::cout << "[AudioManager] Saving user settings to: " << settingsPath << std::endl;
-    return true;
-}
-
 void AudioManager::SetDebugMode(bool enabled) {
     debugMode = enabled;
     std::cout << "[AudioManager] Debug mode: " << (enabled ? "enabled" : "disabled") << std::endl;
@@ -348,19 +338,41 @@ void AudioManager::UpdateFade(float deltaTime) {
     if (!isFading) return;
     
     fadeTimer += deltaTime;
-    float progress = fadeTimer / fadeDuration;
+    float halfDuration = fadeDuration / 2.0f;
     
-    if (progress >= 1.0f) {
-        // Fade terminé
-        InternalStopMusic();
+    if (fadeTimer < halfDuration) {
+        // Fade out phase (first half)
+        if (currentMusic && currentMusic->sound) {
+            float fadeProgress = fadeTimer / halfDuration;
+            float volume = currentMusic->baseVolume * (globalMusicVolume / 100.0f) * (1.0f - fadeProgress);
+            currentMusic->sound->setVolume(std::max(0.0f, volume));
+        }
+    } else if (!fadeOutComplete) {
+        // Switch music at midpoint
+        if (currentMusic && currentMusic->sound) {
+            currentMusic->sound->stop();
+        }
         InternalPlayMusic(fadeToTrack);
-        isFading = false;
-        fadeTimer = 0.0f;
+        if (currentMusic && currentMusic->sound) {
+            currentMusic->sound->setVolume(0.0f); // Start at 0 for fade in
+        }
+        fadeOutComplete = true;
+    } else if (fadeTimer < fadeDuration) {
+        // Fade in phase (second half)
+        float fadeInProgress = (fadeTimer - halfDuration) / halfDuration;
+        float targetVolume = currentMusic->baseVolume * (globalMusicVolume / 100.0f);
+        float volume = targetVolume * fadeInProgress;
+        if (currentMusic && currentMusic->sound) {
+            currentMusic->sound->setVolume(std::min(targetVolume, volume));
+        }
     } else {
-        // Fade en cours
-        if (currentMusic) {
-            float newVolume = fadeFromVolume * (1.0f - progress);
-            currentMusic->sound->setVolume(newVolume);
+        // Fade complete
+        ApplyVolumeToMusic();
+        isFading = false;
+        fadeOutComplete = false;
+        
+        if (debugMode) {
+            std::cout << "[AudioManager] Fade complete - now playing: " << currentMusicName << std::endl;
         }
     }
 }
@@ -415,6 +427,137 @@ void AudioManager::InternalPlayMusic(const std::string& name) {
     
     if (debugMode) {
         std::cout << "[AudioManager] Playing music: " << name << std::endl;
+    }
+}
+
+bool AudioManager::LoadUserSettings(const std::string& settingsPath) {
+    std::cout << "[AudioManager] Loading user settings from: " << settingsPath << std::endl;
+    
+    // TODO: Implémenter le chargement depuis JSON
+    // Pour l'instant, utiliser des valeurs par défaut
+    std::ifstream file(settingsPath);
+    if (!file.is_open()) {
+        std::cerr << "[AudioManager] Warning: Could not open settings file, using defaults" << std::endl;
+        return false;
+    }
+    
+    try {
+        // Parse simple JSON manually or use nlohmann/json
+        // Format attendu:
+        // {
+        //   "audio": {
+        //     "music_volume": 70,
+        //     "sfx_volume": 100
+        //   }
+        // }
+        
+        std::string line;
+        while (std::getline(file, line)) {
+            // Recherche de "music_volume"
+            size_t pos = line.find("\"music_volume\"");
+            if (pos != std::string::npos) {
+                size_t colonPos = line.find(':', pos);
+                if (colonPos != std::string::npos) {
+                    std::string valueStr = line.substr(colonPos + 1);
+                    // Enlever les espaces et virgules
+                    valueStr.erase(std::remove_if(valueStr.begin(), valueStr.end(), 
+                        [](char c) { return std::isspace(c) || c == ',' || c == '}'; }), valueStr.end());
+                    try {
+                        float volume = std::stof(valueStr);
+                        SetMusicVolume(volume);
+                    } catch (...) {}
+                }
+            }
+            
+            // Recherche de "sfx_volume"
+            pos = line.find("\"sfx_volume\"");
+            if (pos != std::string::npos) {
+                size_t colonPos = line.find(':', pos);
+                if (colonPos != std::string::npos) {
+                    std::string valueStr = line.substr(colonPos + 1);
+                    valueStr.erase(std::remove_if(valueStr.begin(), valueStr.end(), 
+                        [](char c) { return std::isspace(c) || c == ',' || c == '}'; }), valueStr.end());
+                    try {
+                        float volume = std::stof(valueStr);
+                        SetSFXVolume(volume);
+                    } catch (...) {}
+                }
+            }
+        }
+        
+        file.close();
+        std::cout << "[AudioManager] Settings loaded - Music: " << globalMusicVolume 
+                  << "%, SFX: " << globalSFXVolume << "%" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[AudioManager] Error loading settings: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool AudioManager::SaveUserSettings(const std::string& settingsPath) {
+    std::cout << "[AudioManager] Saving user settings to: " << settingsPath << std::endl;
+    
+    try {
+        // Lire le fichier existant
+        std::ifstream inFile(settingsPath);
+        std::string content;
+        bool fileExists = false;
+        
+        if (inFile.is_open()) {
+            std::stringstream buffer;
+            buffer << inFile.rdbuf();
+            content = buffer.str();
+            inFile.close();
+            fileExists = true;
+        }
+        
+        // Si le fichier n'existe pas, créer un nouveau JSON
+        if (!fileExists || content.empty()) {
+            content = "{\n  \"audio\": {\n    \"music_volume\": 70,\n    \"sfx_volume\": 100\n  }\n}\n";
+        }
+        
+        // Mettre à jour les valeurs
+        // Rechercher et remplacer music_volume
+        size_t pos = content.find("\"music_volume\"");
+        if (pos != std::string::npos) {
+            size_t colonPos = content.find(':', pos);
+            size_t commaPos = content.find_first_of(",\n}", colonPos);
+            if (colonPos != std::string::npos && commaPos != std::string::npos) {
+                std::string newValue = " " + std::to_string(static_cast<int>(globalMusicVolume));
+                content.replace(colonPos + 1, commaPos - colonPos - 1, newValue);
+            }
+        }
+        
+        // Rechercher et remplacer sfx_volume
+        pos = content.find("\"sfx_volume\"");
+        if (pos != std::string::npos) {
+            size_t colonPos = content.find(':', pos);
+            size_t commaPos = content.find_first_of(",\n}", colonPos);
+            if (colonPos != std::string::npos && commaPos != std::string::npos) {
+                std::string newValue = " " + std::to_string(static_cast<int>(globalSFXVolume));
+                content.replace(colonPos + 1, commaPos - colonPos - 1, newValue);
+            }
+        }
+        
+        // Écrire dans le fichier
+        std::ofstream outFile(settingsPath);
+        if (!outFile.is_open()) {
+            std::cerr << "[AudioManager] Error: Could not open file for writing" << std::endl;
+            return false;
+        }
+        
+        outFile << content;
+        outFile.close();
+        
+        std::cout << "[AudioManager] Settings saved - Music: " << globalMusicVolume 
+                  << "%, SFX: " << globalSFXVolume << "%" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[AudioManager] Error saving settings: " << e.what() << std::endl;
+        return false;
     }
 }
 

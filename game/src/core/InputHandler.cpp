@@ -11,11 +11,18 @@ namespace RType::Core {
 InputHandler::InputHandler()
     : debugMode(false)
 {
-    // Configuration par défaut des touches
+    // Configuration par défaut des touches - ZQSD (FR) + Flèches
     MapKey(InputAction::MoveUp, eng::engine::Key::Z);
     MapKey(InputAction::MoveDown, eng::engine::Key::S);
     MapKey(InputAction::MoveLeft, eng::engine::Key::Q);
     MapKey(InputAction::MoveRight, eng::engine::Key::D);
+    
+    // Touches flèches alternatives
+    MapKey(InputAction::MoveUp, eng::engine::Key::Up);
+    MapKey(InputAction::MoveDown, eng::engine::Key::Down);
+    MapKey(InputAction::MoveLeft, eng::engine::Key::Left);
+    MapKey(InputAction::MoveRight, eng::engine::Key::Right);
+    
     MapKey(InputAction::Shoot, eng::engine::Key::Space);
     MapKey(InputAction::Pause, eng::engine::Key::Escape);
     MapKey(InputAction::Confirm, eng::engine::Key::Enter);
@@ -23,7 +30,7 @@ InputHandler::InputHandler()
     MapKey(InputAction::Console, eng::engine::Key::F1);
     MapKey(InputAction::Menu, eng::engine::Key::M);
     
-    std::cout << "[InputHandler] Initialized with default key mapping" << std::endl;
+    std::cout << "[InputHandler] Initialized with default key mapping (ZQSD + Arrows)" << std::endl;
 }
 
 InputHandler::~InputHandler() {
@@ -68,10 +75,37 @@ void InputHandler::Update(float deltaTime) {
         }
     }
     
-    // Vérifier l'état actuel des touches mappées
+    // Vérifier directement les touches pour chaque action (supporte plusieurs touches)
+    // MoveUp: Z ou Flèche Haut
+    bool moveUpPressed = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Z) ||
+                         eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Up);
+    UpdateActionState(InputAction::MoveUp, moveUpPressed, deltaTime);
+    
+    // MoveDown: S ou Flèche Bas
+    bool moveDownPressed = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::S) ||
+                           eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Down);
+    UpdateActionState(InputAction::MoveDown, moveDownPressed, deltaTime);
+    
+    // MoveLeft: Q ou Flèche Gauche
+    bool moveLeftPressed = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Q) ||
+                           eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Left);
+    UpdateActionState(InputAction::MoveLeft, moveLeftPressed, deltaTime);
+    
+    // MoveRight: D ou Flèche Droite
+    bool moveRightPressed = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::D) ||
+                            eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Right);
+    UpdateActionState(InputAction::MoveRight, moveRightPressed, deltaTime);
+    
+    // Autres actions via le mapping standard
     for (const auto& pair : keyToAction) {
         eng::engine::Key key = pair.first;
         InputAction action = pair.second;
+        
+        // Skip movement actions (already handled above)
+        if (action == InputAction::MoveUp || action == InputAction::MoveDown ||
+            action == InputAction::MoveLeft || action == InputAction::MoveRight) {
+            continue;
+        }
         
         bool currentlyPressed = eng::engine::Keyboard::isKeyPressed(key);
         UpdateActionState(action, currentlyPressed, deltaTime);

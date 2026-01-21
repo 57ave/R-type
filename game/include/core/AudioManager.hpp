@@ -225,6 +225,7 @@ private:
     
     // Système de fade
     bool isFading;
+    bool fadeOutComplete;
     float fadeTimer;
     float fadeDuration;
     float fadeFromVolume;

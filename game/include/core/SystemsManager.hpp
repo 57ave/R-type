@@ -71,6 +71,13 @@ struct SystemsManager {
     void UpdateUISystem(float dt) {
         if (uiSystem) uiSystem->Update(dt);
     }
+    
+    /**
+     * @brief Obtient le système de collision
+     */
+    std::shared_ptr<CollisionSystem> GetCollisionSystem() const {
+        return collisionSystem;
+    }
 };
 
 } // namespace RType::Core

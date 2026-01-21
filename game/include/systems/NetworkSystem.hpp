@@ -222,13 +222,52 @@ private:
         }
     }
 
-    void handlePlayerDied(const NetworkPacket&) {
-        std::cout << "[NetworkSystem] Player died" << std::endl;
+    void handlePlayerDied(const NetworkPacket& packet) {
+        std::cout << "[NetworkSystem] 💀 Player died notification received!" << std::endl;
+        
+        // Le payload contient l'ID du joueur mort
+        if (packet.payload.size() >= sizeof(uint32_t)) {
+            uint32_t deadPlayerId;
+            std::memcpy(&deadPlayerId, packet.payload.data(), sizeof(uint32_t));
+            
+            std::cout << "[NetworkSystem] Player " << deadPlayerId << " died" << std::endl;
+            
+            // Trouver l'entité du joueur mort et mettre sa vie à 0
+            auto it = networkIdToEntity_.find(deadPlayerId);
+            if (it != networkIdToEntity_.end()) {
+                ::ECS::Entity entity = it->second;
+                if (coordinator_->HasComponent<Health>(entity)) {
+                    auto& health = coordinator_->GetComponent<Health>(entity);
+                    health.current = 0;
+                    std::cout << "[NetworkSystem] Set health to 0 for player entity " << entity << std::endl;
+                }
+            }
+            
+            // Vérifier si c'est nous qui sommes morts
+            if (deadPlayerId == localPlayerId_) {
+                std::cout << "[NetworkSystem] 💀 LOCAL PLAYER DIED!" << std::endl;
+            }
+        }
+        
+        // Callback pour notifier le jeu
+        if (playerDiedCallback_) {
+            playerDiedCallback_();
+        }
     }
 
     void handleClientLeft(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Client left" << std::endl;
     }
+    
+    // Callback pour la mort d'un joueur
+    std::function<void()> playerDiedCallback_;
+    
+public:
+    void setPlayerDiedCallback(std::function<void()> callback) {
+        playerDiedCallback_ = callback;
+    }
+    
+private:
 
     void handleRoomListReply(const NetworkPacket& packet) {
         std::cout << "[NetworkSystem] Received ROOM_LIST_REPLY" << std::endl;

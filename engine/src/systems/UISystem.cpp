@@ -121,6 +121,16 @@ void UISystem::HandleEvent(const eng::engine::InputEvent& event)
             }
         }
     }
+    // Handle text input events for input fields
+    else if (event.type == EventType::TextEntered) {
+        if (m_focusedInputField != 0) {
+            // Filter out control characters (backspace, enter, etc.)
+            unsigned int unicode = event.text.unicode;
+            if (unicode >= 32 && unicode < 127) {
+                HandleTextInput(static_cast<char>(unicode));
+            }
+        }
+    }
 
     // Update mouse input handling
     HandleMouseInput();
@@ -474,6 +484,7 @@ void UISystem::HandleMouseInput()
                 auto &input = m_coordinator->GetComponent<Components::UIInputField>(entityUnderMouse);
                 input.isFocused = true;
                 m_focusedInputField = entityUnderMouse;
+                std::cout << "[UISystem] InputField focused: entity " << entityUnderMouse << std::endl;
             }
             // Handle dropdown (ouvrir si fermé)
             if (m_coordinator->HasComponent<Components::UIDropdown>(entityUnderMouse))

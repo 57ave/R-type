@@ -24,6 +24,13 @@ public:
     static void RegisterAll(sol::state& lua);
     
     /**
+     * @brief Update the network client (send keepalive, process packets)
+     * @param deltaTime Time since last update
+     * Should be called every frame from the game loop.
+     */
+    static void Update(float deltaTime);
+    
+    /**
      * @brief Set the network client instance to use
      * @param client Shared pointer to the NetworkClient
      */
