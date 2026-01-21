@@ -39,9 +39,11 @@ public:
     
     /**
      * @brief Point d'entrée principal du jeu
+     * @param argc Nombre d'arguments
+     * @param argv Arguments de ligne de commande
      * @return Code de retour (0 = succès)
      */
-    int Run();
+    int Run(int argc = 0, char* argv[] = nullptr);
 
 private:
     // ========================================
@@ -87,6 +89,10 @@ private:
     // Configuration réseau
     bool networkMode;
     bool isNetworkClient;
+    
+    // Arguments de ligne de commande (appliqués après chargement config)
+    std::string cmdLineServerAddress;
+    int cmdLineServerPort;
 
     // ========================================
     // MÉTHODES PRIVÉES
@@ -97,6 +103,13 @@ private:
      * @return true si l'initialisation réussit
      */
     bool Initialize();
+    
+    /**
+     * @brief Parse les arguments de ligne de commande
+     * @param argc Nombre d'arguments
+     * @param argv Arguments
+     */
+    void ParseCommandLine(int argc, char* argv[]);
     
     /**
      * @brief Arrête et nettoie tous les modules

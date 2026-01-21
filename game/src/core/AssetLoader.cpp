@@ -148,7 +148,11 @@ bool AssetLoader::PreloadAllTextures() {
         {"missile", "game/assets/players/r-typesheet1.png"},
         {"enemy_bullets", "game/assets/enemies/enemy_bullets.png"},
         {"explosion", "game/assets/enemies/r-typesheet44.png"},
-        {"enemy", "game/assets/enemies/r-typesheet5.png"}  // Texture par défaut pour les ennemis (changé de 43 à 5)
+        {"enemy", "game/assets/enemies/r-typesheet5.png"},   // Basic/Shooter enemies
+        {"enemy2", "game/assets/enemies/r-typesheet3.png"},  // ZigZag/Sine enemies
+        {"enemy3", "game/assets/enemies/r-typesheet8.png"},  // Kamikaze enemies
+        {"boss", "game/assets/enemies/r-typesheet30.png"},   // Boss enemies
+        {"powerup", "game/assets/enemies/r-typesheet25.png"} // Power-ups (capsule)
     };
     
     bool allLoaded = true;

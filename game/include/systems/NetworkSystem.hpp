@@ -76,6 +76,19 @@ public:
 
     uint8_t getLocalPlayerId() const { return localPlayerId_; }
 
+    // Get the local player's ECS entity (returns 0 if not found)
+    ::ECS::Entity getLocalPlayerEntity() const {
+        for (const auto& [netId, entity] : networkIdToEntity_) {
+            if (coordinator_->HasComponent<NetworkId>(entity)) {
+                auto& netIdComp = coordinator_->GetComponent<NetworkId>(entity);
+                if (netIdComp.isLocalPlayer) {
+                    return entity;
+                }
+            }
+        }
+        return 0;  // Not found
+    }
+
     // Called by game code to send input
     void sendInput(uint8_t inputMask, uint8_t chargeLevel = 0) {
         if (networkClient_ && networkClient_->isConnected()) {
@@ -495,6 +508,23 @@ private:
                 break;
             case EntityType::ENTITY_EXPLOSION:
                 coordinator_->AddComponent(entity, Tag{"Explosion"});
+                break;
+            case EntityType::ENTITY_BOSS:
+                coordinator_->AddComponent(entity, Tag{"Boss"});
+                // Add EnemyTag with boss type
+                {
+                    ShootEmUp::Components::EnemyTag enemyTag;
+                    enemyTag.enemyType = "boss";
+                    coordinator_->AddComponent(entity, enemyTag);
+                }
+                std::cout << "[NetworkSystem] Created Boss entity " << entity << " at ("
+                          << state.x << ", " << state.y << ")" << std::endl;
+                break;
+            case EntityType::ENTITY_POWERUP:
+                coordinator_->AddComponent(entity, Tag{"PowerUp"});
+                std::cout << "[NetworkSystem] Created PowerUp entity " << entity 
+                          << " (type: " << (int)state.enemyType << ") at ("
+                          << state.x << ", " << state.y << ")" << std::endl;
                 break;
             default:
                 break;

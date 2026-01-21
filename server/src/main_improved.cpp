@@ -21,7 +21,7 @@ struct hash<asio::ip::udp::endpoint> {
         std::hash<std::string> hasher;
         return hasher(ep.address().to_string() + ":" + std::to_string(ep.port()));
     }
-};
+};  // namespace std
 }  // namespace std
 
 // Simple game entity for server
@@ -40,6 +40,13 @@ struct ServerEntity {
     uint8_t chargeLevel = 0;     // For missiles (0 = normal, 1-5 = charge levels)
     uint8_t enemyType = 0;       // For enemies (0 = basic, 1 = zigzag, 2 = sine, etc.)
     uint8_t projectileType = 0;  // For projectiles (0 = normal, 1 = charged, etc.)
+    
+    // Movement pattern data
+    float patternTimer = 0.0f;   // For sine/zigzag patterns
+    float baseY = 0.0f;          // Original Y position for patterns
+    bool isBoss = false;         // Is this a boss entity
+    bool isPowerUp = false;      // Is this a power-up entity
+    std::string powerUpType;     // Type of power-up (speed, shield, weapon, etc.)
 };
 
 class GameServer {
@@ -47,6 +54,11 @@ public:
     GameServer(short port) : server_(port), nextEntityId_(1000), gameRunning_(false) {
         std::random_device rd;
         rng_.seed(rd());
+        
+        // Initialize spawn timers
+        enemySpawnTimer_ = 0.0f;
+        powerUpSpawnTimer_ = 0.0f;
+        bossSpawnTimer_ = 0.0f;
     }
 
     void start() {
@@ -96,10 +108,37 @@ public:
                 }
 
                 if (hasActiveGame) {
-                    enemySpawnTimer += fixedDeltaTime;
-                    if (enemySpawnTimer >= enemySpawnInterval) {
-                        enemySpawnTimer = 0.0f;
-                        spawnEnemy();
+                    // Get player count for scaling
+                    int playerCount = 0;
+                    for (const auto& room : rooms) {
+                        if (room.state == RoomState::PLAYING) {
+                            playerCount = static_cast<int>(room.playerIds.size());
+                            break;
+                        }
+                    }
+
+                    // ========== CONTINUOUS SPAWN SYSTEM ==========
+                    
+                    // Enemy spawn (every 1.5-2.5 seconds, scaled by player count)
+                    float enemyInterval = 2.0f / std::max(1, playerCount);
+                    enemySpawnTimer_ += fixedDeltaTime;
+                    if (enemySpawnTimer_ >= enemyInterval) {
+                        enemySpawnTimer_ = 0.0f;
+                        spawnRandomEnemy();
+                    }
+                    
+                    // Power-up spawn (every 8-12 seconds)
+                    powerUpSpawnTimer_ += fixedDeltaTime;
+                    if (powerUpSpawnTimer_ >= 10.0f) {
+                        powerUpSpawnTimer_ = 0.0f;
+                        spawnRandomPowerUp();
+                    }
+                    
+                    // Boss spawn (every 45 seconds, only if no boss active)
+                    bossSpawnTimer_ += fixedDeltaTime;
+                    if (bossSpawnTimer_ >= 45.0f && !isBossActive()) {
+                        bossSpawnTimer_ = 0.0f;
+                        spawnBoss();
                     }
                 }
 
@@ -396,6 +435,66 @@ private:
                 continue;
             }
 
+            // Update pattern timer for special movements
+            entity.patternTimer += deltaTime;
+
+            // Apply movement patterns based on enemy type
+            if (entity.type == EntityType::ENTITY_MONSTER) {
+                switch (entity.enemyType) {
+                    case 1:  // ZigZag - toggle direction every 0.5 seconds
+                        if (entity.patternTimer >= 0.5f) {
+                            entity.patternTimer = 0.0f;
+                            entity.vy = -entity.vy;
+                        }
+                        break;
+                    case 2:  // SineWave - smooth sine motion
+                        entity.y = entity.baseY + std::sin(entity.patternTimer * 3.0f) * 100.0f;
+                        break;
+                    case 3:  // Kamikaze - aim toward nearest player
+                        {
+                            float nearestDist = 999999.0f;
+                            float targetY = entity.y;
+                            for (const auto& [pid, pe] : entities_) {
+                                if (pe.type == EntityType::ENTITY_PLAYER) {
+                                    float dist = std::abs(pe.y - entity.y);
+                                    if (dist < nearestDist) {
+                                        nearestDist = dist;
+                                        targetY = pe.y;
+                                    }
+                                }
+                            }
+                            if (targetY > entity.y) entity.vy = 200.0f;
+                            else if (targetY < entity.y) entity.vy = -200.0f;
+                            else entity.vy = 0.0f;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            // Boss movement pattern
+            if (entity.type == EntityType::ENTITY_BOSS || entity.isBoss) {
+                // Stop at x=1400 and oscillate vertically
+                if (entity.x <= 1400.0f) {
+                    entity.vx = 0.0f;
+                }
+                // Bounce between y=200 and y=700
+                if (entity.y <= 200.0f) entity.vy = std::abs(entity.vy);
+                if (entity.y >= 700.0f) entity.vy = -std::abs(entity.vy);
+                
+                // Boss shoots more frequently
+                if (entity.fireTimer <= 0.0f && entity.x < 1600.0f) {
+                    spawnBossMissiles(entity);
+                    entity.fireTimer = 1.5f;  // Boss fire rate
+                }
+            }
+
+            // Power-up floating motion
+            if (entity.type == EntityType::ENTITY_POWERUP || entity.isPowerUp) {
+                entity.y = entity.baseY + std::sin(entity.patternTimer * 2.0f) * 30.0f;
+            }
+
             // Update position
             entity.x += entity.vx * deltaTime;
             entity.y += entity.vy * deltaTime;
@@ -410,8 +509,9 @@ private:
                 // Enemies shoot periodically
                 if (entity.x < 1800.0f && entity.x > 100.0f) {  // Only shoot when on screen
                     spawnEnemyMissile(entity);
-                    entity.fireTimer =
-                        2.0f + (dist_(rng_) % 200) / 100.0f;  // Random fire rate 2-4 seconds
+                    // Fire rate depends on enemy type
+                    float baseRate = (entity.enemyType == 4 || entity.enemyType == 5) ? 1.0f : 2.0f;
+                    entity.fireTimer = baseRate + (dist_(rng_) % 200) / 100.0f;
                 }
             }
 
@@ -429,23 +529,50 @@ private:
 
             // Boundary checking for others (remove if out of bounds)
             if (entity.type != EntityType::ENTITY_PLAYER) {
-                if (entity.x < -100.0f || entity.x > 2000.0f || entity.y < -100.0f ||
-                    entity.y > 1180.0f) {
+                if (entity.x < -200.0f || entity.x > 2100.0f || entity.y < -200.0f ||
+                    entity.y > 1280.0f) {
                     toRemove.push_back(id);
                 }
             }
 
             // Check collisions (simple)
             if (entity.type == EntityType::ENTITY_PLAYER_MISSILE) {
+                // Check vs enemies
                 for (auto& [enemyId, enemy] : entities_) {
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
                             std::cout << "[GameServer] Missile " << id << " hit enemy " << enemyId
                                       << "!" << std::endl;
-                            // Create explosion at enemy position
                             spawnExplosion(enemy.x, enemy.y);
                             toRemove.push_back(id);
-                            toRemove.push_back(enemyId);
+                            enemy.hp -= (entity.chargeLevel > 0 ? entity.chargeLevel * 5 : 5);
+                            if (enemy.hp <= 0) {
+                                toRemove.push_back(enemyId);
+                            }
+                            break;
+                        }
+                    }
+                }
+                // Check vs boss
+                for (auto& [bossId, boss] : entities_) {
+                    if (boss.type == EntityType::ENTITY_BOSS || boss.isBoss) {
+                        if (checkCollision(entity, boss)) {
+                            std::cout << "[GameServer] Missile " << id << " hit BOSS " << bossId
+                                      << "!" << std::endl;
+                            spawnExplosion(entity.x, entity.y);
+                            toRemove.push_back(id);
+                            boss.hp -= (entity.chargeLevel > 0 ? entity.chargeLevel * 5 : 5);
+                            if (boss.hp <= 0) {
+                                std::cout << "[GameServer] 🎉 BOSS DEFEATED!" << std::endl;
+                                spawnExplosion(boss.x, boss.y);
+                                spawnExplosion(boss.x + 50, boss.y + 30);
+                                spawnExplosion(boss.x - 30, boss.y - 20);
+                                toRemove.push_back(bossId);
+                                currentBossId_ = 0;
+                                // Spawn reward power-ups
+                                spawnPowerUp(dist_(rng_) % 5, boss.x, boss.y);
+                                spawnPowerUp(dist_(rng_) % 5, boss.x + 50, boss.y + 50);
+                            }
                             break;
                         }
                     }
@@ -487,6 +614,40 @@ private:
                     }
                 }
             }
+
+            // Check power-up collision with players
+            if (entity.type == EntityType::ENTITY_POWERUP || entity.isPowerUp) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            std::cout << "[GameServer] ⭐ Player " << (int)player.playerId 
+                                      << " collected power-up " << entity.powerUpType << std::endl;
+                            toRemove.push_back(id);
+                            // Apply power-up effect (could extend this)
+                            if (entity.powerUpType == "health") {
+                                player.hp = std::min(100, player.hp + 30);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check boss collision with players
+            if (entity.type == EntityType::ENTITY_BOSS || entity.isBoss) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            spawnExplosion(player.x, player.y);
+                            player.hp -= 50;  // Heavy damage from boss collision
+                            if (player.hp <= 0) {
+                                toRemove.push_back(playerId);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // Remove entities
@@ -495,6 +656,9 @@ private:
             if (it != entities_.end()) {
                 std::cout << "[GameServer] 🗑️  Destroying entity " << id
                           << " (type: " << (int)it->second.type << ")" << std::endl;
+                if (it->second.isBoss && id == currentBossId_) {
+                    currentBossId_ = 0;
+                }
                 entities_.erase(it);
                 broadcastEntityDestroy(id);
             }
@@ -502,52 +666,84 @@ private:
     }
 
     bool checkCollision(const ServerEntity& a, const ServerEntity& b) {
-        const float size = 50.0f;
-        return (a.x < b.x + size && a.x + size > b.x && a.y < b.y + size && a.y + size > b.y);
+        float sizeA = a.isBoss ? 150.0f : 50.0f;
+        float sizeB = b.isBoss ? 150.0f : 50.0f;
+        return (a.x < b.x + sizeB && a.x + sizeA > b.x && a.y < b.y + sizeB && a.y + sizeA > b.y);
     }
 
-    void spawnEnemy() {
+    // Check if a boss is currently active
+    bool isBossActive() {
+        if (currentBossId_ == 0) return false;
+        return entities_.find(currentBossId_) != entities_.end();
+    }
+
+    // Spawn a random enemy type
+    void spawnRandomEnemy() {
+        // Enemy types: 0=basic, 1=zigzag, 2=sinewave, 3=kamikaze, 4=shooter, 5=turret
+        int enemyType = dist_(rng_) % 6;
+        float y = 100.0f + (dist_(rng_) % 880);
+        spawnEnemyByType(enemyType, y);
+    }
+
+    // Spawn enemy by specific type
+    void spawnEnemyByType(int type, float y) {
         ServerEntity enemy;
         enemy.id = nextEntityId_++;
         enemy.type = EntityType::ENTITY_MONSTER;
         enemy.x = 1920.0f;
-        enemy.y = 100.0f + (dist_(rng_) % 880);
+        enemy.y = y;
+        enemy.baseY = y;
+        enemy.enemyType = static_cast<uint8_t>(type);
+        enemy.isBoss = false;
+        enemy.isPowerUp = false;
+        enemy.patternTimer = 0.0f;
 
-        // Random enemy type (0-5 for different enemy types)
-        enemy.enemyType = dist_(rng_) % 6;
-
-        // Adjust speed and HP based on enemy type
-        switch (enemy.enemyType) {
-            case 0:  // Basic
+        // Configure based on enemy type
+        switch (type) {
+            case 0:  // Basic - straight line
                 enemy.vx = -200.0f;
+                enemy.vy = 0.0f;
                 enemy.hp = 10;
                 break;
-            case 1:  // ZigZag (faster)
-                enemy.vx = -250.0f;
+            case 1:  // ZigZag - moves up and down
+                enemy.vx = -180.0f;
+                enemy.vy = 150.0f;  // Will toggle
                 enemy.hp = 8;
                 break;
-            case 2:  // Sine Wave
-                enemy.vx = -180.0f;
+            case 2:  // SineWave - smooth wave motion
+                enemy.vx = -160.0f;
+                enemy.vy = 0.0f;
                 enemy.hp = 12;
                 break;
-            case 3:  // Kamikaze (very fast, low HP)
+            case 3:  // Kamikaze - very fast, aims at players
                 enemy.vx = -400.0f;
+                enemy.vy = 0.0f;
                 enemy.hp = 5;
                 break;
-            case 4:  // Turret (slow, high HP)
-                enemy.vx = -100.0f;
-                enemy.hp = 20;
-                break;
-            case 5:  // Boss (rare, slow, very high HP)
+            case 4:  // Shooter - shoots frequently
                 enemy.vx = -150.0f;
-                enemy.hp = 50;
+                enemy.vy = 0.0f;
+                enemy.hp = 15;
+                enemy.fireTimer = 0.5f;  // Shoots faster
+                break;
+            case 5:  // Turret - slow, high HP, shoots a lot
+                enemy.vx = -80.0f;
+                enemy.vy = 0.0f;
+                enemy.hp = 25;
+                enemy.fireTimer = 0.3f;
+                break;
+            default:
+                enemy.vx = -200.0f;
+                enemy.vy = 0.0f;
+                enemy.hp = 10;
                 break;
         }
 
-        enemy.vy = 0.0f;
         enemy.playerId = 0;
-        enemy.playerLine = 0;                                   // Enemies don't use playerLine
-        enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f;  // Initial fire delay 1-3s
+        enemy.playerLine = 0;
+        if (enemy.fireTimer <= 0.0f) {
+            enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f;
+        }
 
         entities_[enemy.id] = enemy;
         broadcastEntitySpawn(enemy);
@@ -555,6 +751,74 @@ private:
         std::cout << "[GameServer] 👾 Spawned enemy " << enemy.id << " (type "
                   << (int)enemy.enemyType << ") at (" << enemy.x << ", " << enemy.y << ")"
                   << std::endl;
+    }
+
+    // Spawn a random power-up
+    void spawnRandomPowerUp() {
+        // Only spawn bomb power-ups (type 4 = missile/bomb)
+        int powerUpType = 4;  // Bomb only
+        float y = 150.0f + (dist_(rng_) % 780);
+        spawnPowerUp(powerUpType, 1920.0f, y);
+    }
+
+    // Spawn power-up by type
+    void spawnPowerUp(int type, float x, float y) {
+        ServerEntity powerUp;
+        powerUp.id = nextEntityId_++;
+        powerUp.type = EntityType::ENTITY_POWERUP;
+        powerUp.x = x;
+        powerUp.y = y;
+        powerUp.baseY = y;
+        powerUp.vx = -100.0f;  // Slow drift left
+        powerUp.vy = 0.0f;
+        powerUp.hp = 1;
+        powerUp.playerId = 0;
+        powerUp.playerLine = 0;
+        powerUp.isBoss = false;
+        powerUp.isPowerUp = true;
+        powerUp.enemyType = static_cast<uint8_t>(type);  // Use enemyType field for power-up type
+        powerUp.patternTimer = 0.0f;
+
+        // Set power-up type string - only bomb now
+        powerUp.powerUpType = "bomb";
+
+        entities_[powerUp.id] = powerUp;
+        broadcastEntitySpawn(powerUp);
+
+        std::cout << "[GameServer] 💣 Spawned BOMB power-up " << powerUp.id << " at (" 
+                  << powerUp.x << ", " << powerUp.y << ")" << std::endl;
+    }
+
+    // Spawn a boss
+    void spawnBoss() {
+        ServerEntity boss;
+        boss.id = nextEntityId_++;
+        boss.type = EntityType::ENTITY_BOSS;
+        boss.x = 1700.0f;
+        boss.y = 400.0f;
+        boss.baseY = 400.0f;
+        boss.vx = -50.0f;  // Very slow approach
+        boss.vy = 100.0f;  // Moves up and down
+        boss.hp = 200;     // High HP
+        boss.playerId = 0;
+        boss.playerLine = 0;
+        boss.isBoss = true;
+        boss.isPowerUp = false;
+        boss.enemyType = dist_(rng_) % 3;  // 0-2 for different boss types
+        boss.fireTimer = 2.0f;
+        boss.patternTimer = 0.0f;
+
+        entities_[boss.id] = boss;
+        currentBossId_ = boss.id;
+        broadcastEntitySpawn(boss);
+
+        std::cout << "[GameServer] 👹 BOSS SPAWNED! ID: " << boss.id << " (type "
+                  << (int)boss.enemyType << ") HP: " << (int)boss.hp << std::endl;
+    }
+
+    // Legacy spawn function (kept for compatibility)
+    void spawnEnemy() {
+        spawnRandomEnemy();
     }
 
     void spawnPlayerMissile(const ServerEntity& player, uint8_t chargeLevel = 0) {
@@ -611,12 +875,47 @@ private:
         explosion.playerId = 0;
         explosion.playerLine = 0;
         explosion.lifetime = 0.5f;  // Explosions disappear after 0.5 seconds
+        explosion.isBoss = false;
+        explosion.isPowerUp = false;
 
         entities_[explosion.id] = explosion;
         broadcastEntitySpawn(explosion);
 
         std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y
                   << ") with lifetime " << explosion.lifetime << "s" << std::endl;
+    }
+
+    // Boss shoots multiple missiles in a spread pattern
+    void spawnBossMissiles(const ServerEntity& boss) {
+        // Spawn 3-5 missiles in a spread pattern
+        int missileCount = 3 + (dist_(rng_) % 3);
+        float spreadAngle = 30.0f;  // degrees
+        float startAngle = -spreadAngle * (missileCount - 1) / 2.0f;
+
+        for (int i = 0; i < missileCount; ++i) {
+            float angle = startAngle + i * spreadAngle;
+            float radians = angle * 3.14159f / 180.0f;
+
+            ServerEntity missile;
+            missile.id = nextEntityId_++;
+            missile.type = EntityType::ENTITY_MONSTER_MISSILE;
+            missile.x = boss.x - 50.0f;
+            missile.y = boss.y + 50.0f;
+            missile.vx = -500.0f * std::cos(radians);
+            missile.vy = 500.0f * std::sin(radians);
+            missile.hp = 1;
+            missile.playerId = 0;
+            missile.playerLine = 0;
+            missile.isBoss = false;
+            missile.isPowerUp = false;
+            missile.projectileType = 1;  // Boss projectile
+
+            entities_[missile.id] = missile;
+            broadcastEntitySpawn(missile);
+        }
+
+        std::cout << "[GameServer] 👹 Boss " << boss.id << " fired " << missileCount 
+                  << " missiles!" << std::endl;
     }
 
     void sendWorldSnapshot(bool forceFull = false) {
@@ -1070,7 +1369,7 @@ private:
             player.y = 200.0f + (playerIndex * 200.0f);  // Offset players vertically
             player.vx = 0.0f;
             player.vy = 0.0f;
-            player.hp = 100;
+            player.hp =200;  // Player starts with 100 HP
             player.playerId = playerId;
             player.playerLine = playerIndex % 5;  // Cycle through 5 different ship colors
 
@@ -1287,6 +1586,12 @@ private:
     std::unordered_map<uint32_t, std::unordered_map<uint32_t, EntityState>> lastSnapshotPerRoom_;
     // Global cache for last sent snapshot (classique mode)
     std::unordered_map<uint32_t, EntityState> lastSnapshotGlobal_;
+    
+    // Spawn timers for continuous spawning
+    float enemySpawnTimer_ = 0.0f;
+    float powerUpSpawnTimer_ = 0.0f;
+    float bossSpawnTimer_ = 0.0f;
+    uint32_t currentBossId_ = 0;  // Track active boss
 };
 
 int main() {

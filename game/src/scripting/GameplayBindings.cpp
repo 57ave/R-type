@@ -94,7 +94,7 @@ void GameplayBindings::RegisterConfigAccessors(sol::state& lua) {
         if (getEnemy.valid()) {
             return getEnemy(enemyType);
         }
-        return sol::nil;
+        return sol::lua_nil;
     };
 
     lua["ConfigAccess"]["GetWeaponConfig"] = [&lua](const std::string& weaponName,
@@ -103,7 +103,7 @@ void GameplayBindings::RegisterConfigAccessors(sol::state& lua) {
         if (getWeapon.valid()) {
             return getWeapon(weaponName, level.value_or(1));
         }
-        return sol::nil;
+        return sol::lua_nil;
     };
 
     lua["ConfigAccess"]["GetBossConfig"] = [&lua](const std::string& bossType) -> sol::table {
@@ -111,7 +111,7 @@ void GameplayBindings::RegisterConfigAccessors(sol::state& lua) {
         if (getBoss.valid()) {
             return getBoss(bossType);
         }
-        return sol::nil;
+        return sol::lua_nil;
     };
 
     lua["ConfigAccess"]["GetPowerUpConfig"] = [&lua](const std::string& powerUpType) -> sol::table {
@@ -119,7 +119,7 @@ void GameplayBindings::RegisterConfigAccessors(sol::state& lua) {
         if (getPowerUp.valid()) {
             return getPowerUp(powerUpType);
         }
-        return sol::nil;
+        return sol::lua_nil;
     };
 }
 

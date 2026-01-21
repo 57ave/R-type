@@ -249,7 +249,9 @@ enum class EntityType : uint8_t {
     ENTITY_PLAYER_MISSILE = 2,
     ENTITY_MONSTER_MISSILE = 3,
     ENTITY_OBSTACLE = 4,
-    ENTITY_EXPLOSION = 5
+    ENTITY_EXPLOSION = 5,
+    ENTITY_BOSS = 6,
+    ENTITY_POWERUP = 7
 };
 
 #pragma pack(push, 1)

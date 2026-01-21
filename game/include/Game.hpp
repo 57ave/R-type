@@ -249,7 +249,7 @@ private:
     float gamePlayTime = 0.0f;
     bool winConditionTriggered = false;
     float winDisplayTimer = 0.0f;
-    const float WIN_TIME_THRESHOLD = 30.0f;   // Win after 30 seconds
+    const float WIN_TIME_THRESHOLD = 75.0f;   // Win after 1m15 (75 seconds)
     const float WIN_DISPLAY_DURATION = 3.0f;  // Show win message for 3 seconds
 
     // Game Over management

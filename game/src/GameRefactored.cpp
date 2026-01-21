@@ -10,12 +10,14 @@
 #include <components/Animation.hpp>
 #include <components/NetworkId.hpp>
 #include <components/ShootEmUpTags.hpp>
+#include <components/Collider.hpp>
 #include <rendering/Types.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <algorithm>
 
 
 namespace RType {
@@ -27,6 +29,8 @@ GameRefactored::GameRefactored()
     , windowTitle("R-Type - ECS Version")
     , networkMode(false)
     , isNetworkClient(false)
+    , cmdLineServerAddress("")
+    , cmdLineServerPort(0)
 {
 }
 
@@ -36,9 +40,42 @@ GameRefactored::~GameRefactored() {
     }
 }
 
-int GameRefactored::Run() {
+void GameRefactored::ParseCommandLine(int argc, char* argv[]) {
+    auto& logger = rtype::core::Logger::getInstance();
+    
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        
+        if ((arg == "--network" || arg == "-n") && i + 2 < argc) {
+            cmdLineServerAddress = argv[i + 1];
+            cmdLineServerPort = std::atoi(argv[i + 2]);
+            
+            logger.info("CommandLine", "Network mode requested: " + cmdLineServerAddress + ":" + std::to_string(cmdLineServerPort));
+            
+            // Activer le mode réseau
+            networkMode = true;
+            isNetworkClient = true;
+            
+            i += 2; // Skip next 2 arguments
+        }
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: r-type_game [options]\n"
+                      << "Options:\n"
+                      << "  --network, -n <ip> <port>  Connect to server at ip:port\n"
+                      << "  --help, -h                 Show this help message\n";
+            exit(0);
+        }
+    }
+}
+
+int GameRefactored::Run(int argc, char* argv[]) {
     auto& logger = rtype::core::Logger::getInstance();
     logger.info("Game", "R-Type starting...");
+    
+    // Parse command line arguments
+    if (argc > 0 && argv != nullptr) {
+        ParseCommandLine(argc, argv);
+    }
     
     if (!Initialize()) {
         logger.error("Game", "Failed to initialize");
@@ -79,6 +116,15 @@ bool GameRefactored::Initialize() {
     
     if (!Core::GameConfig::LoadConfiguration(*luaState)) {
         logger.warning("Game", "Using default configuration");
+    }
+    
+    // Appliquer les arguments de ligne de commande (override config)
+    if (!cmdLineServerAddress.empty()) {
+        auto& config = Core::GameConfig::GetConfiguration();
+        const_cast<Core::GameConfiguration&>(config).network.server.defaultAddress = cmdLineServerAddress;
+        const_cast<Core::GameConfiguration&>(config).network.server.defaultPort = cmdLineServerPort;
+        const_cast<Core::GameConfiguration&>(config).network.autoConnect = true;
+        logger.info("CommandLine", "Overriding config with: " + cmdLineServerAddress + ":" + std::to_string(cmdLineServerPort));
     }
     
     ApplyConfiguration();
@@ -356,38 +402,98 @@ void GameRefactored::SetupNetworkCallbacks() {
             }
         }
         else if (tag.name == "Enemy") {
-            auto enemyTexIt = texMap.find("enemy");
+            // Get enemy type from EnemyTag component
+            std::string enemyType = "basic";
+            if (coordinator->HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
+                auto& enemyTag = coordinator->GetComponent<ShootEmUp::Components::EnemyTag>(entity);
+                enemyType = enemyTag.enemyType;
+            }
+            
+            logger.debug("Network", "Creating sprite for enemy type: " + enemyType);
+            
+            // Define sprite configurations for each enemy type
+            struct EnemySpriteConfig {
+                std::string texture;
+                int frameWidth, frameHeight;
+                int frameCount;
+                float scale;
+                float frameTime;
+            };
+            
+            // Map enemy types to sprite configs (matching enemies_config.lua)
+            EnemySpriteConfig config;
+            std::string textureKey = "enemy";  // Default
+            
+            if (enemyType == "basic" || enemyType == "shooter") {
+                // r-typesheet5.png - 33x36 frames, 8 frames
+                textureKey = "enemy";
+                config = {"enemy", 33, 36, 8, 2.5f, 0.1f};
+            }
+            else if (enemyType == "zigzag" || enemyType == "sine" || enemyType == "sinewave") {
+                // r-typesheet3.png - 17x18 frames, 12 frames
+                textureKey = "enemy2";
+                config = {"enemy2", 17, 18, 12, 2.5f, 0.08f};
+            }
+            else if (enemyType == "kamikaze") {
+                // r-typesheet8.png - 32x32 frames, 4 frames
+                textureKey = "enemy3";
+                config = {"enemy3", 32, 32, 4, 2.0f, 0.05f};
+            }
+            else if (enemyType == "turret" || enemyType == "spreader") {
+                // Use enemy sprite for turrets
+                textureKey = "enemy";
+                config = {"enemy", 33, 36, 8, 2.0f, 0.1f};
+            }
+            else {
+                // Default basic enemy
+                config = {"enemy", 33, 36, 8, 2.5f, 0.1f};
+            }
+            
+            auto enemyTexIt = texMap.find(textureKey);
+            if (enemyTexIt == texMap.end()) {
+                // Fallback to default enemy texture
+                enemyTexIt = texMap.find("enemy");
+            }
+            
             if (enemyTexIt != texMap.end()) {
                 auto* sprite = new SFMLSprite();
                 sprites.push_back(sprite);
                 sprite->setTexture(enemyTexIt->second);
                 
-                IntRect rect(0, 0, 33, 32);
+                IntRect rect(0, 0, config.frameWidth, config.frameHeight);
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.5f;
-                spriteComp.scaleY = 2.5f;
+                spriteComp.scaleX = config.scale;
+                spriteComp.scaleY = config.scale;
                 spriteComp.layer = 5;
                 coordinator->AddComponent(entity, spriteComp);
                 
-                // Ajouter animation pour l'ennemi
+                // Animation
                 Animation anim;
-                anim.frameCount = 8;
+                anim.frameCount = config.frameCount;
                 anim.currentFrame = 0;
-                anim.frameTime = 0.1f;
+                anim.frameTime = config.frameTime;
                 anim.currentTime = 0.0f;
                 anim.loop = true;
-                anim.frameWidth = 33;
-                anim.frameHeight = 32;
+                anim.frameWidth = config.frameWidth;
+                anim.frameHeight = config.frameHeight;
                 anim.startX = 0;
                 anim.startY = 0;
                 anim.spacing = 0;
                 coordinator->AddComponent(entity, anim);
                 
-                logger.info("Network", "✅ Enemy sprite created for entity " + std::to_string(entity));
+                // Add Collider
+                Collider collider;
+                collider.width = config.frameWidth * config.scale;
+                collider.height = config.frameHeight * config.scale;
+                collider.tag = "enemy";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ Enemy sprite created for entity " + std::to_string(entity) + 
+                            " (type: " + enemyType + ", texture: " + textureKey + ")");
             }
         }
         else if (tag.name == "PlayerBullet") {
@@ -398,43 +504,104 @@ void GameRefactored::SetupNetworkCallbacks() {
                 sprite->setTexture(missileTexIt->second);
                 
                 // Vérifier le niveau de charge pour le bon sprite
-                IntRect rect(249, 88, 16, 12);  // Missile normal
+                int chargeLevel = 0;
                 if (coordinator->HasComponent<ShootEmUp::Components::ProjectileTag>(entity)) {
                     auto& projTag = coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(entity);
-                    if (projTag.chargeLevel > 0) {
-                        rect = IntRect(232, 103, 32, 14);  // Missile chargé
-                    }
+                    chargeLevel = projTag.chargeLevel;
+                }
+                
+                IntRect rect;
+                float scaleX = 3.0f;
+                float scaleY = 3.0f;
+                
+                if (chargeLevel <= 0) {
+                    // Missile normal
+                    rect = IntRect(245, 85, 20, 20);
+                } else {
+                    // Charged missile sprites - same as local GameplayManager
+                    struct ChargeData {
+                        int xPos, yPos, width, height;
+                    };
+                    ChargeData chargeLevels[5] = {
+                        {233, 100, 15, 15},  // Level 1
+                        {202, 117, 31, 15},  // Level 2
+                        {170, 135, 47, 15},  // Level 3
+                        {138, 155, 63, 15},  // Level 4
+                        {105, 170, 79, 17}   // Level 5
+                    };
+                    int idx = std::clamp(chargeLevel - 1, 0, 4);
+                    ChargeData& data = chargeLevels[idx];
+                    rect = IntRect(data.xPos, data.yPos, data.width, data.height);
                 }
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.0f;
-                spriteComp.scaleY = 2.0f;
+                spriteComp.scaleX = scaleX;
+                spriteComp.scaleY = scaleY;
                 spriteComp.layer = 8;
                 coordinator->AddComponent(entity, spriteComp);
                 
-                logger.debug("Network", "✅ PlayerBullet sprite created for entity " + std::to_string(entity));
+                // Ajouter Collider pour la collision
+                Collider collider;
+                collider.width = rect.width * scaleX;
+                collider.height = rect.height * scaleY;
+                collider.tag = (chargeLevel > 0) ? "charged_bullet" : "bullet";
+                coordinator->AddComponent(entity, collider);
+                
+                // Animation pour les missiles chargés
+                if (chargeLevel > 0) {
+                    Animation anim;
+                    anim.frameTime = 0.1f;
+                    anim.currentFrame = 0;
+                    anim.frameCount = 2;
+                    anim.loop = true;
+                    anim.frameWidth = rect.width;
+                    anim.frameHeight = rect.height;
+                    anim.startX = rect.left;
+                    anim.startY = rect.top;
+                    anim.spacing = 2;
+                    coordinator->AddComponent(entity, anim);
+                }
+                
+                logger.debug("Network", "✅ PlayerBullet sprite created for entity " + std::to_string(entity) + 
+                            " (chargeLevel: " + std::to_string(chargeLevel) + ")");
             }
         }
         else if (tag.name == "EnemyBullet") {
-            auto missileTexIt = texMap.find("missile");
-            if (missileTexIt != texMap.end()) {
+            auto enemyBulletTexIt = texMap.find("enemy_bullets");
+            if (enemyBulletTexIt != texMap.end()) {
                 auto* sprite = new SFMLSprite();
                 sprites.push_back(sprite);
-                sprite->setTexture(missileTexIt->second);
+                sprite->setTexture(enemyBulletTexIt->second);
                 
-                IntRect rect(200, 88, 16, 12);  // Missile ennemi
+                // Orange ball: first row at x=166, y=3, each frame ~12x12 pixels
+                IntRect rect(166, 3, 12, 12);
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.0f;
-                spriteComp.scaleY = 2.0f;
-                spriteComp.layer = 7;
+                spriteComp.scaleX = 2.5f;
+                spriteComp.scaleY = 2.5f;
+                spriteComp.layer = 8;
                 coordinator->AddComponent(entity, spriteComp);
+                
+                // Animation - 4 frames looping
+                Animation anim;
+                anim.frameTime = 0.1f;
+                anim.currentFrame = 0;
+                anim.frameCount = 4;
+                anim.loop = true;
+                anim.frameWidth = 12;
+                anim.frameHeight = 12;
+                anim.startX = 166;
+                anim.startY = 3;
+                anim.spacing = 5;  // Spacing between frames (17 - 12 = 5)
+                coordinator->AddComponent(entity, anim);
+                
+                logger.debug("Network", "✅ EnemyBullet sprite created for entity " + std::to_string(entity));
             }
         }
         else if (tag.name == "Explosion") {
@@ -470,6 +637,100 @@ void GameRefactored::SetupNetworkCallbacks() {
                 coordinator->AddComponent(entity, anim);
             }
         }
+        else if (tag.name == "Boss") {
+            auto bossTexIt = texMap.find("boss");
+            if (bossTexIt == texMap.end()) {
+                bossTexIt = texMap.find("enemy");  // Fallback
+            }
+            
+            if (bossTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(bossTexIt->second);
+                
+                IntRect rect(0, 0, 160, 128);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.0f;
+                spriteComp.scaleY = 2.0f;
+                spriteComp.layer = 6;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Boss animation
+                Animation anim;
+                anim.frameCount = 4;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.15f;
+                anim.currentTime = 0.0f;
+                anim.loop = true;
+                anim.frameWidth = 160;
+                anim.frameHeight = 128;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+                
+                // Boss collider
+                Collider collider;
+                collider.width = 160 * 2.0f;
+                collider.height = 128 * 2.0f;
+                collider.tag = "boss";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ Boss sprite created for entity " + std::to_string(entity));
+            }
+        }
+        else if (tag.name == "PowerUp") {
+            auto powerupTexIt = texMap.find("powerup");
+            if (powerupTexIt == texMap.end()) {
+                powerupTexIt = texMap.find("missile");  // Fallback
+            }
+            
+            if (powerupTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(powerupTexIt->second);
+                
+                // r-typesheet25.png is 133x133, contains capsule power-ups
+                // Each frame is approximately 33x33 pixels
+                IntRect rect(0, 0, 33, 33);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.5f;
+                spriteComp.scaleY = 2.5f;
+                spriteComp.layer = 7;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Power-up animation (4 frames in a row)
+                Animation anim;
+                anim.frameCount = 4;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.12f;
+                anim.currentTime = 0.0f;
+                anim.loop = true;
+                anim.frameWidth = 33;
+                anim.frameHeight = 33;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+                
+                // Power-up collider
+                Collider collider;
+                collider.width = 33 * 2.5f;
+                collider.height = 33 * 2.5f;
+                collider.tag = "powerup";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ PowerUp sprite created for entity " + std::to_string(entity));
+            }
+        }
     });
 
     // Callback de destruction d'entité - EFFET D'EXPLOSION
@@ -500,11 +761,24 @@ void GameRefactored::SetupNetworkCallbacks() {
     });
 
     // Callback de statut de connexion
-    networkManager->SetConnectionStatusCallback([&logger](bool connected, const std::string& message) {
+    networkManager->SetConnectionStatusCallback([this, &logger](bool connected, const std::string& message) {
         if (connected) {
             logger.info("Network", "Connected - " + message);
         } else {
             logger.warning("Network", "Disconnected - " + message);
+            
+            // Notifier Lua de l'échec de connexion
+            if (this->luaState) {
+                sol::state& state = this->luaState->GetState();
+                sol::protected_function onConnectionFailed = state["OnConnectionFailed"];
+                if (onConnectionFailed.valid()) {
+                    auto result = onConnectionFailed(message);
+                    if (!result.valid()) {
+                        sol::error err = result;
+                        logger.error("Lua", std::string("OnConnectionFailed error: ") + err.what());
+                    }
+                }
+            }
         }
     });
 }
@@ -562,25 +836,62 @@ void GameRefactored::SetupLuaBindings() {
     // Override Network.Connect to use the refactored Core::NetworkManager + NetworkSystem.
     // This ensures incoming packets are processed and forwarded to Lua callbacks.
     auto netTable = lua["Network"].get_or_create<sol::table>();
+    
+    // Expose server configuration (from command line or config)
+    netTable["GetServerAddress"] = [this]() -> std::string {
+        if (!cmdLineServerAddress.empty()) {
+            return cmdLineServerAddress;
+        }
+        const auto& config = Core::GameConfig::GetConfiguration();
+        return config.network.server.defaultAddress;
+    };
+    
+    netTable["GetServerPort"] = [this]() -> int {
+        if (cmdLineServerPort > 0) {
+            return cmdLineServerPort;
+        }
+        const auto& config = Core::GameConfig::GetConfiguration();
+        return config.network.server.defaultPort;
+    };
+    
+    netTable["ShouldAutoConnect"] = [this]() -> bool {
+        // Auto-connect si l'utilisateur a passé --network en argument
+        return !cmdLineServerAddress.empty() && cmdLineServerPort > 0;
+    };
+    
     netTable["Connect"] = [this](const std::string& host, int port) {
+        auto& logger = rtype::core::Logger::getInstance();
+        
         if (!luaState) {
-            std::cerr << "[GameRefactored] LuaState not available" << std::endl;
+            logger.error("Network", "LuaState not available");
             return;
         }
 
         sol::state& lua = luaState->GetState();
         if (!networkManager || !coordinator) {
-            std::cerr << "[GameRefactored] NetworkManager/Coordinator not available" << std::endl;
+            logger.error("Network", "NetworkManager/Coordinator not available");
+            // Notifier Lua de l'échec
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Network system not initialized");
+            }
             return;
         }
 
         if (host.empty() || port <= 0) {
-            std::cerr << "[GameRefactored] Invalid host/port" << std::endl;
+            logger.error("Network", "Invalid host/port: " + host + ":" + std::to_string(port));
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Invalid IP or port");
+            }
             return;
         }
 
+        logger.info("Network", "Attempting connection to " + host + ":" + std::to_string(port));
+
         // If already connected, just notify UI.
         if (networkManager->IsConnected()) {
+            logger.info("Network", "Already connected, updating UI");
             if (gameLoop) {
                 gameLoop->SetNetworkSystem(networkManager->GetNetworkSystem());
                 gameLoop->SetNetworkMode(true);
@@ -597,9 +908,16 @@ void GameRefactored::SetupLuaBindings() {
 
         const bool ok = networkManager->ConnectToServer(host, static_cast<short>(port), coordinator.get());
         if (!ok) {
-            std::cerr << "[GameRefactored] Connection failed" << std::endl;
+            logger.error("Network", "Failed to connect to " + host + ":" + std::to_string(port));
+            // Notifier Lua de l'échec
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Connection failed - server not responding");
+            }
             return;
         }
+        
+        logger.info("Network", "Connection initiated successfully");
 
         networkMode = true;
         isNetworkClient = true;

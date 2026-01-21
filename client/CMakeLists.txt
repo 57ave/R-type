@@ -1,28 +1,39 @@
 # ==================== Client Executable ====================
-# ==================== Client Executable ====================
-
-# Sources du client (implémentations client-specific)
-file(GLOB_RECURSE CLIENT_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
-
-# Ensure the top-level main.cpp is included if present
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
-    list(APPEND CLIENT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
-endif()
+# Client wrapper qui utilise GameRefactored
 
 # Créer l'exécutable client
-add_executable(r-type_client
-    main.cpp
-    ${CLIENT_SOURCES}
-)
+add_executable(r-type_client main.cpp)
 
 target_include_directories(r-type_client PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/game/include
 )
 
 # Link contre engine et game
 target_link_libraries(r-type_client PRIVATE
+    # Core engine libraries
     engine
+    core
+    network
+    scripting
     game
+    
+    # Generic engine systems (UISystem must come after game)
+    UISystem
+    MovementSystem
+    AnimationSystem
+    StateMachineAnimationSystem
+    LifetimeSystem
+    ScrollingBackgroundSystem
+    BoundarySystem
+    HealthSystem
+    AudioSystem
+    
+    # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
+    shootemup
+    
+    # SFML
+    sfml-graphics
+    sfml-window
+    sfml-system
+    sfml-audio
 )
