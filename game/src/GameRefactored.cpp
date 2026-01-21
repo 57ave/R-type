@@ -36,9 +36,48 @@ GameRefactored::~GameRefactored() {
     }
 }
 
-int GameRefactored::Run() {
+void GameRefactored::ParseCommandLine(int argc, char* argv[]) {
+    auto& logger = rtype::core::Logger::getInstance();
+    
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        
+        if ((arg == "--network" || arg == "-n") && i + 2 < argc) {
+            std::string address = argv[i + 1];
+            int port = std::atoi(argv[i + 2]);
+            
+            logger.info("CommandLine", "Network mode requested: " + address + ":" + std::to_string(port));
+            
+            // Activer le mode réseau
+            networkMode = true;
+            isNetworkClient = true;
+            
+            // Override config with command line args
+            auto& config = Core::GameConfig::GetConfiguration();
+            const_cast<Core::GameConfiguration&>(config).network.server.defaultAddress = address;
+            const_cast<Core::GameConfiguration&>(config).network.server.defaultPort = port;
+            const_cast<Core::GameConfiguration&>(config).network.autoConnect = true;
+            
+            i += 2; // Skip next 2 arguments
+        }
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: r-type_client [options]\n"
+                      << "Options:\n"
+                      << "  --network, -n <ip> <port>  Connect to server at ip:port\n"
+                      << "  --help, -h                 Show this help message\n";
+            exit(0);
+        }
+    }
+}
+
+int GameRefactored::Run(int argc, char* argv[]) {
     auto& logger = rtype::core::Logger::getInstance();
     logger.info("Game", "R-Type starting...");
+    
+    // Parse command line arguments
+    if (argc > 0 && argv != nullptr) {
+        ParseCommandLine(argc, argv);
+    }
     
     if (!Initialize()) {
         logger.error("Game", "Failed to initialize");
