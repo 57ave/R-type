@@ -17,6 +17,12 @@
 #include <mutex>
 #include <memory>
 #include <unordered_map>
+// Some platforms or build systems define a global macro named DEBUG which
+// conflicts with our LogLevel::DEBUG enum value. Undefine it here so the
+// enum declaration can use the symbol name safely.
+#ifdef DEBUG
+#undef DEBUG
+#endif
 
 namespace rtype {
 namespace core {

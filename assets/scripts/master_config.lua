@@ -8,7 +8,7 @@ print("  R-TYPE CONFIGURATION LOADER")
 print("========================================")
 
 -- Base path for scripts
-local scriptPath = "game/assets/scripts/config/"
+local scriptPath = "assets/scripts/"
 
 -- Configuration load order (dependencies first)
 local configFiles = {
