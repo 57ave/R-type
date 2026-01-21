@@ -39,12 +39,7 @@ jobs:
             python3
 
       - name: Configure CMake (GCC)
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc \
-            -DCMAKE_CXX_COMPILER=g++ \
-            -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build -j $(nproc)
@@ -86,12 +81,7 @@ jobs:
             python3
 
       - name: Configure CMake (Clang)
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build -j $(nproc)
@@ -117,11 +107,7 @@ jobs:
           vcpkg install openal-soft:x64-windows
 
       - name: Configure CMake (MSVC)
-        run: |
-          cmake -B build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DBUILD_TESTS=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DBUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build --config Release
