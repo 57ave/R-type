@@ -2,6 +2,11 @@
 #include "core/GameStateCallbacks.hpp"
 #include "network/NetworkBindings.hpp"
 #include "core/Logger.hpp"
+#include <components/Position.hpp>
+#include <components/Sprite.hpp>
+#include <components/ScrollingBackground.hpp>
+#include <components/Tag.hpp>
+#include <rendering/Types.hpp>
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -149,6 +154,17 @@ bool GameRefactored::Initialize(int argc, char* argv[]) {
     // ========================================
     LoadScripts();
     InitializeUI();
+    InitializeWorld();  // Create background and initial game entities
+
+    // Définir l'état initial du jeu
+    auto& gsm = GameStateManager::Instance();
+    if (networkMode) {
+        gsm.SetState(GameState::Lobby);  // Attendre la connexion en mode réseau
+        logger.info("Game", "Initial game state: Lobby");
+    } else {
+        gsm.SetState(GameState::Playing);  // Directement en jeu en mode solo
+        logger.info("Game", "Initial game state: Playing");
+    }
 
     // ========================================
     // FINALISATION
@@ -336,8 +352,8 @@ bool GameRefactored::LoadScripts() {
 
     auto& logger = rtype::core::Logger::getInstance();
 
-    // Charger le script d'initialisation principal
-    std::string initScript = assetLoader->ResolveAssetPath("assets/scripts/init.lua");
+    // Charger le script d'initialisation principal (MAINTENANT dans game/assets/scripts/)
+    std::string initScript = assetLoader->ResolveAssetPath("game/assets/scripts/init.lua");
     if (!luaState->LoadScript(initScript)) {
         logger.error("Game", "Failed to load init.lua");
         return false;
@@ -376,6 +392,27 @@ void GameRefactored::SetupLuaBindings() {
 
     // Callbacks de gestion d'état
     SetupGameStateBindings();
+
+    // Namespace Game pour la création d'entités
+    auto gameNamespace = lua["Game"].get_or_create<sol::table>();
+    
+    gameNamespace["CreatePlayer"] = [this](float x, float y, int line) -> int {
+        if (!gameplayManager) {
+            auto& logger = rtype::core::Logger::getInstance();
+            logger.error("Lua", "GameplayManager not available");
+            return 0;
+        }
+        ECS::Entity player = gameplayManager->CreatePlayer(x, y, line);
+        auto& logger = rtype::core::Logger::getInstance();
+        logger.info("Lua", "Player created: " + std::to_string(player));
+        return static_cast<int>(player);
+    };
+
+    gameNamespace["CreateEnemy"] = [this](float x, float y, const std::string& pattern, const std::string& type) -> int {
+        if (!gameplayManager) return 0;
+        ECS::Entity enemy = gameplayManager->CreateEnemy(x, y, pattern, type);
+        return static_cast<int>(enemy);
+    };
 
     // Chemin de base des assets pour Lua
     lua["ASSET_BASE_PATH"] = assetLoader->GetBasePath();
@@ -504,6 +541,74 @@ void GameRefactored::InitializeUI() {
             sol::error err = result;
             logger.error("UI", std::string("InitUI() error: ") + err.what());
         }
+    }
+}
+
+void GameRefactored::InitializeWorld() {
+    if (!coordinator || !assetLoader) return;
+
+    auto& logger = rtype::core::Logger::getInstance();
+    logger.info("Game", "Creating game world (background)...");
+
+    // Créer le background scrollant
+    auto* backgroundTexture = assetLoader->GetTexture("background");
+    if (!backgroundTexture) {
+        logger.error("Game", "Background texture not loaded!");
+        return;
+    }
+
+    // Créer 2 backgrounds pour le scrolling infini
+    for (int i = 0; i < 2; ++i) {
+        ECS::Entity bg = coordinator->CreateEntity();
+
+        // Position
+        Position pos;
+        pos.x = static_cast<float>(i * windowWidth);
+        pos.y = 0.0f;
+        coordinator->AddComponent(bg, pos);
+
+        // Sprite - Utiliser AssetLoader::CreateSprite
+        auto* sprite = assetLoader->CreateSprite("background");
+        if (!sprite) {
+            logger.error("Game", "Failed to create background sprite " + std::to_string(i));
+            continue;
+        }
+        sprite->setPosition(eng::engine::rendering::Vector2f(pos.x, pos.y));
+
+        ::Sprite spriteComp;
+        spriteComp.sprite = sprite;
+        spriteComp.layer = -10;  // Background layer (lowest)
+        spriteComp.scaleX = static_cast<float>(windowWidth) / backgroundTexture->getSize().x;
+        spriteComp.scaleY = static_cast<float>(windowHeight) / backgroundTexture->getSize().y;
+        coordinator->AddComponent(bg, spriteComp);
+
+        // ScrollingBackground component
+        ::ScrollingBackground scrollComp;
+        scrollComp.scrollSpeed = 100.0f;  // Pixels per second
+        scrollComp.horizontal = true;
+        scrollComp.loop = true;
+        scrollComp.sprite1X = pos.x;
+        scrollComp.sprite2X = pos.x;
+        scrollComp.spriteWidth = static_cast<float>(windowWidth);
+        coordinator->AddComponent(bg, scrollComp);
+
+        // Tag
+        ::Tag tag;
+        tag.name = "Background";
+        coordinator->AddComponent(bg, tag);
+
+        logger.debug("Game", "Background " + std::to_string(i) + " created at x=" + std::to_string(pos.x));
+    }
+
+    logger.info("Game", "Game world initialized");
+    
+    // Spawner le joueur initial si on est en mode solo
+    if (!networkMode && gameplayManager) {
+        logger.info("Game", "Spawning initial player...");
+        float playerX = 100.0f;
+        float playerY = static_cast<float>(windowHeight) / 2.0f;
+        gameplayManager->CreatePlayer(playerX, playerY, 0);
+        logger.info("Game", "Player spawned at (" + std::to_string(playerX) + ", " + std::to_string(playerY) + ")");
     }
 }
 

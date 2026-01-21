@@ -51,8 +51,6 @@
 #include <scripting/ComponentBindings.hpp>
 #include "network/NetworkBindings.hpp"
 
-#include <iostream>
-
 namespace RType::Core {
 
 bool GameInitializer::InitializeECS(ECS::Coordinator& coordinator, 
@@ -255,7 +253,8 @@ bool GameInitializer::RegisterSystems(ECS::Coordinator& coordinator,
 
 bool GameInitializer::SetupLuaBindings(::Scripting::LuaState& luaState, 
                                       ECS::Coordinator& coordinator) {
-    std::cout << "🌙 [GameInitializer] Setting up Lua bindings..." << std::endl;
+    auto& logger = rtype::core::Logger::getInstance();
+    logger.info("GameInitializer", "Setting up Lua bindings...");
     
     try {
         // Initialize Lua state
@@ -269,11 +268,11 @@ bool GameInitializer::SetupLuaBindings(::Scripting::LuaState& luaState,
         // Register network bindings (allows runtime connection from UI)
         RType::Network::NetworkBindings::RegisterAll(luaState.GetState());
         
-        std::cout << "[GameInitializer] ✓ Lua bindings configured successfully" << std::endl;
+        logger.info("GameInitializer", "Lua bindings configured successfully");
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "[GameInitializer] ERROR setting up Lua bindings: " << e.what() << std::endl;
+        logger.error("GameInitializer", std::string("ERROR setting up Lua bindings: ") + e.what());
         return false;
     }
 }

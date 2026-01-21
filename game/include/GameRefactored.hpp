@@ -171,6 +171,11 @@ private:
      * @brief Initialise l'interface utilisateur
      */
     void InitializeUI();
+    
+    /**
+     * @brief Initialise le monde du jeu (background, etc.)
+     */
+    void InitializeWorld();
 };
 
 } // namespace RType

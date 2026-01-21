@@ -236,6 +236,7 @@ private:
     // Méthodes privées
     void RegisterEntity(ECS::Entity entity);
     eng::engine::rendering::ITexture* GetTextureForEnemy(const std::string& enemyType) const;
+    eng::engine::rendering::ISprite* CreateSpriteFromTexture(const std::string& textureName);
     float GetRandomSpawnX() const;
     float GetRandomSpawnY() const;
     std::string GetRandomEnemyPattern() const;

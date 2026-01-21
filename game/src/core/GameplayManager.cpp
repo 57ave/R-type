@@ -75,13 +75,9 @@ ECS::Entity GameplayManager::CreatePlayer(float x, float y, int line) {
     // Velocity (controlled by input)
     coordinator->AddComponent(player, Velocity{0.0f, 0.0f});
 
-    // Sprite
-    auto* sprite = new eng::engine::rendering::sfml::SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto playerTexture = GetTextureForEnemy("player");
-    if (playerTexture) {
-        sprite->setTexture(playerTexture);
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("player");
+    if (sprite) {
         eng::engine::rendering::IntRect rect(33 * 2, line * 17, 33, 17);
         sprite->setTextureRect(rect);
         sprite->setPosition(eng::engine::rendering::Vector2f(x, y));
@@ -149,13 +145,9 @@ ECS::Entity GameplayManager::CreateEnemy(float x, float y, const std::string& pa
     // Velocity
     coordinator->AddComponent(enemy, Velocity{0.0f, 0.0f});
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto enemyTexture = GetTextureForEnemy("enemy");
-    if (enemyTexture) {
-        sprite->setTexture(enemyTexture);
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("enemy");
+    if (sprite) {
         IntRect rect(0, 0, 33, 32);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
@@ -235,14 +227,9 @@ ECS::Entity GameplayManager::CreateMissile(float x, float y, bool isCharged, int
     float speed = isCharged ? 1500.0f : 1000.0f;
     coordinator->AddComponent(missile, Velocity{speed, 0.0f});
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto missileTexture = GetTextureForEnemy("missile");
-    if (missileTexture) {
-        sprite->setTexture(missileTexture);
-
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("missile");
+    if (sprite) {
         IntRect rect;
         if (!isCharged) {
             // Missiles normaux
@@ -334,14 +321,10 @@ ECS::Entity GameplayManager::CreateEnemyMissile(float x, float y, float directio
     float speed = 400.0f;
     coordinator->AddComponent(missile, Velocity{speed * directionX, speed * directionY});
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto bulletTexture = GetTextureForEnemy("enemy_bullets");
-    if (bulletTexture) {
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("enemy_bullets");
+    if (sprite) {
         IntRect rect(166, 3, 12, 12);
-        sprite->setTexture(bulletTexture);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
 
@@ -403,13 +386,9 @@ ECS::Entity GameplayManager::CreateExplosion(float x, float y) {
     // Position
     coordinator->AddComponent(explosion, Position{x, y});
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto explosionTexture = GetTextureForEnemy("explosion");
-    if (explosionTexture) {
-        sprite->setTexture(explosionTexture);
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("explosion");
+    if (sprite) {
         IntRect rect(129, 0, 34, 35);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
@@ -454,13 +433,9 @@ ECS::Entity GameplayManager::CreateShootEffect(float x, float y, ECS::Entity par
     // Position
     coordinator->AddComponent(effect, Position{x, y});
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites->push_back(sprite);
-    
-    auto missileTexture = GetTextureForEnemy("missile");
-    if (missileTexture) {
-        sprite->setTexture(missileTexture);
+    // Sprite - Utiliser CreateSpriteFromTexture
+    auto* sprite = CreateSpriteFromTexture("missile");
+    if (sprite) {
         IntRect rect(212, 80, 16, 16);
         sprite->setTextureRect(rect);
         sprite->setPosition(Vector2f(x, y));
@@ -709,6 +684,20 @@ eng::engine::rendering::ITexture* GameplayManager::GetTextureForEnemy(const std:
     }
     
     return nullptr;
+}
+
+eng::engine::rendering::ISprite* GameplayManager::CreateSpriteFromTexture(const std::string& textureName) {
+    auto* texture = GetTextureForEnemy(textureName);
+    if (!texture) {
+        std::cout << "[GameplayManager] Texture not found: " << textureName << std::endl;
+        return nullptr;
+    }
+    
+    auto* sprite = new SFMLSprite();
+    sprite->setTexture(texture);
+    allSprites->push_back(sprite);
+    
+    return sprite;
 }
 
 float GameplayManager::GetRandomSpawnX() const {
