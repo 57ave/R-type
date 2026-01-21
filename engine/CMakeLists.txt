@@ -235,35 +235,16 @@ endif()
 
 # Scripting library (Lua + Sol3) - only if Lua is found
 if(LUA_FOUND)
-    if(WIN32 OR MINGW)
-        add_library(scripting SHARED
-            src/scripting/LuaState.cpp
-            src/scripting/ComponentBindings.cpp
-            src/scripting/CoreBindings.cpp
-            src/scripting/DevConsoleBindings.cpp
-            src/scripting/GameBindings.cpp
-            src/scripting/PrefabManager.cpp
-            src/scripting/ScriptSystem.cpp
-            src/scripting/ScriptingManager.cpp
-            src/scripting/PrefabManager.cpp
-            src/scripting/ScriptSystem.cpp
-        )
-        target_compile_definitions(scripting PRIVATE RTYPE_BUILD_DLL)
-        target_link_options(scripting PRIVATE -Wl,--export-all-symbols)
-    else()
-        add_library(scripting STATIC
-            src/scripting/LuaState.cpp
-            src/scripting/ComponentBindings.cpp
-            src/scripting/CoreBindings.cpp
-            src/scripting/DevConsoleBindings.cpp
-            src/scripting/GameBindings.cpp
-            src/scripting/PrefabManager.cpp
-            src/scripting/ScriptSystem.cpp
-            src/scripting/ScriptingManager.cpp
-            src/scripting/PrefabManager.cpp
-            src/scripting/ScriptSystem.cpp
-        )
-    endif()
+    add_library(scripting STATIC
+        src/scripting/LuaState.cpp
+        src/scripting/ComponentBindings.cpp
+        src/scripting/CoreBindings.cpp
+        src/scripting/DevConsoleBindings.cpp
+        src/scripting/GameBindings.cpp
+        src/scripting/PrefabManager.cpp
+        src/scripting/ScriptSystem.cpp
+        src/scripting/ScriptingManager.cpp
+    )
     set_target_properties(scripting PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     target_include_directories(scripting PUBLIC
