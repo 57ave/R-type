@@ -1,117 +1,68 @@
-# ==================== Game Logic Library ====================
-# Logique métier spécifique au R-Type
+# R-Type Game - CMakeLists.txt
+cmake_minimum_required(VERSION 3.17)
+project(rtype_game)
 
-# Scripting dependencies are inherited from engine
-# Ensure we have access to variables if needed
-if(NOT SOL3_INCLUDE_DIR AND TARGET sol2)
-    get_target_property(SOL3_INCLUDE_DIR sol2 INTERFACE_INCLUDE_DIRECTORIES)
-endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+message(STATUS "🎮 R-Type Game - Configuring...")
+
+# Collect all source files
 file(GLOB_RECURSE GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/components/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/network/*.cpp"
 )
 
-if(GAME_SOURCES)
-    # Add UIBindings.cpp explicitly (it's used by game and causes DLL issues in UISystem on Windows)
-    list(APPEND GAME_SOURCES "${CMAKE_SOURCE_DIR}/engine/src/scripting/UIBindings.cpp")
-    
-    add_library(game STATIC ${GAME_SOURCES})
+# Add main.cpp
+set(GAME_SOURCES ${GAME_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
-    target_include_directories(game PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/engine/modules  # For shootemup module includes
-        ${CMAKE_SOURCE_DIR}/server/include  # For shared network protocol (RTypeProtocol.hpp)
-    )
+# Create game executable
+add_executable(game ${GAME_SOURCES})
 
-    if(SOL3_INCLUDE_DIR)
-        target_include_directories(game PUBLIC ${SOL3_INCLUDE_DIR})
-    endif()
-    if(LUA_INCLUDE_DIR)
-        target_include_directories(game PUBLIC ${LUA_INCLUDE_DIR})
-    endif()
+# Include directories
+target_include_directories(game PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/engine/include
+    ${CMAKE_SOURCE_DIR}/engine/external/sol3/include
+)
 
-    # Game dépend de l'engine + shootemup module
-    target_link_libraries(game PUBLIC
-        engine
-        scripting
-        shootemup
-        ${LUA_LIBRARIES}
-    )
-else()
-    # Placeholder si pas de fichiers game encore
-    add_library(game INTERFACE)
-
-    target_include_directories(game INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_SOURCE_DIR}/engine/modules  # For shootemup module includes
-    )
-
-    target_link_libraries(game INTERFACE
-        engine
-        shootemup
-    )
-endif()
-
-# ==================== Game Executable ====================
-add_executable(r-type_game main.cpp)
-
-target_link_libraries(r-type_game PRIVATE
-    # Core engine libraries
+# Link against engine libraries
+target_link_libraries(game PRIVATE
+    # Core engine
     engine
+    ecs
     core
+    rendering
     network
     scripting
-    game
     
-    # Generic engine systems (UISystem must come after game)
-    UISystem
+    # Systems (only those that exist as shared libraries)
     MovementSystem
     AnimationSystem
     StateMachineAnimationSystem
+    UISystem
+    AudioSystem
+    InputSystem
     LifetimeSystem
-    ScrollingBackgroundSystem
     BoundarySystem
     HealthSystem
-    AudioSystem
-    
-    # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
-    shootemup
+    ScrollingBackgroundSystem
     
     # SFML
     sfml-graphics
     sfml-window
     sfml-system
     sfml-audio
+    sfml-network
 )
 
-# Install steps
-install(TARGETS r-type_game
-    RUNTIME DESTINATION bin
+# Copy assets to build directory
+add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:game>/assets
+    COMMENT "Copying game assets to build directory"
 )
 
-# Install assets
-# 1. Copy root assets (scripts)
-if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
-    install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
-        DESTINATION bin
-    )
-endif()
-
-# 2. Copy game-specific assets (fonts, images, sounds)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
-    # Note: Using "/" at the end of the source directory copies the *contents*
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/"
-        DESTINATION bin/assets
-    )
-endif()
-
-# 3. Copy client assets if they exist and are different
-if(EXISTS "${CMAKE_SOURCE_DIR}/client/assets")
-    install(DIRECTORY "${CMAKE_SOURCE_DIR}/client/assets/"
-        DESTINATION bin/assets
-    )
-endif()
-
+message(STATUS "✅ R-Type Game configured successfully")
+message(STATUS "   Sources: ${CMAKE_CURRENT_SOURCE_DIR}/src")
+message(STATUS "   Assets: ${CMAKE_CURRENT_SOURCE_DIR}/assets")

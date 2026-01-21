@@ -17,9 +17,8 @@ target_include_directories(r-type_server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Link contre game et engine
+# Link contre engine (game est un exécutable, pas une lib)
 target_link_libraries(r-type_server PRIVATE
-    game
     engine
     MovementSystem
     AnimationSystem

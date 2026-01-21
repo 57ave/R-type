@@ -21,8 +21,7 @@ target_include_directories(r-type_client PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Link contre engine et game
+# Link contre engine seulement (game est un exécutable séparé maintenant)
 target_link_libraries(r-type_client PRIVATE
     engine
-    game
 )
