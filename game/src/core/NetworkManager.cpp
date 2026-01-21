@@ -1,5 +1,6 @@
 #include "core/NetworkManager.hpp"
 #include "network/RTypeProtocol.hpp"
+#include "network/NetworkBindings.hpp"
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -9,7 +10,7 @@ namespace RType::Core {
 NetworkManager::NetworkManager()
     : connected(false)
     , localPlayerId(0)
-    , connectionTimeout(5.0f)
+    , connectionTimeout(3.0f)  // Réduit de 5s à 3s pour éviter les freeze
     , retryAttempts(3)
     , retryDelay(1.0f)
     , debugMode(false)
@@ -64,17 +65,27 @@ bool NetworkManager::ConnectToServer(const std::string& address, short port, ECS
             return true;
         } else {
             std::cerr << "[NetworkManager] ⚠️ Connection timeout!" << std::endl;
+            // Notifier AVANT de détruire les objets réseau
+            OnConnectionStatusChanged(false, "Connection timeout");
+            // NE PAS appeler disconnect() car on n'a jamais établi de connexion (pas de WELCOME reçu)
+            // Reset directement pour éviter que le destructeur n'essaie d'envoyer un paquet
             networkClient.reset();
             networkSystem.reset();
-            OnConnectionStatusChanged(false, "Connection timeout");
+            // Mettre à null dans NetworkBindings pour éviter les accès à un objet détruit
+            RType::Network::NetworkBindings::SetNetworkClient(nullptr);
             return false;
         }
 
     } catch (const std::exception& e) {
         std::cerr << "[NetworkManager] ❌ Connection error: " << e.what() << std::endl;
+        // Notifier AVANT de détruire les objets réseau
+        OnConnectionStatusChanged(false, std::string("Connection error: ") + e.what());
+        // NE PAS appeler disconnect() en cas d'erreur pour éviter un crash
+        // Reset directement
         networkClient.reset();
         networkSystem.reset();
-        OnConnectionStatusChanged(false, std::string("Connection error: ") + e.what());
+        // Mettre à null dans NetworkBindings pour éviter les accès à un objet détruit
+        RType::Network::NetworkBindings::SetNetworkClient(nullptr);
         return false;
     }
 }
@@ -243,13 +254,14 @@ bool NetworkManager::WaitForServerWelcome() {
 
         // Vérifier le timeout
         auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-        if (elapsed > connectionTimeout) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count();
+        if (elapsed > connectionTimeout * 1000) {
+            std::cerr << "[NetworkManager] Timeout after " << elapsed << "ms" << std::endl;
             return false;
         }
 
         // Petite pause pour ne pas saturer le CPU
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
