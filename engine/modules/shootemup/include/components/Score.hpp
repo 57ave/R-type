@@ -12,33 +12,33 @@ struct Score {
     uint32_t comboMultiplier = 1;
     float comboTimer = 0.0f;
     uint32_t consecutiveKills = 0;
-    
+
     // Ajouter des points avec gestion du combo
     void AddPoints(uint32_t points) {
         currentScore += points * comboMultiplier;
-        comboTimer = 3.0f; // Reset combo timer - 3 seconds to continue combo
+        comboTimer = 3.0f;  // Reset combo timer - 3 seconds to continue combo
         consecutiveKills++;
-        
+
         // Increase combo multiplier every 3 kills
         if (consecutiveKills % 3 == 0 && comboMultiplier < 5) {
             comboMultiplier++;
         }
-        
+
         if (currentScore > highScore) {
             highScore = currentScore;
         }
     }
-    
+
     void UpdateCombo(float deltaTime) {
         if (comboTimer > 0.0f) {
             comboTimer -= deltaTime;
             if (comboTimer <= 0.0f) {
-                comboMultiplier = 1; // Reset combo
+                comboMultiplier = 1;  // Reset combo
                 consecutiveKills = 0;
             }
         }
     }
-    
+
     void Reset() {
         currentScore = 0;
         comboMultiplier = 1;
@@ -47,7 +47,7 @@ struct Score {
     }
 };
 
-} // namespace Components
-} // namespace ShootEmUp
+}  // namespace Components
+}  // namespace ShootEmUp
 
-#endif // SHOOTEMUP_COMPONENTS_SCORE_HPP
+#endif  // SHOOTEMUP_COMPONENTS_SCORE_HPP

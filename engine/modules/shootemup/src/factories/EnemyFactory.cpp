@@ -1,19 +1,17 @@
 #include "factories/EnemyFactory.hpp"
+
+#include <rendering/Types.hpp>
+
 #include "components/ShootEmUpTags.hpp"
 #include "components/Weapon.hpp"
-#include <rendering/Types.hpp>
 
 using namespace eng::engine::rendering;
 using namespace ShootEmUp::Components;
 
 // Helper pour créer le sprite de base
-SFMLSprite* EnemyFactory::CreateEnemySprite(
-    float x, float y,
-    SFMLTexture* texture,
-    int spriteX, int spriteY,
-    int spriteWidth, int spriteHeight,
-    std::vector<SFMLSprite*>& spriteList
-) {
+SFMLSprite* EnemyFactory::CreateEnemySprite(float x, float y, SFMLTexture* texture, int spriteX,
+                                            int spriteY, int spriteWidth, int spriteHeight,
+                                            std::vector<SFMLSprite*>& spriteList) {
     auto* sprite = new SFMLSprite();
     spriteList.push_back(sprite);
     sprite->setTexture(texture);
@@ -24,12 +22,9 @@ SFMLSprite* EnemyFactory::CreateEnemySprite(
 }
 
 // Ennemi BASIC - Simple mouvement horizontal
-ECS::Entity EnemyFactory::CreateBasicEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateBasicEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                           SFMLTexture* texture,
+                                           std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     // Position & Velocity
@@ -90,19 +85,16 @@ ECS::Entity EnemyFactory::CreateBasicEnemy(
     enemyTag.enemyType = "basic";
     enemyTag.scoreValue = 100;
     enemyTag.aiAggressiveness = 1.0f;
-    enemyTag.enemyType = "basic"; // backward compatibility
+    enemyTag.enemyType = "basic";  // backward compatibility
     coordinator.AddComponent(enemy, enemyTag);
 
     return enemy;
 }
 
 // Ennemi ZIGZAG - Mouvement en zigzag
-ECS::Entity EnemyFactory::CreateZigZagEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateZigZagEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                            SFMLTexture* texture,
+                                            std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     coordinator.AddComponent(enemy, Position{x, y});
@@ -162,12 +154,9 @@ ECS::Entity EnemyFactory::CreateZigZagEnemy(
 }
 
 // Ennemi SINE_WAVE - Mouvement sinusoïdal
-ECS::Entity EnemyFactory::CreateSineWaveEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateSineWaveEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                              SFMLTexture* texture,
+                                              std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     coordinator.AddComponent(enemy, Position{x, y});
@@ -227,12 +216,9 @@ ECS::Entity EnemyFactory::CreateSineWaveEnemy(
 }
 
 // Ennemi KAMIKAZE - Fonce vers le joueur
-ECS::Entity EnemyFactory::CreateKamikazeEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateKamikazeEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                              SFMLTexture* texture,
+                                              std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     coordinator.AddComponent(enemy, Position{x, y});
@@ -260,7 +246,7 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
 
     MovementPattern movementPattern;
     movementPattern.patternType = "diagonal_down";
-    movementPattern.speed = 400.0f; // Plus rapide!
+    movementPattern.speed = 400.0f;  // Plus rapide!
     movementPattern.startX = x;
     movementPattern.startY = y;
     coordinator.AddComponent(enemy, movementPattern);
@@ -290,12 +276,9 @@ ECS::Entity EnemyFactory::CreateKamikazeEnemy(
 }
 
 // TURRET - Statique qui tire
-ECS::Entity EnemyFactory::CreateTurretEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateTurretEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                            SFMLTexture* texture,
+                                            std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     coordinator.AddComponent(enemy, Position{x, y});
@@ -353,12 +336,9 @@ ECS::Entity EnemyFactory::CreateTurretEnemy(
 }
 
 // BOSS - Ennemi puissant
-ECS::Entity EnemyFactory::CreateBossEnemy(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateBossEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                          SFMLTexture* texture,
+                                          std::vector<SFMLSprite*>& spriteList) {
     ECS::Entity enemy = coordinator.CreateEntity();
 
     coordinator.AddComponent(enemy, Position{x, y});
@@ -371,7 +351,7 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     spriteComp.layer = 5;
     spriteComp.scaleX = 2.5f;
     spriteComp.scaleY = 2.5f;
-    spriteComp.scaleX = 2.0f; // Boss plus gros
+    spriteComp.scaleX = 2.0f;  // Boss plus gros
     spriteComp.scaleY = 2.0f;
     coordinator.AddComponent(enemy, spriteComp);
 
@@ -396,7 +376,7 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
     coordinator.AddComponent(enemy, movementPattern);
 
     Collider collider;
-    collider.width = 33 * 5.0f; // Boss plus gros collider
+    collider.width = 33 * 5.0f;  // Boss plus gros collider
     collider.height = 32 * 5.0f;
     collider.tag = "enemy";
     coordinator.AddComponent(enemy, collider);
@@ -420,13 +400,9 @@ ECS::Entity EnemyFactory::CreateBossEnemy(
 }
 
 // Factory générique qui dispatche selon le type (string-based)
-ECS::Entity EnemyFactory::CreateEnemy(
-    ECS::Coordinator& coordinator,
-    const std::string& enemyType,
-    float x, float y,
-    SFMLTexture* texture,
-    std::vector<SFMLSprite*>& spriteList
-) {
+ECS::Entity EnemyFactory::CreateEnemy(ECS::Coordinator& coordinator, const std::string& enemyType,
+                                      float x, float y, SFMLTexture* texture,
+                                      std::vector<SFMLSprite*>& spriteList) {
     if (enemyType == "basic") {
         return CreateBasicEnemy(coordinator, x, y, texture, spriteList);
     } else if (enemyType == "zigzag") {
@@ -450,31 +426,28 @@ ECS::Entity EnemyFactory::CreateEnemy(
 // ============================================================================
 
 ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
-    ECS::Coordinator& coordinator,
-    float x, float y,
-    sol::table config,
+    ECS::Coordinator& coordinator, float x, float y, sol::table config,
     std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*>& textures,
-    std::vector<eng::engine::rendering::sfml::SFMLSprite*>& spriteList
-) {
+    std::vector<eng::engine::rendering::sfml::SFMLSprite*>& spriteList) {
     using namespace ShootEmUp::Components;
-    
+
     if (!config.valid()) {
         std::cerr << "[EnemyFactory] Invalid config table!" << std::endl;
         return 0;
     }
-    
+
     ECS::Entity enemy = coordinator.CreateEntity();
-    
+
     // Lire la config
     int health = config.get_or("health", 10);
     int scoreValue = config.get_or("scoreValue", 100);
-    
+
     sol::table movement = config.get_or("movement", sol::table());
     std::string patternType = movement.get_or<std::string>("pattern", "straight");
     float speed = config.get_or("speed", 200.0f);
     float amplitude = movement.get_or("amplitude", 80.0f);
     float frequency = movement.get_or("frequency", 2.0f);
-    
+
     sol::table sprite = config.get_or("sprite", sol::table());
     int frameWidth = sprite.get_or("frameWidth", 33);
     int frameHeight = sprite.get_or("frameHeight", 32);
@@ -482,19 +455,19 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     int startX = sprite.get_or("startX", 0);
     int startY = sprite.get_or("startY", 0);
     int spacing = sprite.get_or("spacing", 0);
-    
+
     sol::table animation = config.get_or("animation", sol::table());
     int frameCount = animation.get_or("frameCount", 8);
     float frameTime = animation.get_or("frameTime", 0.1f);
     bool loop = animation.get_or("loop", true);
-    
+
     sol::table hitbox = config.get_or("hitbox", sol::table());
     int hitboxWidth = hitbox.get_or("width", frameWidth);
     int hitboxHeight = hitbox.get_or("height", frameHeight);
-    
+
     std::string enemyName = config.get_or<std::string>("name", "Unknown");
     std::string enemyType = config.get_or<std::string>("enemyType", "basic");
-    
+
     // Trouver la texture - preferer la texture indiquée dans la config (sprite.texture)
     eng::engine::rendering::sfml::SFMLTexture* texture = nullptr;
     std::string texPath = std::string();
@@ -510,7 +483,8 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
             texture = it->second;
             std::cout << "[EnemyFactory] Using texture from config: " << texPath << std::endl;
         } else {
-            std::cout << "[EnemyFactory] Texture '" << texPath << "' not found in cache, falling back to generic 'enemy'" << std::endl;
+            std::cout << "[EnemyFactory] Texture '" << texPath
+                      << "' not found in cache, falling back to generic 'enemy'" << std::endl;
         }
     }
 
@@ -527,18 +501,18 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
         coordinator.DestroyEntity(enemy);
         return 0;
     }
-    
+
     // Créer les composants
     coordinator.AddComponent(enemy, Position{x, y});
     coordinator.AddComponent(enemy, Velocity{0.0f, 0.0f});
-    
+
     auto* sfmlSprite = new eng::engine::rendering::sfml::SFMLSprite();
     spriteList.push_back(sfmlSprite);
     sfmlSprite->setTexture(texture);
     eng::engine::rendering::IntRect rect(startX, startY, frameWidth, frameHeight);
     sfmlSprite->setTextureRect(rect);
     sfmlSprite->setPosition(eng::engine::rendering::Vector2f(x, y));
-    
+
     Sprite spriteComp;
     spriteComp.sprite = sfmlSprite;
     spriteComp.textureRect = rect;
@@ -546,7 +520,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     spriteComp.scaleX = scale;
     spriteComp.scaleY = scale;
     coordinator.AddComponent(enemy, spriteComp);
-    
+
     Animation anim;
     anim.frameTime = frameTime;
     anim.currentFrame = 0;
@@ -558,7 +532,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     anim.startY = startY;
     anim.spacing = spacing;
     coordinator.AddComponent(enemy, anim);
-    
+
     MovementPattern movementPattern;
     movementPattern.patternType = patternType;
     movementPattern.speed = speed;
@@ -567,27 +541,27 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     movementPattern.startX = x;
     movementPattern.startY = y;
     coordinator.AddComponent(enemy, movementPattern);
-    
+
     Collider collider;
     collider.width = hitboxWidth * scale;
     collider.height = hitboxHeight * scale;
     collider.tag = "enemy";
     coordinator.AddComponent(enemy, collider);
-    
+
     Health healthComp;
     healthComp.current = health;
     healthComp.max = health;
     healthComp.destroyOnDeath = true;
     healthComp.deathEffect = "explosion";
     coordinator.AddComponent(enemy, healthComp);
-    
+
     coordinator.AddComponent(enemy, Tag{"enemy"});
     EnemyTag enemyTag;
     enemyTag.enemyType = enemyType;
     enemyTag.scoreValue = scoreValue;
     enemyTag.aiAggressiveness = 1.0f;
     coordinator.AddComponent(enemy, enemyTag);
-    
+
     // Weapon (optionnel) - peut être une string (weapon id), une table (config détaillée)
     try {
         sol::object weaponObj = config["weapon"];
@@ -599,10 +573,12 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
         if (weaponObj.valid()) {
             if (weaponObj.get_type() == sol::type::table) {
                 sol::table weaponTable = config.get<sol::table>("weapon");
-                weaponComp.weaponType = weaponTable.get_or("weaponType", std::string("single_shot"));
+                weaponComp.weaponType =
+                    weaponTable.get_or("weaponType", std::string("single_shot"));
                 weaponComp.level = weaponTable.get_or("level", 1);
                 weaponComp.fireRate = weaponTable.get_or("fireRate", 0.5f);
-                weaponComp.projectileType = weaponTable.get_or("projectileType", std::string("enemy_bullet"));
+                weaponComp.projectileType =
+                    weaponTable.get_or("projectileType", std::string("enemy_bullet"));
                 weaponComp.projectileSpeed = weaponTable.get_or("projectileSpeed", 600.0f);
                 weaponComp.damage = weaponTable.get_or("damage", 1);
                 weaponComp.projectileCount = weaponTable.get_or("projectileCount", 1);
@@ -612,7 +588,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
                 // Simple form: weapon = "enemy_bullet"
                 std::string weaponId = config.get<std::string>("weapon");
                 weaponComp.weaponType = weaponId;
-                weaponComp.projectileType = weaponId; // use same id for projectile lookup
+                weaponComp.projectileType = weaponId;  // use same id for projectile lookup
                 weaponComp.fireRate = shootInterval > 0.0f ? shootInterval : 1.0f;
                 weaponComp.projectileSpeed = 600.0f;
                 weaponComp.damage = 1;
@@ -636,14 +612,15 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
 
         if (shouldAddWeapon) {
             coordinator.AddComponent(enemy, weaponComp);
-            std::cout << "[EnemyFactory] Added Weapon component to '" << enemyName << "' (proj:" << weaponComp.projectileType << ")" << std::endl;
+            std::cout << "[EnemyFactory] Added Weapon component to '" << enemyName
+                      << "' (proj:" << weaponComp.projectileType << ")" << std::endl;
         }
     } catch (...) {
         // ignore malformed weapon tables or types
     }
 
-    std::cout << "[EnemyFactory] Created '" << enemyName << "' (type: " << enemyType 
-              << ") at (" << x << ", " << y << ") with " << health << " HP" << std::endl;
-    
+    std::cout << "[EnemyFactory] Created '" << enemyName << "' (type: " << enemyType << ") at ("
+              << x << ", " << y << ") with " << health << " HP" << std::endl;
+
     return enemy;
 }

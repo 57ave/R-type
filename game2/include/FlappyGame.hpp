@@ -1,65 +1,66 @@
 #pragma once
 
+#include <algorithm>
+#include <functional>
 #include <iostream>
 #include <memory>
-#include <vector>
-#include <algorithm>
-#include <string>
 #include <set>
-#include <functional>
+#include <string>
+#include <vector>
 
 // Engine includes - Core
-#include <ecs/ECS.hpp>
 #include <ecs/Coordinator.hpp>
+#include <ecs/ECS.hpp>
 
 // Engine includes - Rendering
-#include <rendering/sfml/SFMLWindow.hpp>
 #include <rendering/sfml/SFMLRenderer.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <rendering/sfml/SFMLTexture.hpp>
+#include <rendering/sfml/SFMLWindow.hpp>
 
 // Engine includes - Input/Time abstractions
+#include <engine/Clock.hpp>
 #include <engine/Input.hpp>
 #include <engine/Keyboard.hpp>
-#include <engine/Clock.hpp>
 
 // Scripting - Engine generic
-#include <scripting/LuaState.hpp>
 #include <scripting/ComponentBindings.hpp>
+#include <scripting/LuaState.hpp>
 #include <scripting/UIBindings.hpp>
 
 // Network
 #include <network/NetworkClient.hpp>
+
 #include "NetworkBindings.hpp"
 
 // Generic Engine Systems
-#include <systems/MovementSystem.hpp>
 #include <systems/AnimationSystem.hpp>
-#include <systems/RenderSystem.hpp>
 #include <systems/HealthSystem.hpp>
 #include <systems/LifetimeSystem.hpp>
+#include <systems/MovementSystem.hpp>
+#include <systems/RenderSystem.hpp>
 #include <systems/UISystem.hpp>
 // Note: CollisionSystem not used - collisions handled in Lua
 
 // Generic Engine Components
-#include <ecs/Components.hpp>  // For Transform, Velocity, Sprite, etc. (used by Lua bindings)
-#include <components/Position.hpp>   // Used by RenderSystem
-#include <components/Sprite.hpp>     // Used by RenderSystem
-#include <components/Tag.hpp>        // Used by RenderSystem
 #include <components/Animation.hpp>
 #include <components/Lifetime.hpp>
+#include <components/Position.hpp>  // Used by RenderSystem
+#include <components/Sprite.hpp>    // Used by RenderSystem
+#include <components/Tag.hpp>       // Used by RenderSystem
+#include <ecs/Components.hpp>       // For Transform, Velocity, Sprite, etc. (used by Lua bindings)
 
 namespace FlappyBird {
 
 /**
  * @brief Main Flappy Bird game class
- * 
+ *
  * This class is intentionally minimal - it only handles:
  * - ECS initialization
  * - Lua script loading
  * - SFML render loop
  * - Input event forwarding to Lua
- * 
+ *
  * All game logic is implemented in Lua scripts.
  */
 class FlappyGame {
@@ -130,7 +131,7 @@ private:
 
     // Game state
     bool shouldQuit = false;
-    
+
     // Input state tracking (for "JustPressed" detection)
     bool spaceWasPressed = false;
     bool escapeWasPressed = false;
@@ -140,4 +141,4 @@ private:
     bool key3WasPressed = false;
 };
 
-} // namespace FlappyBird
+}  // namespace FlappyBird
