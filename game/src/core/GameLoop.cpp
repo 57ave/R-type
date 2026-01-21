@@ -757,6 +757,20 @@ void GameLoop::SetupCollisionCallback() {
                 return;  // Enemy projectile doesn't hit other enemies
             }
         }
+        
+        // Check if player projectile hits the player - ignore (player can't hit themselves)
+        if (aIsProjectile && bIsPlayer) {
+            auto& projTag = coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(a);
+            if (projTag.isPlayerProjectile) {
+                return;  // Player projectile doesn't hit the player
+            }
+        }
+        if (bIsProjectile && aIsPlayer) {
+            auto& projTag = coordinator->GetComponent<ShootEmUp::Components::ProjectileTag>(b);
+            if (projTag.isPlayerProjectile) {
+                return;  // Player projectile doesn't hit the player
+            }
+        }
 
         // Check for damage/health components
         bool aHasDamage = coordinator->HasComponent<Damage>(a);
