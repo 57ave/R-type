@@ -1,5 +1,4 @@
 #include "core/GameInitializer.hpp"
-#include "Game.hpp"
 #include <core/Logger.hpp>
 
 // Include all necessary components and systems

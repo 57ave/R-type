@@ -2,7 +2,7 @@
 #include <rendering/sfml/SFMLTexture.hpp>
 #include <rendering/sfml/SFMLSprite.hpp>
 #include <engine/Audio.hpp>
-#include <iostream>
+#include <core/Logger.hpp>
 #include <filesystem>
 #include <fstream>
 
@@ -12,11 +12,13 @@ AssetLoader::AssetLoader()
     : initialized(false)
     , debugMode(false)
 {
+    LOG_DEBUG("AssetLoader", "Created");
 }
 
 AssetLoader::~AssetLoader() {
     UnloadAll();
     CleanupSprites();
+    LOG_DEBUG("AssetLoader", "Destroyed");
 }
 
 bool AssetLoader::Initialize(const std::string& basePathParam) {
@@ -24,6 +26,7 @@ bool AssetLoader::Initialize(const std::string& basePathParam) {
         basePath = basePathParam;
     } else {
         if (!FindBasePath()) {
+            LOG_ERROR("AssetLoader", "Could not find base path");
             return false;
         }
     }
@@ -37,17 +40,20 @@ bool AssetLoader::Initialize(const std::string& basePathParam) {
     };
     
     initialized = true;
+    LOG_INFO("AssetLoader", "Initialized with base path: " + (basePath.empty() ? "(current dir)" : basePath));
     
     return true;
 }
 
 bool AssetLoader::LoadAssetConfig(const std::string& configPath) {
+    LOG_INFO("AssetLoader", "Loading asset config from: " + configPath);
     // TODO: Implémenter le chargement depuis Lua
     return true;
 }
 
 std::string AssetLoader::ResolveAssetPath(const std::string& relativePath) {
     if (!initialized) {
+        LOG_ERROR("AssetLoader", "Not initialized");
         return relativePath;
     }
     
@@ -63,6 +69,9 @@ std::string AssetLoader::ResolveAssetPath(const std::string& relativePath) {
     }
     
     // Fallback: retourner le chemin tel quel
+    if (debugMode) {
+        LOG_WARNING("AssetLoader", "Could not resolve path: " + relativePath);
+    }
     
     return relativePath;
 }
@@ -77,6 +86,8 @@ void AssetLoader::SetBasePath(const std::string& basePathParam) {
         basePath + "game/",
         basePath + "assets/",
     };
+    
+    LOG_INFO("AssetLoader", "Base path updated to: " + basePath);
 }
 
 std::string AssetLoader::GetBasePath() const {
@@ -86,6 +97,9 @@ std::string AssetLoader::GetBasePath() const {
 eng::engine::rendering::ITexture* AssetLoader::LoadTexture(const std::string& name, const std::string& filePath) {
     // Vérifier si déjà chargé
     if (IsTextureLoaded(name)) {
+        if (debugMode) {
+            LOG_DEBUG("AssetLoader", "Texture already loaded: " + name);
+        }
         return textureMap[name];
     }
     
@@ -95,6 +109,7 @@ eng::engine::rendering::ITexture* AssetLoader::LoadTexture(const std::string& na
     // Créer et charger la texture
     auto texture = std::make_unique<eng::engine::rendering::sfml::SFMLTexture>();
     if (!texture->loadFromFile(resolvedPath)) {
+        LOG_ERROR("AssetLoader", "Failed to load texture: " + resolvedPath);
         return nullptr;
     }
     
@@ -102,6 +117,10 @@ eng::engine::rendering::ITexture* AssetLoader::LoadTexture(const std::string& na
     eng::engine::rendering::ITexture* texturePtr = texture.get();
     textures[name] = std::move(texture);
     textureMap[name] = texturePtr;
+    
+    if (debugMode) {
+        LOG_INFO("AssetLoader", "Loaded texture: " + name + " (" + resolvedPath + ")");
+    }
     
     return texturePtr;
 }
@@ -115,6 +134,8 @@ eng::engine::rendering::ITexture* AssetLoader::GetTexture(const std::string& nam
 }
 
 bool AssetLoader::PreloadAllTextures() {
+    LOG_INFO("AssetLoader", "Preloading all textures...");
+    
     // Liste des textures de base à précharger
     struct TextureInfo {
         std::string name;
@@ -127,16 +148,18 @@ bool AssetLoader::PreloadAllTextures() {
         {"missile", "game/assets/players/r-typesheet1.png"},
         {"enemy_bullets", "game/assets/enemies/enemy_bullets.png"},
         {"explosion", "game/assets/enemies/r-typesheet44.png"},
-        {"enemy", "game/assets/enemies/r-typesheet43.png"}  // Texture par défaut pour les ennemis
+        {"enemy", "game/assets/enemies/r-typesheet5.png"}  // Texture par défaut pour les ennemis (changé de 43 à 5)
     };
     
     bool allLoaded = true;
     for (const auto& info : defaultTextures) {
         if (!LoadTexture(info.name, info.path)) {
+            LOG_ERROR("AssetLoader", "Failed to preload texture: " + info.name);
             allLoaded = false;
         }
     }
     
+    LOG_INFO("AssetLoader", "Preloaded " + std::to_string(textures.size()) + " textures");
     return allLoaded;
 }
 
@@ -147,6 +170,9 @@ std::unordered_map<std::string, eng::engine::rendering::ITexture*>& AssetLoader:
 eng::engine::SoundBuffer* AssetLoader::LoadSoundBuffer(const std::string& name, const std::string& filePath) {
     // Vérifier si déjà chargé
     if (IsSoundLoaded(name)) {
+        if (debugMode) {
+            LOG_DEBUG("AssetLoader", "Sound already loaded: " + name);
+        }
         return soundBuffers[name].get();
     }
     
@@ -156,12 +182,19 @@ eng::engine::SoundBuffer* AssetLoader::LoadSoundBuffer(const std::string& name, 
     // Créer et charger le buffer
     auto buffer = std::make_unique<eng::engine::SoundBuffer>();
     if (!buffer->loadFromFile(resolvedPath)) {
+        if (debugMode) {
+            LOG_ERROR("AssetLoader", "Failed to load sound: " + resolvedPath);
+        }
         return nullptr;
     }
     
     // Stocker le buffer
     eng::engine::SoundBuffer* bufferPtr = buffer.get();
     soundBuffers[name] = std::move(buffer);
+    
+    if (debugMode) {
+        LOG_INFO("AssetLoader", "Loaded sound: " + name + " (" + resolvedPath + ")");
+    }
     
     return bufferPtr;
 }
@@ -175,6 +208,8 @@ eng::engine::SoundBuffer* AssetLoader::GetSoundBuffer(const std::string& name) {
 }
 
 bool AssetLoader::PreloadAllSounds() {
+    LOG_INFO("AssetLoader", "Preloading all sounds...");
+    
     // Liste des sons de base à précharger
     struct SoundInfo {
         std::string name;
@@ -183,29 +218,37 @@ bool AssetLoader::PreloadAllSounds() {
     
     std::vector<SoundInfo> defaultSounds = {
         {"shoot", "game/assets/vfx/shoot.ogg"},
-        {"explosion", "game/assets/vfx/explosion.ogg"},
+        {"explosion", "game/assets/vfx/Boom.ogg"},  // Changé de explosion.ogg à Boom.ogg
         {"menu", "game/assets/sounds/Title.ogg"}
     };
     
-    bool allLoaded = true;
     for (const auto& info : defaultSounds) {
         if (!LoadSoundBuffer(info.name, info.path)) {
             // Ce n'est pas grave si certains sons ne se chargent pas
+            if (debugMode) {
+                LOG_WARNING("AssetLoader", "Could not preload sound: " + info.name);
+            }
         }
     }
     
+    LOG_INFO("AssetLoader", "Preloaded " + std::to_string(soundBuffers.size()) + " sounds");
     return true;  // Toujours retourner true pour les sons
 }
 
 eng::engine::rendering::ISprite* AssetLoader::CreateSprite(const std::string& textureName) {
     auto* texture = GetTexture(textureName);
     if (!texture) {
+        LOG_ERROR("AssetLoader", "Cannot create sprite: texture not found: " + textureName);
         return nullptr;
     }
     
     auto* sprite = new eng::engine::rendering::sfml::SFMLSprite();
     sprite->setTexture(texture);
     allSprites.push_back(sprite);
+    
+    if (debugMode) {
+        LOG_DEBUG("AssetLoader", "Created sprite for texture: " + textureName);
+    }
     
     return sprite;
 }
@@ -219,6 +262,10 @@ void AssetLoader::CleanupSprites() {
         delete sprite;
     }
     allSprites.clear();
+    
+    if (debugMode) {
+        LOG_DEBUG("AssetLoader", "All sprites cleaned up");
+    }
 }
 
 void AssetLoader::UnloadTexture(const std::string& name) {
@@ -226,6 +273,10 @@ void AssetLoader::UnloadTexture(const std::string& name) {
     if (it != textures.end()) {
         textureMap.erase(name);
         textures.erase(it);
+        
+        if (debugMode) {
+            LOG_DEBUG("AssetLoader", "Unloaded texture: " + name);
+        }
     }
 }
 
@@ -233,6 +284,10 @@ void AssetLoader::UnloadSound(const std::string& name) {
     auto it = soundBuffers.find(name);
     if (it != soundBuffers.end()) {
         soundBuffers.erase(it);
+        
+        if (debugMode) {
+            LOG_DEBUG("AssetLoader", "Unloaded sound: " + name);
+        }
     }
 }
 
@@ -240,6 +295,7 @@ void AssetLoader::UnloadAll() {
     textures.clear();
     textureMap.clear();
     soundBuffers.clear();
+    LOG_INFO("AssetLoader", "All resources unloaded");
 }
 
 bool AssetLoader::IsTextureLoaded(const std::string& name) const {
@@ -266,23 +322,22 @@ AssetLoader::AssetStats AssetLoader::GetStats() const {
 
 void AssetLoader::SetDebugMode(bool enabled) {
     debugMode = enabled;
-    std::cout << "[AssetLoader] Debug mode: " << (enabled ? "enabled" : "disabled") << std::endl;
+    LOG_INFO("AssetLoader", std::string("Debug mode: ") + (enabled ? "enabled" : "disabled"));
 }
 
 void AssetLoader::DebugPrintResources() const {
-    std::cout << "[AssetLoader] Loaded resources:" << std::endl;
-    
-    std::cout << "  Textures (" << textures.size() << "):" << std::endl;
+    LOG_INFO("AssetLoader", "=== Loaded resources ===");
+    LOG_INFO("AssetLoader", "Textures (" + std::to_string(textures.size()) + "):");
     for (const auto& pair : textures) {
-        std::cout << "    - " << pair.first << std::endl;
+        LOG_INFO("AssetLoader", "  - " + pair.first);
     }
     
-    std::cout << "  Sounds (" << soundBuffers.size() << "):" << std::endl;
+    LOG_INFO("AssetLoader", "Sounds (" + std::to_string(soundBuffers.size()) + "):");
     for (const auto& pair : soundBuffers) {
-        std::cout << "    - " << pair.first << std::endl;
+        LOG_INFO("AssetLoader", "  - " + pair.first);
     }
     
-    std::cout << "  Sprites created: " << allSprites.size() << std::endl;
+    LOG_INFO("AssetLoader", "Sprites created: " + std::to_string(allSprites.size()));
 }
 
 // ========================================
@@ -304,13 +359,12 @@ bool AssetLoader::FindBasePath() {
         std::string fullPath = candidate + testFile;
         if (std::filesystem::exists(fullPath)) {
             basePath = candidate;
-            std::cout << "[AssetLoader] Base path found: " 
-                      << (candidate.empty() ? "(current dir)" : candidate) << std::endl;
+            LOG_INFO("AssetLoader", "Base path found: " + (candidate.empty() ? "(current dir)" : candidate));
             return true;
         }
     }
     
-    std::cerr << "[AssetLoader] Could not find base path" << std::endl;
+    LOG_ERROR("AssetLoader", "Could not find base path");
     return false;
 }
 
