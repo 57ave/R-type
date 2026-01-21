@@ -6,7 +6,7 @@ int main(int argc, char* argv[])
 {
     try {
         RType::GameRefactored game;
-        return game.Run(argc, argv);
+        return game.Run();
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

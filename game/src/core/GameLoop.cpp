@@ -23,6 +23,9 @@ GameLoop::GameLoop(ECS::Coordinator* coordinator)
     , winConditionTriggered(false)
     , winDisplayTimer(0.0f)
     , inputMask(0)
+    , player(0)
+    , playerCreated(false)
+    , systemsManager(nullptr)
 {
     std::cout << "[GameLoop] Initialized" << std::endl;
 }
@@ -47,6 +50,20 @@ void GameLoop::SetUISystem(std::shared_ptr<UISystem> ui) {
     uiSystem = ui;
     if (uiSystem) {
         std::cout << "[GameLoop] UI system connected" << std::endl;
+    }
+}
+
+void GameLoop::SetRenderSystem(std::shared_ptr<RenderSystem> render) {
+    renderSystem = render;
+    if (renderSystem) {
+        std::cout << "[GameLoop] Render system connected" << std::endl;
+    }
+}
+
+void GameLoop::SetSystemsManager(SystemsManager* systems) {
+    systemsManager = systems;
+    if (systemsManager) {
+        std::cout << "[GameLoop] Systems manager connected" << std::endl;
     }
 }
 
@@ -110,6 +127,13 @@ bool GameLoop::Update() {
     // ========================================
     auto currentState = GameStateManager::Instance().GetState();
     
+    // Créer le joueur quand on passe en mode Playing
+    if (currentState == GameState::Playing && !playerCreated && !networkMode && gameplayManager) {
+        player = gameplayManager->CreatePlayer(150.0f, static_cast<float>(window->getSize().y) / 2.0f, 0);
+        playerCreated = true;
+        std::cout << "[GameLoop] Player created: " << player << std::endl;
+    }
+    
     // Skip game logic updates when in menu states
     bool inMenu = (currentState == GameState::MainMenu || 
                    currentState == GameState::Paused ||
@@ -123,9 +147,23 @@ bool GameLoop::Update() {
     HandleEvents();
 
     // ========================================
-    // UPDATE SYSTEMS
+    // UPDATE SYSTEMS ECS
     // ========================================
-    UpdateSystems(deltaTime, inMenu);
+    if (systemsManager) {
+        // Les systèmes visuels tournent toujours (même en menu)
+        systemsManager->UpdateVisualSystems(deltaTime);
+        
+        // Les systèmes de gameplay uniquement en jeu
+        if (!inMenu) {
+            if (networkMode) {
+                // Mode réseau : pas de simulation locale (serveur autoritaire)
+                // On garde quand même les animations
+            } else {
+                // Mode local : simulation complète
+                systemsManager->UpdateGameplaySystems(deltaTime);
+            }
+        }
+    }
 
     // ========================================
     // HANDLE INPUT (only when not in menu)
@@ -169,7 +207,7 @@ bool GameLoop::Update() {
     // ========================================
     // UI UPDATES
     // ========================================
-    if (uiSystem) {
+    if (uiSystem && inMenu) {
         uiSystem->Update(deltaTime);
     }
 
@@ -213,69 +251,26 @@ void GameLoop::HandleEvents() {
 void GameLoop::UpdateSystems(float dt, bool inMenu) {
     if (!coordinator) return;
 
-    // TODO: Update core ECS systems
-    // Note: GetSystem() is not available in the Coordinator API
-    // Systems should be updated through the coordinator's system manager
-    // For now, systems are registered and will be updated automatically
+    // ========================================
+    // MISE À JOUR DES SYSTÈMES ECS
+    // ========================================
     
-    /*
-    // Movement system
-    auto movementSystem = coordinator->GetSystem<MovementSystem>();
-    if (movementSystem) {
-        movementSystem->Update(dt);
-    }
-
-    // Animation systems
-    auto animationSystem = coordinator->GetSystem<AnimationSystem>();
-    if (animationSystem) {
-        animationSystem->Update(dt);
-    }
-
-    auto stateMachineAnimSystem = coordinator->GetSystem<StateMachineAnimationSystem>();
-    if (stateMachineAnimSystem) {
-        stateMachineAnimSystem->Update(dt);
-    }
-
-    // Lifetime system
-    auto lifetimeSystem = coordinator->GetSystem<LifetimeSystem>();
-    if (lifetimeSystem) {
-        lifetimeSystem->Update(dt);
-    }
-
-    // Movement pattern system
-    auto movementPatternSystem = coordinator->GetSystem<MovementPatternSystem>();
-    if (movementPatternSystem) {
-        movementPatternSystem->Update(dt);
-    }
-
-    // Scrolling background system
-    auto scrollingBgSystem = coordinator->GetSystem<ScrollingBackgroundSystem>();
-    if (scrollingBgSystem) {
-        scrollingBgSystem->Update(dt);
-    }
-    */
-
-    // TODO: Boundary system (GetSystem not available)
-    /*
-    auto boundarySystem = coordinator->GetSystem<BoundarySystem>();
-    if (boundarySystem) {
-        boundarySystem->Update(dt);
-    }
-
-    // Collision system (only in gameplay)
-    if (!inMenu) {
-        auto collisionSystem = coordinator->GetSystem<CollisionSystem>();
-        if (collisionSystem) {
-            collisionSystem->Update(dt);
-        }
-    }
-
-    // Health system
-    auto healthSystem = coordinator->GetSystem<HealthSystem>();
-    if (healthSystem) {
-        healthSystem->Update(dt);
-    }
-    */
+    // Les systèmes sont appelés directement via leurs shared_ptr stockés
+    // dans GameInitializer. Pour l'instant, on va utiliser une approche
+    // où les systèmes s'auto-mettent à jour via leurs signatures.
+    
+    // Note: Les systèmes enregistrés via RegisterSystem sont automatiquement
+    // notifiés des changements d'entités grâce aux signatures.
+    // Mais ils ont besoin d'être explicitement mis à jour.
+    
+    // Pour une architecture propre, nous allons déléguer les appels
+    // aux gestionnaires qui ont accès aux systèmes.
+    
+    // Les systèmes visuels (animation, scrolling) sont toujours actifs
+    // Les systèmes de gameplay (mouvement, collision) uniquement en jeu
+    
+    // Cette méthode est un placeholder - les systèmes seront appelés
+    // individuellement dans Update() avec les bonnes conditions
 }
 
 void GameLoop::UpdateGameLogic(float dt) {
@@ -341,10 +336,12 @@ void GameLoop::UpdateEnemySpawning(float dt) {
     enemySpawnTimer += dt;
     enemyShootTimer += dt;
 
-    // Spawn enemies
+    // Spawn enemies with increasing difficulty
     if (enemySpawnTimer >= enemySpawnInterval) {
         gameplayManager->SpawnRandomEnemy();
         enemySpawnTimer = 0.0f;
+        
+        std::cout << "[GameLoop] Enemy spawned, next in " << enemySpawnInterval << "s" << std::endl;
         
         // Gradually decrease spawn interval (increase difficulty)
         if (enemySpawnInterval > 0.5f) {
@@ -428,15 +425,12 @@ void GameLoop::Render() {
 
     window->clear();
 
-    // TODO: Render game world through ECS render system (GetSystem not available)
-    /*
-    auto renderSystem = coordinator->GetSystem<RenderSystem>();
+    // Render game world through ECS render system
     if (renderSystem) {
         renderSystem->Update(deltaTime);
     }
-    */
 
-    // Render UI
+    // Render UI on top
     if (uiSystem) {
         uiSystem->Render(window);
     }

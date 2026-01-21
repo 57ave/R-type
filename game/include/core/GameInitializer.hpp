@@ -5,9 +5,11 @@
 #include <scripting/LuaState.hpp>
 #include <sol/sol.hpp>
 #include <memory>
+#include "SystemsManager.hpp"
 
 // Forward declarations
 class UISystem;
+class RenderSystem;
 
 namespace RType::Core {
 
@@ -45,11 +47,15 @@ public:
      * @param coordinator Référence vers le coordinateur ECS
      * @param renderer Référence vers le renderer
      * @param outUISystem Pointeur optionnel pour récupérer le UISystem
+     * @param outRenderSystem Pointeur optionnel pour récupérer le RenderSystem
+     * @param outSystemsManager Pointeur optionnel pour récupérer tous les systèmes
      * @return true si tous les systèmes sont enregistrés avec succès
      */
     static bool RegisterSystems(ECS::Coordinator& coordinator,
                                eng::engine::rendering::sfml::SFMLRenderer& renderer,
-                               std::shared_ptr<UISystem>* outUISystem = nullptr);
+                               std::shared_ptr<UISystem>* outUISystem = nullptr,
+                               std::shared_ptr<RenderSystem>* outRenderSystem = nullptr,
+                               SystemsManager* outSystemsManager = nullptr);
 
     /**
      * @brief Configure les bindings Lua et charge les scripts

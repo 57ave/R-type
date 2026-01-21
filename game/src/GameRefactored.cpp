@@ -11,6 +11,7 @@
 #include <chrono>
 #include <thread>
 
+
 namespace RType {
 
 GameRefactored::GameRefactored()
@@ -29,11 +30,11 @@ GameRefactored::~GameRefactored() {
     }
 }
 
-int GameRefactored::Run(int argc, char* argv[]) {
+int GameRefactored::Run() {
     auto& logger = rtype::core::Logger::getInstance();
     logger.info("Game", "R-Type starting...");
     
-    if (!Initialize(argc, argv)) {
+    if (!Initialize()) {
         logger.error("Game", "Failed to initialize");
         return 1;
     }
@@ -47,7 +48,7 @@ int GameRefactored::Run(int argc, char* argv[]) {
     return 0;
 }
 
-bool GameRefactored::Initialize(int argc, char* argv[]) {
+bool GameRefactored::Initialize() {
     auto& logger = rtype::core::Logger::getInstance();
     
     if (initialized) {
@@ -56,32 +57,26 @@ bool GameRefactored::Initialize(int argc, char* argv[]) {
     }
 
     // ========================================
-    // ANALYSE DES ARGUMENTS
-    // ========================================
-    ParseCommandLineArguments(argc, argv);
-
-    // ========================================
     // INITIALISATION ECS
     // ========================================
     coordinator = std::make_unique<ECS::Coordinator>();
     coordinator->Init();
     
     Core::GameInitializer::RegisterComponents(*coordinator);
-
+    
     // ========================================
     // INITIALISATION LUA ET CONFIGURATION
     // ========================================
     luaState = &Scripting::LuaState::Instance();
     luaState->Init();
     luaState->EnableHotReload(true);
-
+    
     if (!Core::GameConfig::LoadConfiguration(*luaState)) {
         logger.warning("Game", "Using default configuration");
     }
-
-    // Appliquer la configuration chargée
+    
     ApplyConfiguration();
-
+    
     // ========================================
     // INITIALISATION DES GESTIONNAIRES
     // ========================================
@@ -97,26 +92,27 @@ bool GameRefactored::Initialize(int argc, char* argv[]) {
     // Précharger les ressources
     assetLoader->PreloadAllTextures();
     assetLoader->PreloadAllSounds();
-
+    
     // Audio Manager
     audioManager = std::make_shared<Core::AudioManager>();
     if (!audioManager->Initialize(assetLoader->GetBasePath())) {
         logger.warning("Game", "Audio manager initialization failed, continuing without audio");
     }
-
+    
     // Input Handler
     inputHandler = std::make_shared<Core::InputHandler>();
     SetupInputCallbacks();
-
+    
     // Gameplay Manager
     gameplayManager = std::make_shared<Core::GameplayManager>(coordinator.get());
     gameplayManager->Initialize(assetLoader->GetTextureMap(), assetLoader->GetAllSprites());
     gameplayManager->SetWindowSize(static_cast<float>(windowWidth), static_cast<float>(windowHeight));
-
+    
     // Network Manager
     networkManager = std::make_unique<Core::NetworkManager>();
     SetupNetworkCallbacks();
 
+    
     // ========================================
     // INITIALISATION WINDOW ET RENDERER
     // ========================================
@@ -139,6 +135,8 @@ bool GameRefactored::Initialize(int argc, char* argv[]) {
     gameLoop = std::make_unique<Core::GameLoop>(coordinator.get());
     gameLoop->SetWindow(window.get());
     gameLoop->SetUISystem(uiSystem);
+    gameLoop->SetRenderSystem(renderSystem);  // RenderSystem was set in InitializeSystems()
+    gameLoop->SetSystemsManager(&systemsManager);  // Pass systems manager
     gameLoop->SetAudioManager(audioManager);
     gameLoop->SetInputHandler(inputHandler);
     gameLoop->SetGameplayManager(gameplayManager);
@@ -219,58 +217,33 @@ void GameRefactored::Shutdown() {
 // MÉTHODES PRIVÉES
 // ========================================
 
-void GameRefactored::ParseCommandLineArguments(int argc, char* argv[]) {
-    auto& logger = rtype::core::Logger::getInstance();
-    
-    // Support de l'ancien flag --network pour la rétrocompatibilité
-    if (argc > 1 && std::string(argv[1]) == "--network") {
-        networkMode = true;
-        isNetworkClient = true;
-        
-        std::string serverAddress = "127.0.0.1";
-        short serverPort = 12345;
-        
-        if (argc > 2) {
-            serverAddress = argv[2];
-        }
-        if (argc > 3) {
-            serverPort = static_cast<short>(std::stoi(argv[3]));
-        }
-        
-        legacyServerAddress = serverAddress;
-        legacyServerPort = serverPort;
-        
-        logger.info("Game", "Network mode enabled - Server: " + serverAddress + ":" + std::to_string(serverPort));
-    }
-}
-
 void GameRefactored::ApplyConfiguration() {
     auto& logger = rtype::core::Logger::getInstance();
     const auto& config = Core::GameConfig::GetConfiguration();
 
-    // Configuration de la fenêtre
-    windowWidth = config.window.width;
-    windowHeight = config.window.height;
-    windowTitle = config.window.title;
-
-    // Configuration réseau (sauf si legacy CLI args)
-    if (!networkMode) {
-        networkMode = (config.network.startMode == "network");
-        if (networkMode && config.network.autoConnect) {
-            isNetworkClient = true;
-            legacyServerAddress = config.network.server.defaultAddress;
-            legacyServerPort = config.network.server.defaultPort;
-            logger.info("Game", "Auto-connect enabled: " + legacyServerAddress + ":" + std::to_string(legacyServerPort));
+    // Configuration réseau
+    networkMode = (config.network.startMode == "network");
+    isNetworkClient = config.network.autoConnect && networkMode;
+    
+    // Connexion si auto-connect
+    if (networkMode && config.network.autoConnect && networkManager) {
+        std::string addr = config.network.server.defaultAddress;
+        int port = config.network.server.defaultPort;
+        
+        if (networkManager->ConnectToServer(addr, port, coordinator.get())) {
+            logger.info("Network", "Connected to " + addr + ":" + std::to_string(port));
+        } else {
+            logger.error("Network", "Connection failed");
         }
     }
 }
 
 bool GameRefactored::InitializeSystems() {
-    if (!Core::GameInitializer::RegisterSystems(*coordinator, *renderer, &uiSystem)) {
+    if (!Core::GameInitializer::RegisterSystems(*coordinator, *renderer, &uiSystem, &renderSystem, &systemsManager)) {
         return false;
     }
 
-    // UISystem is now set by RegisterSystems
+    // UISystem and RenderSystem are now set by RegisterSystems
     uiSystem->SetWindow(window.get());
     
     // Charger la police par défaut pour l'UI
@@ -602,14 +575,8 @@ void GameRefactored::InitializeWorld() {
 
     logger.info("Game", "Game world initialized");
     
-    // Spawner le joueur initial si on est en mode solo
-    if (!networkMode && gameplayManager) {
-        logger.info("Game", "Spawning initial player...");
-        float playerX = 100.0f;
-        float playerY = static_cast<float>(windowHeight) / 2.0f;
-        gameplayManager->CreatePlayer(playerX, playerY, 0);
-        logger.info("Game", "Player spawned at (" + std::to_string(playerX) + ", " + std::to_string(playerY) + ")");
-    }
+    // Ne PAS créer le joueur ici - il sera créé par GameLoop
+    // quand on passe en mode Playing
 }
 
 } // namespace RType

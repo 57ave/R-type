@@ -15,6 +15,7 @@
 #include "core/NetworkManager.hpp"
 #include "core/AssetLoader.hpp"
 #include "systems/UISystem.hpp"
+#include "systems/RenderSystem.hpp"
 
 namespace RType {
 
@@ -38,11 +39,9 @@ public:
     
     /**
      * @brief Point d'entrée principal du jeu
-     * @param argc Nombre d'arguments
-     * @param argv Arguments de la ligne de commande
      * @return Code de retour (0 = succès)
      */
-    int Run(int argc, char* argv[]);
+    int Run();
 
 private:
     // ========================================
@@ -68,6 +67,8 @@ private:
     
     // Systèmes
     std::shared_ptr<UISystem> uiSystem;
+    std::shared_ptr<RenderSystem> renderSystem;
+    Core::SystemsManager systemsManager;  // Gestionnaire de tous les systèmes
     
     // Boucle de jeu
     std::unique_ptr<Core::GameLoop> gameLoop;
@@ -86,8 +87,6 @@ private:
     // Configuration réseau
     bool networkMode;
     bool isNetworkClient;
-    std::string legacyServerAddress;
-    short legacyServerPort;
 
     // ========================================
     // MÉTHODES PRIVÉES
@@ -95,24 +94,15 @@ private:
     
     /**
      * @brief Initialise tous les modules du jeu
-     * @param argc Nombre d'arguments
-     * @param argv Arguments de la ligne de commande
      * @return true si l'initialisation réussit
      */
-    bool Initialize(int argc, char* argv[]);
+    bool Initialize();
     
     /**
      * @brief Arrête et nettoie tous les modules
      */
     void Shutdown();
-    
-    /**
-     * @brief Parse les arguments de ligne de commande
-     * @param argc Nombre d'arguments
-     * @param argv Arguments
-     */
-    void ParseCommandLineArguments(int argc, char* argv[]);
-    
+        
     /**
      * @brief Applique la configuration chargée
      */

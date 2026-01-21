@@ -23,13 +23,13 @@ namespace eng {
 namespace engine {
 namespace systems {
 
-class NetworkSystem : public ECS::System {
+class NetworkSystem : public ::ECS::System {
 public:
-    using EntityCallback = std::function<void(ECS::Entity)>;
-    using EntityDestroyCallback = std::function<void(ECS::Entity, uint32_t)>; // entity, networkId
+    using EntityCallback = std::function<void(::ECS::Entity)>;
+    using EntityDestroyCallback = std::function<void(::ECS::Entity, uint32_t)>; // entity, networkId
     using GameStartCallback = std::function<void()>; // Called when GAME_START is received
     
-    NetworkSystem(ECS::Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
+    NetworkSystem(::ECS::Coordinator* coordinator, std::shared_ptr<NetworkClient> client)
         : coordinator_(coordinator), networkClient_(client), localPlayerId_(0) {}
     
     void setEntityCreatedCallback(EntityCallback callback) {
@@ -209,7 +209,7 @@ private:
             
             auto it = networkIdToEntity_.find(networkId);
             if (it != networkIdToEntity_.end()) {
-                ECS::Entity entity = it->second;
+                ::ECS::Entity entity = it->second;
                 
                 // Notify callback before destroying (for explosion effects)
                 if (entityDestroyedCallback_) {
@@ -330,7 +330,7 @@ private:
         
         if (it != networkIdToEntity_.end()) {
             // Update existing entity
-            ECS::Entity entity = it->second;
+            ::ECS::Entity entity = it->second;
             
             if (coordinator_->HasComponent<Position>(entity)) {
                 auto& pos = coordinator_->GetComponent<Position>(entity);
@@ -355,7 +355,7 @@ private:
     }
 
     void createEntityFromState(const EntityState& state) {
-        ECS::Entity entity = coordinator_->CreateEntity();
+        ::ECS::Entity entity = coordinator_->CreateEntity();
         
         // Add NetworkId component. Use state.playerId to determine ownership
         bool isLocal = (state.type == EntityType::ENTITY_PLAYER && 
@@ -441,9 +441,9 @@ private:
     }
 
 private:
-    ECS::Coordinator* coordinator_;
+    ::ECS::Coordinator* coordinator_;
     std::shared_ptr<NetworkClient> networkClient_;
-    std::unordered_map<uint32_t, ECS::Entity> networkIdToEntity_;
+    std::unordered_map<uint32_t, ::ECS::Entity> networkIdToEntity_;
     uint8_t localPlayerId_;
     EntityCallback entityCreatedCallback_;
     EntityDestroyCallback entityDestroyedCallback_;

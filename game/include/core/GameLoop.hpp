@@ -9,9 +9,11 @@
 #include "core/InputHandler.hpp"
 #include "core/AudioManager.hpp"
 #include "core/GameplayManager.hpp"
+#include "core/SystemsManager.hpp"
 #include <systems/UISystem.hpp>
 #include <scripting/LuaState.hpp>
 #include <scripting/ScriptSystem.hpp>
+#include <systems/RenderSystem.hpp>
 
 namespace RType::Core {
 
@@ -50,6 +52,11 @@ public:
     void SetUISystem(std::shared_ptr<UISystem> ui);
     
     /**
+     * @brief Définit le système de rendu
+     */
+    void SetRenderSystem(std::shared_ptr<RenderSystem> render);
+    
+    /**
      * @brief Définit le gestionnaire audio
      */
     void SetAudioManager(std::shared_ptr<AudioManager> audio);
@@ -73,6 +80,11 @@ public:
      * @brief Définit l'état Lua
      */
     void SetLuaState(Scripting::LuaState* lua);
+    
+    /**
+     * @brief Définit le gestionnaire de systèmes
+     */
+    void SetSystemsManager(SystemsManager* systems);
     
     /**
      * @brief Définit la fenêtre
@@ -118,6 +130,8 @@ private:
     ECS::Coordinator* coordinator;
     std::shared_ptr<eng::engine::systems::NetworkSystem> networkSystem;
     std::shared_ptr<UISystem> uiSystem;
+    std::shared_ptr<RenderSystem> renderSystem;
+    SystemsManager* systemsManager;  // Gestionnaire de tous les systèmes
     std::shared_ptr<AudioManager> audioManager;
     std::shared_ptr<InputHandler> inputHandler;
     std::shared_ptr<GameplayManager> gameplayManager;
@@ -145,6 +159,8 @@ private:
     float gamePlayTime;
     bool winConditionTriggered;
     float winDisplayTimer;
+    ECS::Entity player;        // Entity du joueur
+    bool playerCreated;        // Est-ce que le joueur a été créé?
     uint8_t inputMask;
     
     // Configuration

@@ -138,7 +138,9 @@ void GameInitializer::RegisterComponents(ECS::Coordinator& coordinator) {
 
 bool GameInitializer::RegisterSystems(ECS::Coordinator& coordinator,
                                      eng::engine::rendering::sfml::SFMLRenderer& renderer,
-                                     std::shared_ptr<UISystem>* outUISystem) {
+                                     std::shared_ptr<UISystem>* outUISystem,
+                                     std::shared_ptr<RenderSystem>* outRenderSystem,
+                                     SystemsManager* outSystemsManager) {
     auto& logger = rtype::core::Logger::getInstance();
     logger.info("GameInitializer", "Registering systems...");
     
@@ -240,6 +242,26 @@ bool GameInitializer::RegisterSystems(ECS::Coordinator& coordinator,
         // Store UISystem pointer if requested
         if (outUISystem) {
             *outUISystem = uiSystem;
+        }
+        
+        // Store RenderSystem pointer if requested
+        if (outRenderSystem) {
+            *outRenderSystem = renderSystem;
+        }
+        
+        // Store all systems in SystemsManager if requested
+        if (outSystemsManager) {
+            outSystemsManager->movementSystem = movementSystem;
+            outSystemsManager->animationSystem = animationSystem;
+            outSystemsManager->stateMachineAnimSystem = stateMachineAnimSystem;
+            outSystemsManager->lifetimeSystem = lifetimeSystem;
+            outSystemsManager->movementPatternSystem = movementPatternSystem;
+            outSystemsManager->scrollingBgSystem = scrollingBgSystem;
+            outSystemsManager->boundarySystem = boundarySystem;
+            outSystemsManager->collisionSystem = collisionSystem;
+            outSystemsManager->healthSystem = healthSystem;
+            outSystemsManager->renderSystem = renderSystem;
+            outSystemsManager->uiSystem = uiSystem;
         }
         
         logger.info("GameInitializer", "All systems registered and initialized successfully");
