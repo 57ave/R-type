@@ -121,36 +121,7 @@ include(cmake/CPM.cmake)
 # Dépendance ASIO
 CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 
-# Dépendance SFML: Force SFML 2.6 via CPM (project not compatible with SFML 3.x API)
-# Skip system SFML to avoid version conflicts
-option(USE_SYSTEM_SFML "Use system SFML instead of CPM" ON)
-
-# SFML build options - disable warnings as errors (causes issues on macOS with ObjC files)
-set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
-
-if(USE_SYSTEM_SFML)
-    find_package(SFML COMPONENTS Graphics Window System Audio Network CONFIG)
-    if(SFML_FOUND)
-         message(STATUS "✅ Found System SFML at: ${SFML_DIR} (Version: ${SFML_VERSION})")
-    else()
-         message(STATUS "⚠️ System SFML not found via CONFIG. Trying CPM...")
-    endif()
-endif()
-if (NOT SFML_FOUND)
-    message(STATUS "Using CPM to download SFML 2.6.0")
-    # Add SFML with OPTIONS to disable warnings as errors
-    CPMAddPackage(
-        NAME SFML
-        GITHUB_REPOSITORY SFML/SFML
-        GIT_TAG 2.6.0
-        OPTIONS
-            "WARNINGS_AS_ERRORS OFF"
-            "SFML_BUILD_EXAMPLES OFF"
-    )
-endif()
-set(SFML_VERSION_MAJOR 2)
+# SFML is now found in root CMakeLists.txt
 
 # Enable PIC for ecs library (needed for shared library systems)
 set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)

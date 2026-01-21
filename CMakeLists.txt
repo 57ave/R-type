@@ -59,7 +59,7 @@ if(WIN32 OR MINGW)
 endif()
 
 # Find SFML (required by all sub-projects)
-find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)
+find_package(SFML COMPONENTS Graphics Window System Audio Network CONFIG)
 if(NOT SFML_FOUND)
     CPMAddPackage(
         NAME SFML
