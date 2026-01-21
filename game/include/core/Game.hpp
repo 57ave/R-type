@@ -48,6 +48,7 @@ public:
     eng::engine::rendering::sfml::SFMLWindow* getWindow() { return window_.get(); }
     Scripting::LuaState& getLuaState() { return Scripting::LuaState::Instance(); }
     StateManager* getStateManager() { return stateManager_.get(); }
+    NetworkManager* getNetworkManager() { return networkManager_.get(); }
     UISystem* getUISystem() { return uiSystem_.get(); }
     GameConfig& getConfig() { return config_; }
 

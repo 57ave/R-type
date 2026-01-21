@@ -493,6 +493,28 @@ void Game::setupLuaBindings()
         coordinator_->AddComponent(entity, tag);
     };
     
+    // AddUIInputField - Only parameters from Lua, rest uses defaults
+    lua["ECS"]["AddUIInputField"] = [this](ECS::Entity entity, float x, float y, float width, float height,
+                                            const std::string& placeholder, int maxLength) {
+        UIElement uiElem;
+        uiElem.x = x;
+        uiElem.y = y;
+        uiElem.width = width;
+        uiElem.height = height;
+        coordinator_->AddComponent(entity, uiElem);
+        
+        Position pos{x, y};
+        coordinator_->AddComponent(entity, pos);
+        
+        UIInputField inputField;
+        inputField.placeholder = placeholder;
+        inputField.maxLength = maxLength;
+        coordinator_->AddComponent(entity, inputField);
+        
+        Tag tag{"inputfield"};
+        coordinator_->AddComponent(entity, tag);
+    };
+    
     std::cout << "[GAME] ✅ Lua bindings registered (ECS + UI exposed to Lua)" << std::endl;
 }
 

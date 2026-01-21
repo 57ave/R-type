@@ -1,10 +1,13 @@
 /**
- * MultiplayerMenuState.hpp - Multiplayer Menu State (Placeholder Phase 4)
+ * MultiplayerMenuState.hpp - Multiplayer Lobby Menu (Phase 5)
  */
 
 #pragma once
 
 #include "GameState.hpp"
+#include <ecs/Coordinator.hpp>
+#include <vector>
+#include <string>
 
 class MultiplayerMenuState : public GameState
 {
@@ -18,4 +21,29 @@ public:
     void update(float deltaTime) override;
     void render() override;
     const char* getName() const override { return "MultiplayerMenu"; }
+
+private:
+    std::vector<ECS::Entity> menuEntities_;
+    ECS::Entity hoveredButton_ = 0;
+    
+    // UI state
+    enum class MenuMode {
+        MAIN,       // Host/Join/Back buttons
+        HOST,       // Hosting setup
+        JOIN,       // Server browser
+        LOBBY       // In a room
+    };
+    MenuMode currentMode_ = MenuMode::MAIN;
+    
+    // Network state
+    std::string playerName_ = "Player";
+    std::string serverAddress_ = "127.0.0.1";
+    uint16_t serverPort_ = 8080;
+    bool isReady_ = false;  // Local player ready state
+    
+    void createMainMenu();
+    void createHostMenu();
+    void createJoinMenu();
+    void createLobbyMenu();
+    void clearMenu();
 };
