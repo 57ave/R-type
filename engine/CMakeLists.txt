@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(WIN32)
+    add_compile_definitions(_WIN32_WINNT=0x0A00) # Windows 10 targeting
+endif()
+
 # Compiler warnings (only for our code, not dependencies)
 if(MSVC)
     add_compile_options(/W4)
@@ -119,7 +123,7 @@ CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 
 # Dépendance SFML: Force SFML 2.6 via CPM (project not compatible with SFML 3.x API)
 # Skip system SFML to avoid version conflicts
-option(USE_SYSTEM_SFML "Use system SFML instead of CPM" OFF)
+option(USE_SYSTEM_SFML "Use system SFML instead of CPM" ON)
 
 # SFML build options - disable warnings as errors (causes issues on macOS with ObjC files)
 set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
