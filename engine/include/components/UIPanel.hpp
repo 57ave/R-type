@@ -1,6 +1,7 @@
 #ifndef ENG_ENGINE_COMPONENTS_UIPANEL_HPP
 #define ENG_ENGINE_COMPONENTS_UIPANEL_HPP
 
+#include <algorithm>
 #include <cstdint>
 #include <ecs/Types.hpp>
 #include <string>
