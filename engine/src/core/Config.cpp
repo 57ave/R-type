@@ -6,6 +6,7 @@
 */
 
 #include "core/Config.hpp"
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -13,25 +14,20 @@
 namespace eng {
 namespace core {
 
-Config::Config()
-{
-}
+Config::Config() {}
 
-Config::~Config()
-{
+Config::~Config() {
     _data.clear();
 }
 
 // Extrait le nom du fichier sans extension
-std::string Config::getFilenameWithoutExtension(const std::string& filepath) const
-{
+std::string Config::getFilenameWithoutExtension(const std::string& filepath) const {
     std::filesystem::path p(filepath);
     return p.stem().string();
 }
 
 // Scanne un dossier et ajoute tous les .gif dans _data
-void Config::scanDirectory(const std::string& path, const std::string& category)
-{
+void Config::scanDirectory(const std::string& path, const std::string& category) {
     try {
         if (!std::filesystem::exists(path)) {
             std::cerr << "Directory does not exist: " << path << std::endl;
@@ -59,8 +55,7 @@ void Config::scanDirectory(const std::string& path, const std::string& category)
 }
 
 // Charge la configuration depuis un dossier d'assets
-void Config::load(const std::string& filepath)
-{
+void Config::load(const std::string& filepath) {
     std::cout << "========================================" << std::endl;
     std::cout << "Loading assets from: " << filepath << std::endl;
     std::cout << "========================================" << std::endl;
@@ -78,25 +73,24 @@ void Config::load(const std::string& filepath)
 }
 
 // Sauvegarde la configuration dans un fichier
-void Config::save(const std::string& filepath) const
-{
+void Config::save(const std::string& filepath) const {
     std::ofstream file(filepath);
     if (!file.is_open()) {
         std::cerr << "Failed to save config to: " << filepath << std::endl;
         return;
     }
-    
+
     file << "# Game Asset Configuration" << std::endl;
     file << "# Auto-generated file" << std::endl;
     file << std::endl;
-    
+
     for (const auto& [key, value] : _data) {
         file << key << " = " << value << std::endl;
     }
-    
+
     file.close();
     std::cout << "Config saved to: " << filepath << std::endl;
 }
 
-} // namespace core
-} // namespace eng
+}  // namespace core
+}  // namespace eng

@@ -1,8 +1,8 @@
 #ifndef ENG_ENGINE_ECS_TYPES_HPP
 #define ENG_ENGINE_ECS_TYPES_HPP
 
-#include <cstdint>
 #include <bitset>
+#include <cstdint>
 
 namespace ECS {
 
@@ -30,6 +30,6 @@ constexpr NetworkId INVALID_NETWORK_ID = 0;
 // Example: 0b00000101 means the entity has components 0 and 2
 using Signature = std::bitset<MAX_COMPONENTS>;
 
-} // namespace ECS
+}  // namespace ECS
 
-#endif // ENG_ENGINE_ECS_TYPES_HPP
+#endif  // ENG_ENGINE_ECS_TYPES_HPP

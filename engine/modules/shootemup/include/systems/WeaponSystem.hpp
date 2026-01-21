@@ -4,23 +4,23 @@
 #include <ecs/System.hpp>
 
 namespace ECS {
-    class Coordinator;
+class Coordinator;
 }
 
 class WeaponSystem : public ECS::System {
-    public:
-        WeaponSystem();
-        ~WeaponSystem() override = default;
-        void Init() override;
-        void Update(float dt) override;
-        void Shutdown() override;
+public:
+    WeaponSystem();
+    ~WeaponSystem() override = default;
+    void Init() override;
+    void Update(float dt) override;
+    void Shutdown() override;
 
-        void SetCoordinator(ECS::Coordinator* coordinator) { coordinator_ = coordinator; }
+    void SetCoordinator(ECS::Coordinator* coordinator) { coordinator_ = coordinator; }
 
-    private:
-        ECS::Coordinator* coordinator_;
+private:
+    ECS::Coordinator* coordinator_;
 
-        void CreateProjectile(ECS::Entity owner, bool charged, int chargeLevel);
+    void CreateProjectile(ECS::Entity owner, bool charged, int chargeLevel);
 };
 
-#endif // RTYPE_ENGINE_SYSTEMS_WEAPONSYSTEM_HPP
+#endif  // RTYPE_ENGINE_SYSTEMS_WEAPONSYSTEM_HPP

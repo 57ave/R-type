@@ -1,8 +1,8 @@
 #pragma once
 
-#include <sol/sol.hpp>
 #include <network/NetworkClient.hpp>
 #include <network/Packet.hpp>
+#include <sol/sol.hpp>
 
 namespace FlappyBird {
 
@@ -15,4 +15,4 @@ public:
     static void RegisterPacketTypes(sol::state& lua);
 };
 
-} // namespace FlappyBird
+}  // namespace FlappyBird

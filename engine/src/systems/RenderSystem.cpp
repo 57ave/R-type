@@ -1,31 +1,23 @@
-#include <systems/RenderSystem.hpp>
+#include <algorithm>
 #include <components/Position.hpp>
 #include <components/Sprite.hpp>
 #include <components/Tag.hpp>
 #include <ecs/Coordinator.hpp>
-#include <rendering/Types.hpp>
-#include <rendering/IRenderer.hpp>
 #include <iostream>
+#include <rendering/IRenderer.hpp>
+#include <rendering/Types.hpp>
+#include <systems/RenderSystem.hpp>
 #include <vector>
-#include <algorithm>
 
-RenderSystem::RenderSystem()
-    : renderer_(nullptr)
-    , coordinator_(nullptr)
-{
-}
+RenderSystem::RenderSystem() : renderer_(nullptr), coordinator_(nullptr) {}
 
-void RenderSystem::Init()
-{
+void RenderSystem::Init() {
     // nothing to init by default
 }
 
-void RenderSystem::Shutdown()
-{
-}
+void RenderSystem::Shutdown() {}
 
-void RenderSystem::Update(float /*dt*/)
-{
+void RenderSystem::Update(float /*dt*/) {
     if (!renderer_ || !coordinator_) {
         // Renderer or coordinator not set — nothing to draw
         return;
@@ -34,7 +26,7 @@ void RenderSystem::Update(float /*dt*/)
     // Collect all renderable entities and sort by layer
     std::vector<ECS::Entity> renderableEntities;
     for (auto entity : mEntities) {
-        if (coordinator_->HasComponent<Position>(entity) && 
+        if (coordinator_->HasComponent<Position>(entity) &&
             coordinator_->HasComponent<Sprite>(entity)) {
             renderableEntities.push_back(entity);
         }
@@ -59,27 +51,26 @@ void RenderSystem::Update(float /*dt*/)
                 }
             }
         }
-        std::cout << "[RenderSystem] Rendering " << renderableEntities.size() 
-                  << " entities (" << enemyCount << " enemies, " 
-                  << playerBulletCount << " player bullets, " 
+        std::cout << "[RenderSystem] Rendering " << renderableEntities.size() << " entities ("
+                  << enemyCount << " enemies, " << playerBulletCount << " player bullets, "
                   << enemyBulletCount << " enemy bullets)" << std::endl;
     }
 
     // Sort by layer (lower layer = drawn first = background)
-    std::sort(renderableEntities.begin(), renderableEntities.end(), 
-        [this](ECS::Entity a, ECS::Entity b) {
-            auto& spriteA = coordinator_->GetComponent<Sprite>(a);
-            auto& spriteB = coordinator_->GetComponent<Sprite>(b);
-            return spriteA.layer < spriteB.layer;
-        });
+    std::sort(renderableEntities.begin(), renderableEntities.end(),
+              [this](ECS::Entity a, ECS::Entity b) {
+                  auto& spriteA = coordinator_->GetComponent<Sprite>(a);
+                  auto& spriteB = coordinator_->GetComponent<Sprite>(b);
+                  return spriteA.layer < spriteB.layer;
+              });
 
     // Draw all entities in order
     for (auto entity : renderableEntities) {
-        auto &pos = coordinator_->GetComponent<Position>(entity);
-        auto &spr = coordinator_->GetComponent<Sprite>(entity);
+        auto& pos = coordinator_->GetComponent<Position>(entity);
+        auto& spr = coordinator_->GetComponent<Sprite>(entity);
 
         if (!spr.sprite)
-            continue; // nothing to draw
+            continue;  // nothing to draw
 
         // Skip sprites with zero scale (hidden/finished animations)
         if (spr.scaleX <= 0.0f || spr.scaleY <= 0.0f)

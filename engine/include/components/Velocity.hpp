@@ -6,4 +6,4 @@ struct Velocity {
     float dy = 0.0f;
 };
 
-#endif // ENG_ENGINE_COMPONENTS_VELOCITY_HPP
+#endif  // ENG_ENGINE_COMPONENTS_VELOCITY_HPP
