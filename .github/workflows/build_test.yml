@@ -1,0 +1,152 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  # Job 1: Linux GCC Build
+  linux-gcc:
+    name: Linux (GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev \
+            libfreetype6-dev \
+            python3
+
+      - name: Configure CMake (GCC)
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure --verbose
+
+  # Job 2: Linux Clang Build
+  linux-clang:
+    name: Linux (Clang)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev \
+            libfreetype6-dev \
+            python3
+
+      - name: Configure CMake (Clang)
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure --verbose
+
+  # Job 3: Windows MSVC Build
+  windows-msvc:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '8eb57355a4ffac410d60f6b9c0e4e8e06c9f7cfd'
+
+      - name: Install Dependencies via vcpkg
+        run: |
+          vcpkg install sfml:x64-windows
+          vcpkg install lua:x64-windows
+          vcpkg install openal-soft:x64-windows
+
+      - name: Configure CMake (MSVC)
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" `
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest -C Release --output-on-failure --verbose
+
+  # Job 4: Code Formatting Check
+  format-check:
+    name: Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Check Formatting
+        run: |
+          chmod +x scripts/format.sh
+          ./scripts/format.sh --check
