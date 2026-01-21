@@ -113,7 +113,20 @@ void UISystem::HandleEvent(const eng::engine::InputEvent& event)
             SelectNext();
         }
         else if (event.key.code == Key::Enter) {
-            ActivateSelected();
+            bool inputHandled = false;
+            // Prioritize focused input field
+            if (m_focusedInputField != 0 && m_coordinator && m_coordinator->HasComponent<Components::UIInputField>(m_focusedInputField)) {
+                 auto& input = m_coordinator->GetComponent<Components::UIInputField>(m_focusedInputField);
+                 if (!input.onSubmitCallback.empty()) {
+                     CallLuaStringCallback(input.onSubmitCallback, input.text);
+                     CallCppStringCallback(input.onSubmitCallback, input.text);
+                     inputHandled = true;
+                 }
+            }
+            
+            if (!inputHandled) {
+                ActivateSelected();
+            }
         }
         else if (event.key.code == Key::Backspace) {
             if (m_focusedInputField != 0) {
@@ -234,6 +247,14 @@ void UISystem::ActivateSelected()
                 CallLuaValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
                 CallCppValueCallback(checkbox.onChangeCallback, checkbox.checked ? 1.0f : 0.0f);
             }
+        }
+    }
+    // Check if it's an input field
+    else if (m_coordinator->HasComponent<Components::UIInputField>(m_selectedEntity)) {
+        auto& input = m_coordinator->GetComponent<Components::UIInputField>(m_selectedEntity);
+        if (!input.onSubmitCallback.empty()) {
+            CallLuaStringCallback(input.onSubmitCallback, input.text);
+            CallCppStringCallback(input.onSubmitCallback, input.text);
         }
     }
 }

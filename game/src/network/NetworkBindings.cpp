@@ -405,6 +405,8 @@ void NetworkBindings::OnRoomPlayersUpdated(const std::vector<PlayerInRoomInfo>& 
 void NetworkBindings::OnChatMessage(const std::string& senderName, const std::string& message) {
     if (!s_lua) return;
     
+    std::cout << "[Client] RECEIVED CHAT: " << senderName << ": " << message << std::endl;
+
     sol::protected_function luaCallback = (*s_lua)["OnChatMessage"];
     if (!luaCallback.valid()) {
         std::cout << "[NetworkBindings] OnChatMessage not found in Lua (optional callback)" << std::endl;
@@ -418,7 +420,7 @@ void NetworkBindings::OnChatMessage(const std::string& senderName, const std::st
     }
 }
 
-void NetworkBindings::SendChatMessage(const std::string& message) {
+void NetworkBindings::SendChatMessage(const std::string& message, uint32_t roomId) {
     if (!s_networkClient) {
         std::cerr << "[NetworkBindings] Cannot send chat message: NetworkClient not set" << std::endl;
         return;
@@ -433,13 +435,13 @@ void NetworkBindings::SendChatMessage(const std::string& message) {
     payload.senderId = 0;  // Will be set by server
     payload.senderName = "";  // Will be set by server
     payload.message = message;
-    payload.roomId = 0;  // Will be set by server
+    payload.roomId = roomId;
     
     NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CHAT_MESSAGE));
     packet.setPayload(payload.serialize());
     s_networkClient->sendPacket(packet);
     
-    std::cout << "[NetworkBindings] Chat message sent: " << message << std::endl;
+    std::cout << "[NetworkBindings] Chat message sent: " << message << " (room " << roomId << ")" << std::endl;
 }
 
 } // namespace Network

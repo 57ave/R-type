@@ -25,6 +25,13 @@ UI.countdownValue = 3
 UI.scores = {}
 UI.leaderboard = {}
 
+-- Chat state
+UI.chatInput = ""
+UI.chatHistory = {}
+UI.isTyping = false
+UI.chatVisible = true
+UI.maxChatLines = 8
+
 function UI.init()
     print("✅ Simple UI initialized")
 end
@@ -172,6 +179,98 @@ function UI.renderLobby()
     -- Instructions
     Flappy.DrawText("Waiting for more players to join...", centerX, 450, 22, 128, 128, 128)
     Flappy.DrawText("Press ESC to return to menu", centerX, 640, 20, 192, 192, 192)
+
+    -- Chat Rendering
+    if UI.chatVisible then
+        local chatX = 50
+        local chatY = 450
+        local lineHeight = 25
+        
+        -- Draw Chat Box Background
+        Flappy.DrawRect(chatX - 10, chatY - 10, 400, 220, 0, 0, 0, 150)
+        Flappy.DrawRectOutline(chatX - 10, chatY - 10, 400, 220, 100, 100, 100, 1)
+
+        -- Draw History (Last N messages)
+        local historyCount = #UI.chatHistory
+        local startIdx = math.max(1, historyCount - UI.maxChatLines + 1)
+        
+        for i = startIdx, historyCount do
+            local msg = UI.chatHistory[i]
+            local y = chatY + (i - startIdx) * lineHeight
+            local displayText = msg.sender .. ": " .. msg.message
+            Flappy.DrawTextLeft(displayText, chatX, y, 18, 200, 200, 200)
+        end
+        
+        -- Draw Input Line
+        local inputY = chatY + (UI.maxChatLines * lineHeight) + 10
+        Flappy.DrawRect(chatX - 5, inputY - 5, 390, 30, 50, 50, 50, 200)
+        
+        local inputText = UI.chatInput
+        if UI.isTyping then
+            inputText = inputText .. "_"
+        end
+        Flappy.DrawTextLeft("Chat: " .. inputText, chatX, inputY, 18, 255, 255, 255)
+    end
+end
+
+function UI.addChatMessage(sender, message)
+    table.insert(UI.chatHistory, {sender = sender, message = message})
+    if #UI.chatHistory > 20 then
+        table.remove(UI.chatHistory, 1)
+    end
+end
+
+function UI.onTextEntered(char)
+    if not UI.isTyping then return end
+    
+    -- basic filtering (only printable)
+    local byte = string.byte(char)
+    if byte >= 32 and byte <= 126 then
+        if #UI.chatInput < 40 then
+            UI.chatInput = UI.chatInput .. char
+        end
+    end
+end
+
+function UI.onKeyPressed(keyCode)
+    -- Toggle chat typing with Enter
+    -- Key code 58 is Enter (sf::Keyboard::Enter) - wait, need to verify
+    -- Assuming generic mapping or passing raw int. SFML Enter is 58.
+    -- Backspace is 59.
+    
+    -- Let's use generic numbers for now, assuming standard SFML mappings
+    local Key_Enter = 58
+    local Key_Backspace = 59
+    local Key_T = 19
+    local Key_Esc = 36
+    
+    if keyCode == Key_Enter then
+        if UI.isTyping then
+            -- Send message
+            if UI.chatInput ~= "" then
+                if Network and Network.sendChat then
+                    print("[UI] Sending chat: " .. UI.chatInput)
+                    Network.sendChat(UI.chatInput)
+                end
+                UI.chatInput = ""
+            end
+            UI.isTyping = false
+        else
+            UI.isTyping = true
+            -- Consume input so it doesn't type 't' or whatever
+        end
+    elseif keyCode == Key_Backspace then
+        if UI.isTyping and #UI.chatInput > 0 then
+            UI.chatInput = string.sub(UI.chatInput, 1, -2)
+        end
+    elseif keyCode == Key_Esc then
+        if UI.isTyping then
+            UI.isTyping = false
+        end
+    elseif keyCode == Key_T and not UI.isTyping and UI.currentScreen == "LOBBY" then
+        -- Optional: Press T to start typing
+        UI.isTyping = true
+    end
 end
 
 -- Functions to update UI state (called from game logic)
