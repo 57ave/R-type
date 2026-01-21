@@ -27,6 +27,8 @@ GameRefactored::GameRefactored()
     , windowTitle("R-Type - ECS Version")
     , networkMode(false)
     , isNetworkClient(false)
+    , cmdLineServerAddress("")
+    , cmdLineServerPort(0)
 {
 }
 
@@ -43,25 +45,19 @@ void GameRefactored::ParseCommandLine(int argc, char* argv[]) {
         std::string arg = argv[i];
         
         if ((arg == "--network" || arg == "-n") && i + 2 < argc) {
-            std::string address = argv[i + 1];
-            int port = std::atoi(argv[i + 2]);
+            cmdLineServerAddress = argv[i + 1];
+            cmdLineServerPort = std::atoi(argv[i + 2]);
             
-            logger.info("CommandLine", "Network mode requested: " + address + ":" + std::to_string(port));
+            logger.info("CommandLine", "Network mode requested: " + cmdLineServerAddress + ":" + std::to_string(cmdLineServerPort));
             
             // Activer le mode réseau
             networkMode = true;
             isNetworkClient = true;
             
-            // Override config with command line args
-            auto& config = Core::GameConfig::GetConfiguration();
-            const_cast<Core::GameConfiguration&>(config).network.server.defaultAddress = address;
-            const_cast<Core::GameConfiguration&>(config).network.server.defaultPort = port;
-            const_cast<Core::GameConfiguration&>(config).network.autoConnect = true;
-            
             i += 2; // Skip next 2 arguments
         }
         else if (arg == "--help" || arg == "-h") {
-            std::cout << "Usage: r-type_client [options]\n"
+            std::cout << "Usage: r-type_game [options]\n"
                       << "Options:\n"
                       << "  --network, -n <ip> <port>  Connect to server at ip:port\n"
                       << "  --help, -h                 Show this help message\n";
@@ -118,6 +114,15 @@ bool GameRefactored::Initialize() {
     
     if (!Core::GameConfig::LoadConfiguration(*luaState)) {
         logger.warning("Game", "Using default configuration");
+    }
+    
+    // Appliquer les arguments de ligne de commande (override config)
+    if (!cmdLineServerAddress.empty()) {
+        auto& config = Core::GameConfig::GetConfiguration();
+        const_cast<Core::GameConfiguration&>(config).network.server.defaultAddress = cmdLineServerAddress;
+        const_cast<Core::GameConfiguration&>(config).network.server.defaultPort = cmdLineServerPort;
+        const_cast<Core::GameConfiguration&>(config).network.autoConnect = true;
+        logger.info("CommandLine", "Overriding config with: " + cmdLineServerAddress + ":" + std::to_string(cmdLineServerPort));
     }
     
     ApplyConfiguration();

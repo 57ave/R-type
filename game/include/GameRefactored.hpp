@@ -89,6 +89,10 @@ private:
     // Configuration réseau
     bool networkMode;
     bool isNetworkClient;
+    
+    // Arguments de ligne de commande (appliqués après chargement config)
+    std::string cmdLineServerAddress;
+    int cmdLineServerPort;
 
     // ========================================
     // MÉTHODES PRIVÉES
