@@ -145,8 +145,9 @@ public:
     /**
      * @brief Send a chat message to the room
      * @param message The message to send
+     * @param roomId The room ID to send the message to
      */
-    static void SendChatMessage(const std::string& message);
+    static void SendChatMessage(const std::string& message, uint32_t roomId);
 
 private:
     static std::shared_ptr<NetworkClient> s_networkClient;
