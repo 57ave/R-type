@@ -1,10 +1,11 @@
 #pragma once
 
 #include <asio.hpp>
-#include <vector>
+#include <iostream>
 #include <mutex>
 #include <queue>
-#include <iostream>
+#include <vector>
+
 #include "Packet.hpp"
 
 using asio::ip::udp;

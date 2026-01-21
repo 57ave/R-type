@@ -6,8 +6,9 @@
 */
 
 #include "core/Logger.hpp"
-#include <filesystem>
+
 #include <ctime>
+#include <filesystem>
 
 namespace rtype {
 namespace core {
@@ -16,27 +17,19 @@ namespace core {
 constexpr const char* Logger::MODULE_COLORS[];
 
 Logger::Logger()
-    : _minLevel(LogLevel::DEBUG)
-    , _colorEnabled(true)
-    , _consoleEnabled(true)
-    , _fileEnabled(true)
-    , _initialized(false)
-{
-}
+    : _minLevel(LogLevel::DEBUG), _colorEnabled(true), _consoleEnabled(true), _fileEnabled(true),
+      _initialized(false) {}
 
-Logger::~Logger()
-{
+Logger::~Logger() {
     shutdown();
 }
 
-Logger& Logger::getInstance()
-{
+Logger& Logger::getInstance() {
     static Logger instance;
     return instance;
 }
 
-bool Logger::init(const std::string& logDirectory, const std::string& logFileName)
-{
+bool Logger::init(const std::string& logDirectory, const std::string& logFileName) {
     {
         std::lock_guard<std::mutex> lock(_mutex);
 
@@ -50,7 +43,8 @@ bool Logger::init(const std::string& logDirectory, const std::string& logFileNam
                 std::filesystem::create_directories(logDirectory);
             }
         } catch (const std::filesystem::filesystem_error& e) {
-            std::cerr << "[ERROR][LOGGER] Failed to create log directory: " << e.what() << std::endl;
+            std::cerr << "[ERROR][LOGGER] Failed to create log directory: " << e.what()
+                      << std::endl;
             return false;
         }
 
@@ -60,8 +54,7 @@ bool Logger::init(const std::string& logDirectory, const std::string& logFileNam
         std::tm tm = *std::localtime(&time_t);
 
         std::ostringstream oss;
-        oss << logDirectory << "/" 
-            << std::put_time(&tm, "%Y%m%d_%H%M%S") << "_" << logFileName;
+        oss << logDirectory << "/" << std::put_time(&tm, "%Y%m%d_%H%M%S") << "_" << logFileName;
         _logFilePath = oss.str();
 
         // Open log file
@@ -72,15 +65,14 @@ bool Logger::init(const std::string& logDirectory, const std::string& logFileNam
         }
 
         _initialized = true;
-    } // Release lock before calling info()
+    }  // Release lock before calling info()
 
     // Log initialization (outside the lock to avoid deadlock)
     info("LOGGER", "Logger initialized - File: " + _logFilePath);
     return true;
 }
 
-void Logger::shutdown()
-{
+void Logger::shutdown() {
     std::lock_guard<std::mutex> lock(_mutex);
 
     if (_initialized && _logFile.is_open()) {
@@ -90,78 +82,64 @@ void Logger::shutdown()
     _initialized = false;
 }
 
-void Logger::setMinLevel(LogLevel level)
-{
+void Logger::setMinLevel(LogLevel level) {
     std::lock_guard<std::mutex> lock(_mutex);
     _minLevel = level;
 }
 
-LogLevel Logger::getMinLevel() const
-{
+LogLevel Logger::getMinLevel() const {
     return _minLevel;
 }
 
-void Logger::setColorEnabled(bool enabled)
-{
+void Logger::setColorEnabled(bool enabled) {
     std::lock_guard<std::mutex> lock(_mutex);
     _colorEnabled = enabled;
 }
 
-void Logger::setConsoleEnabled(bool enabled)
-{
+void Logger::setConsoleEnabled(bool enabled) {
     std::lock_guard<std::mutex> lock(_mutex);
     _consoleEnabled = enabled;
 }
 
-void Logger::setFileEnabled(bool enabled)
-{
+void Logger::setFileEnabled(bool enabled) {
     std::lock_guard<std::mutex> lock(_mutex);
     _fileEnabled = enabled;
 }
 
-void Logger::debug(const std::string& module, const std::string& message)
-{
+void Logger::debug(const std::string& module, const std::string& message) {
     log(LogLevel::DEBUG, module, message);
 }
 
-void Logger::info(const std::string& module, const std::string& message)
-{
+void Logger::info(const std::string& module, const std::string& message) {
     log(LogLevel::INFO, module, message);
 }
 
-void Logger::warning(const std::string& module, const std::string& message)
-{
+void Logger::warning(const std::string& module, const std::string& message) {
     log(LogLevel::WARNING, module, message);
 }
 
-void Logger::error(const std::string& module, const std::string& message)
-{
+void Logger::error(const std::string& module, const std::string& message) {
     log(LogLevel::ERROR, module, message);
 }
 
 // Legacy API implementations
-void Logger::debug(const std::string& message)
-{
+void Logger::debug(const std::string& message) {
     log(LogLevel::DEBUG, "GENERAL", message);
 }
 
-void Logger::info(const std::string& message)
-{
+void Logger::info(const std::string& message) {
     log(LogLevel::INFO, "GENERAL", message);
 }
 
-void Logger::warning(const std::string& message)
-{
+void Logger::warning(const std::string& message) {
     log(LogLevel::WARNING, "GENERAL", message);
 }
 
-void Logger::error(const std::string& message)
-{
+void Logger::error(const std::string& message) {
     log(LogLevel::ERROR, "GENERAL", message);
 }
 
-void Logger::log(LogLevel level, const std::string& module, const std::string& message)
-{
+void Logger::log(LogLevel level, const std::string& module, const std::string& message) {
     if (level < _minLevel) {
         return;
     }
@@ -177,61 +155,67 @@ void Logger::log(LogLevel level, const std::string& module, const std::string& m
             const char* levelColor = getLevelColor(level);
             const char* moduleColor = getModuleColor(module);
 
-            std::cout << LogColors::WHITE << timestamp << " "
-                      << levelColor << LogColors::BOLD << "[" << levelName << "]" << LogColors::RESET
-                      << moduleColor << "[" << module << "]" << LogColors::RESET
-                      << " " << message << std::endl;
+            std::cout << LogColors::WHITE << timestamp << " " << levelColor << LogColors::BOLD
+                      << "[" << levelName << "]" << LogColors::RESET << moduleColor << "[" << module
+                      << "]" << LogColors::RESET << " " << message << std::endl;
         } else {
-            std::cout << timestamp << " [" << levelName << "][" << module << "] " << message << std::endl;
+            std::cout << timestamp << " [" << levelName << "][" << module << "] " << message
+                      << std::endl;
         }
     }
 
     // File output (no colors)
     if (_fileEnabled && _logFile.is_open()) {
-        _logFile << timestamp << " [" << levelName << "][" << module << "] " << message << std::endl;
+        _logFile << timestamp << " [" << levelName << "][" << module << "] " << message
+                 << std::endl;
         _logFile.flush();
     }
 }
 
-std::string Logger::getTimestamp() const
-{
+std::string Logger::getTimestamp() const {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch()) % 1000;
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
     std::tm tm = *std::localtime(&time_t);
 
     std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S")
-        << '.' << std::setfill('0') << std::setw(3) << ms.count();
+    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << '.' << std::setfill('0') << std::setw(3)
+        << ms.count();
     return oss.str();
 }
 
-const char* Logger::getLevelName(LogLevel level) const
-{
+const char* Logger::getLevelName(LogLevel level) const {
     switch (level) {
-        case LogLevel::DEBUG:   return "DEBUG";
-        case LogLevel::INFO:    return "INFO";
-        case LogLevel::WARNING: return "WARNING";
-        case LogLevel::ERROR:   return "ERROR";
-        default:                return "UNKNOWN";
+        case LogLevel::DEBUG:
+            return "DEBUG";
+        case LogLevel::INFO:
+            return "INFO";
+        case LogLevel::WARNING:
+            return "WARNING";
+        case LogLevel::ERROR:
+            return "ERROR";
+        default:
+            return "UNKNOWN";
     }
 }
 
-const char* Logger::getLevelColor(LogLevel level) const
-{
+const char* Logger::getLevelColor(LogLevel level) const {
     switch (level) {
-        case LogLevel::DEBUG:   return LogColors::CYAN;
-        case LogLevel::INFO:    return LogColors::GREEN;
-        case LogLevel::WARNING: return LogColors::YELLOW;
-        case LogLevel::ERROR:   return LogColors::RED;
-        default:                return LogColors::WHITE;
+        case LogLevel::DEBUG:
+            return LogColors::CYAN;
+        case LogLevel::INFO:
+            return LogColors::GREEN;
+        case LogLevel::WARNING:
+            return LogColors::YELLOW;
+        case LogLevel::ERROR:
+            return LogColors::RED;
+        default:
+            return LogColors::WHITE;
     }
 }
 
-const char* Logger::getModuleColor(const std::string& module) const
-{
+const char* Logger::getModuleColor(const std::string& module) const {
     // Get consistent color for each module
     auto it = _moduleColorIndex.find(module);
     if (it == _moduleColorIndex.end()) {
@@ -242,8 +226,5 @@ const char* Logger::getModuleColor(const std::string& module) const
     return MODULE_COLORS[it->second];
 }
 
-} // namespace core
-} // namespace rtype
-
-
-
+}  // namespace core
+}  // namespace rtype

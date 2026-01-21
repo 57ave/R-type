@@ -8,14 +8,14 @@
 #ifndef _CORE_LOGGER_
 #define _CORE_LOGGER_
 
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <sstream>
 #include <chrono>
+#include <fstream>
 #include <iomanip>
-#include <mutex>
+#include <iostream>
 #include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 
 namespace rtype {
@@ -24,32 +24,26 @@ namespace core {
 /**
  * @brief Log levels for the logging system
  */
-enum class LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARNING = 2,
-    ERROR = 3,
-    OFF = 4
-};
+enum class LogLevel { DEBUG = 0, INFO = 1, WARNING = 2, ERROR = 3, OFF = 4 };
 
 /**
  * @brief ANSI color codes for console output
  */
 namespace LogColors {
-    constexpr const char* RESET = "\033[0m";
-    constexpr const char* RED = "\033[31m";
-    constexpr const char* GREEN = "\033[32m";
-    constexpr const char* YELLOW = "\033[33m";
-    constexpr const char* BLUE = "\033[34m";
-    constexpr const char* MAGENTA = "\033[35m";
-    constexpr const char* CYAN = "\033[36m";
-    constexpr const char* WHITE = "\033[37m";
-    constexpr const char* BOLD = "\033[1m";
-}
+constexpr const char* RESET = "\033[0m";
+constexpr const char* RED = "\033[31m";
+constexpr const char* GREEN = "\033[32m";
+constexpr const char* YELLOW = "\033[33m";
+constexpr const char* BLUE = "\033[34m";
+constexpr const char* MAGENTA = "\033[35m";
+constexpr const char* CYAN = "\033[36m";
+constexpr const char* WHITE = "\033[37m";
+constexpr const char* BOLD = "\033[1m";
+}  // namespace LogColors
 
 /**
  * @brief Enhanced Logger class with colored console output and file logging
- * 
+ *
  * Features:
  * - DEBUG/INFO/WARNING/ERROR levels
  * - Colored console output
@@ -72,7 +66,7 @@ public:
      * @param logFileName Name of the log file (default: "rtype.log")
      * @return true if initialization successful
      */
-    bool init(const std::string& logDirectory = ".log", 
+    bool init(const std::string& logDirectory = ".log",
               const std::string& logFileName = "rtype.log");
 
     /**
@@ -215,7 +209,7 @@ private:
 #define LOG_WARNING(module, msg) rtype::core::Logger::getInstance().warning(module, msg)
 #define LOG_ERROR(module, msg) rtype::core::Logger::getInstance().error(module, msg)
 
-} // namespace core
-} // namespace rtype
+}  // namespace core
+}  // namespace rtype
 
 #endif /* !_CORE_LOGGER_ */

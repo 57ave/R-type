@@ -2,24 +2,22 @@
 #define ENG_ENGINE_RENDERING_ITEXTURE_HPP
 
 #include <string>
+
 #include "rendering/Types.hpp"
 
-namespace eng
-{
-    namespace engine
-    {
-        namespace rendering
-        {
-            class ITexture {
-                public:
-                    virtual ~ITexture() = default;
+namespace eng {
+namespace engine {
+namespace rendering {
+class ITexture {
+public:
+    virtual ~ITexture() = default;
 
-                    virtual Vector2u getSize() const = 0;
-                    virtual bool loadFromFile(const std::string &path) = 0;
-            };
+    virtual Vector2u getSize() const = 0;
+    virtual bool loadFromFile(const std::string& path) = 0;
+};
 
-        }
-    }
-}
+}  // namespace rendering
+}  // namespace engine
+}  // namespace eng
 
-#endif // ENG_ENGINE_RENDERING_ITEXTURE_HPP
+#endif  // ENG_ENGINE_RENDERING_ITEXTURE_HPP

@@ -46,6 +46,11 @@ UNFORMATTED=()
 FORMATTED_COUNT=0
 
 for file in $FILES; do
+    # Skip if file doesn't exist or isn't readable (broken symlinks, build artifacts, etc.)
+    if [ ! -f "$file" ] || [ ! -r "$file" ]; then
+        continue
+    fi
+    
     if [ "$CHECK_MODE" = true ]; then
         # Check if file needs formatting
         if ! clang-format --dry-run --Werror "$file" &> /dev/null; then

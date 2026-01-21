@@ -14,20 +14,15 @@ public:
     bool isConnected;
     uint32_t roomId;
 
-    ClientSession(udp::endpoint ep, uint8_t id) 
-        : endpoint(ep), 
-          lastPacketTime(std::chrono::steady_clock::now()), 
-          lastSequenceNumber(0), 
-          playerId(id), 
-          isConnected(true),
-          roomId(0) {}
+    ClientSession(udp::endpoint ep, uint8_t id)
+        : endpoint(ep), lastPacketTime(std::chrono::steady_clock::now()), lastSequenceNumber(0),
+          playerId(id), isConnected(true), roomId(0) {}
 
-    void updateLastPacketTime() {
-        lastPacketTime = std::chrono::steady_clock::now();
-    }
+    void updateLastPacketTime() { lastPacketTime = std::chrono::steady_clock::now(); }
 
     bool isTimedOut(const std::chrono::milliseconds& timeoutDuration) const {
         auto now = std::chrono::steady_clock::now();
-        return std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPacketTime) > timeoutDuration;
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now - lastPacketTime) >
+               timeoutDuration;
     }
 };

@@ -3,17 +3,14 @@
 
 namespace ECS {
 
-EntityManager::EntityManager()
-    : mLivingEntityCount(0)
-{
+EntityManager::EntityManager() : mLivingEntityCount(0) {
     // Initialize the queue with all possible entity IDs
     for (Entity entity = 0; entity < MAX_ENTITIES; ++entity) {
         mAvailableEntities.push(entity);
     }
 }
 
-Entity EntityManager::CreateEntity()
-{
+Entity EntityManager::CreateEntity() {
     if (mLivingEntityCount >= MAX_ENTITIES) {
         throw std::runtime_error("Too many entities in existence.");
     }
@@ -26,8 +23,7 @@ Entity EntityManager::CreateEntity()
     return id;
 }
 
-void EntityManager::DestroyEntity(Entity entity)
-{
+void EntityManager::DestroyEntity(Entity entity) {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
 
     // Remove network ID mapping if it exists
@@ -45,77 +41,69 @@ void EntityManager::DestroyEntity(Entity entity)
     --mLivingEntityCount;
 }
 
-void EntityManager::SetSignature(Entity entity, Signature signature)
-{
+void EntityManager::SetSignature(Entity entity, Signature signature) {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
 
     // Put this entity's signature into the array
     mSignatures[entity] = signature;
 }
 
-Signature EntityManager::GetSignature(Entity entity) const
-{
+Signature EntityManager::GetSignature(Entity entity) const {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
 
     // Get this entity's signature from the array
     return mSignatures[entity];
 }
 
-std::uint32_t EntityManager::GetLivingEntityCount() const
-{
+std::uint32_t EntityManager::GetLivingEntityCount() const {
     return mLivingEntityCount;
 }
 
-void EntityManager::SetNetworkId(Entity entity, NetworkId networkId)
-{
+void EntityManager::SetNetworkId(Entity entity, NetworkId networkId) {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
     assert(networkId != INVALID_NETWORK_ID && "Cannot set invalid network ID.");
-    
+
     if (mNetworkIdToEntity.find(networkId) != mNetworkIdToEntity.end()) {
         throw std::runtime_error("NetworkId already assigned to another entity.");
     }
-    
+
     // Remove old mapping if exists
     if (mEntityToNetworkId.find(entity) != mEntityToNetworkId.end()) {
         NetworkId oldNetworkId = mEntityToNetworkId[entity];
         mNetworkIdToEntity.erase(oldNetworkId);
     }
-    
+
     mEntityToNetworkId[entity] = networkId;
     mNetworkIdToEntity[networkId] = entity;
 }
 
-NetworkId EntityManager::GetNetworkId(Entity entity) const
-{
+NetworkId EntityManager::GetNetworkId(Entity entity) const {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
-    
+
     auto it = mEntityToNetworkId.find(entity);
     if (it == mEntityToNetworkId.end()) {
         return INVALID_NETWORK_ID;
     }
-    
+
     return it->second;
 }
 
-bool EntityManager::HasNetworkId(Entity entity) const
-{
+bool EntityManager::HasNetworkId(Entity entity) const {
     assert(entity < MAX_ENTITIES && "Entity out of range.");
     return mEntityToNetworkId.find(entity) != mEntityToNetworkId.end();
 }
 
-Entity EntityManager::GetEntityByNetworkId(NetworkId networkId) const
-{
+Entity EntityManager::GetEntityByNetworkId(NetworkId networkId) const {
     auto it = mNetworkIdToEntity.find(networkId);
     if (it == mNetworkIdToEntity.end()) {
         throw std::runtime_error("NetworkId not found.");
     }
-    
+
     return it->second;
 }
 
-bool EntityManager::HasEntityForNetworkId(NetworkId networkId) const
-{
+bool EntityManager::HasEntityForNetworkId(NetworkId networkId) const {
     return mNetworkIdToEntity.find(networkId) != mNetworkIdToEntity.end();
 }
 
-} // namespace ECS
+}  // namespace ECS

@@ -2,9 +2,9 @@
 // AudioSystem.cpp - ECS Audio System Implementation
 // ============================================
 
-#include <systems/AudioSystem.hpp>
-#include <iostream>
 #include <algorithm>
+#include <iostream>
+#include <systems/AudioSystem.hpp>
 
 namespace eng {
 namespace engine {
@@ -16,28 +16,31 @@ void AudioSystem::Init(const std::string& sfxPath) {
 }
 
 void AudioSystem::Update(float /*deltaTime*/) {
-    if (!m_coordinator) return;
+    if (!m_coordinator)
+        return;
 
     // Process all entities with AudioSource component
     for (auto entity : mEntities) {
-        if (!m_coordinator->HasComponent<AudioSource>(entity)) continue;
-        
+        if (!m_coordinator->HasComponent<AudioSource>(entity))
+            continue;
+
         auto& audioSrc = m_coordinator->GetComponent<AudioSource>(entity);
-        
+
         // Check if sound should start playing
         if (audioSrc.playOnStart && !audioSrc.isPlaying) {
             // Get or load the sound buffer
             auto* buffer = GetOrLoadBuffer(audioSrc.soundPath);
             if (!buffer) {
-                std::cerr << "[AudioSystem] Failed to load sound: " << audioSrc.soundPath << std::endl;
-                audioSrc.playOnStart = false; // Don't try again
+                std::cerr << "[AudioSystem] Failed to load sound: " << audioSrc.soundPath
+                          << std::endl;
+                audioSrc.playOnStart = false;  // Don't try again
                 continue;
             }
 
             // Create and play the sound
             auto sound = std::make_unique<eng::engine::Sound>();
             sound->setBuffer(*buffer);
-            
+
             // Apply volume: component volume * global SFX volume
             float finalVolume = (audioSrc.volume / 100.0f) * m_globalSFXVolume;
             sound->setVolume(finalVolume);
@@ -46,9 +49,9 @@ void AudioSystem::Update(float /*deltaTime*/) {
 
             m_entitySounds[entity] = std::move(sound);
             audioSrc.isPlaying = true;
-            
-            std::cout << "[AudioSystem] Playing: " << audioSrc.soundPath 
-                      << " (Vol: " << finalVolume << "%)" << std::endl;
+
+            std::cout << "[AudioSystem] Playing: " << audioSrc.soundPath << " (Vol: " << finalVolume
+                      << "%)" << std::endl;
         }
 
         // Check if sound has finished (for non-looping sounds)
@@ -76,28 +79,28 @@ void AudioSystem::Update(float /*deltaTime*/) {
 
 void AudioSystem::Shutdown() {
     std::cout << "[AudioSystem] Shutting down..." << std::endl;
-    
+
     // Stop and clear all entity sounds
     for (auto& [entity, sound] : m_entitySounds) {
         sound->stop();
     }
     m_entitySounds.clear();
-    
+
     // Stop and clear one-shot sounds
     for (auto& sound : m_activeSounds) {
         sound->stop();
     }
     m_activeSounds.clear();
-    
+
     // Clear sound buffers
     m_soundBuffers.clear();
-    
+
     std::cout << "[AudioSystem] Shutdown complete" << std::endl;
 }
 
 void AudioSystem::SetSFXVolume(float volume) {
     m_globalSFXVolume = std::clamp(volume, 0.0f, 100.0f);
-    
+
     // Update volume on all currently playing entity sounds
     for (auto& [entity, sound] : m_entitySounds) {
         if (m_coordinator && m_coordinator->HasComponent<AudioSource>(entity)) {
@@ -106,13 +109,14 @@ void AudioSystem::SetSFXVolume(float volume) {
             sound->setVolume(finalVolume);
         }
     }
-    
+
     // Update volume on one-shot sounds
     for (auto& sound : m_activeSounds) {
         sound->setVolume(m_globalSFXVolume);
     }
-    
-    std::cout << "[AudioSystem] Global SFX volume set to: " << m_globalSFXVolume << "%" << std::endl;
+
+    std::cout << "[AudioSystem] Global SFX volume set to: " << m_globalSFXVolume << "%"
+              << std::endl;
 }
 
 void AudioSystem::PreloadSound(const std::string& name, const std::string& path) {
@@ -151,9 +155,9 @@ void AudioSystem::PlaySFX(const std::string& name, float volumeMultiplier) {
     sound->play();
 
     m_activeSounds.push_back(std::move(sound));
-    
-    std::cout << "[AudioSystem] SFX: " << name << " (Vol: " 
-              << (m_globalSFXVolume * volumeMultiplier) << "%)" << std::endl;
+
+    std::cout << "[AudioSystem] SFX: " << name
+              << " (Vol: " << (m_globalSFXVolume * volumeMultiplier) << "%)" << std::endl;
 }
 
 void AudioSystem::StopAllSounds() {
@@ -166,7 +170,7 @@ void AudioSystem::StopAllSounds() {
         sound->stop();
     }
     m_activeSounds.clear();
-    
+
     std::cout << "[AudioSystem] All sounds stopped" << std::endl;
 }
 
@@ -179,7 +183,7 @@ SoundBuffer* AudioSystem::GetOrLoadBuffer(const std::string& soundPath) {
     // Try to load from full path
     std::string fullPath = m_baseSFXPath + soundPath;
     auto buffer = std::make_unique<SoundBuffer>();
-    
+
     if (!buffer->loadFromFile(fullPath)) {
         // Try without base path (maybe it's already a full path)
         if (!buffer->loadFromFile(soundPath)) {
@@ -193,15 +197,13 @@ SoundBuffer* AudioSystem::GetOrLoadBuffer(const std::string& soundPath) {
 }
 
 void AudioSystem::CleanupFinishedSounds() {
-    m_activeSounds.erase(
-        std::remove_if(m_activeSounds.begin(), m_activeSounds.end(),
-            [](const std::unique_ptr<Sound>& sound) {
-                return sound->getStatus() == Sound::Stopped;
-            }),
-        m_activeSounds.end()
-    );
+    m_activeSounds.erase(std::remove_if(m_activeSounds.begin(), m_activeSounds.end(),
+                                        [](const std::unique_ptr<Sound>& sound) {
+                                            return sound->getStatus() == Sound::Stopped;
+                                        }),
+                         m_activeSounds.end());
 }
 
-} // namespace systems
-} // namespace engine
-} // namespace eng
+}  // namespace systems
+}  // namespace engine
+}  // namespace eng

@@ -1,16 +1,16 @@
 #pragma once
 
-#include "Room.hpp"
 #include <map>
 #include <memory>
 #include <mutex>
-#include <vector>
 #include <optional>
+#include <vector>
+
+#include "Room.hpp"
 
 class RoomManager {
 public:
     RoomManager() : nextRoomId_(1) {}
-
 
     uint32_t createRoom(const std::string& name, uint8_t maxPlayers = 4, uint32_t hostId = 0) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -33,18 +33,16 @@ public:
         return false;
     }
 
-
     bool joinRoom(uint32_t roomId, uint32_t playerId) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = rooms_.find(roomId);
         if (it != rooms_.end()) {
-            // Check if player is already in another room? 
+            // Check if player is already in another room?
             // For simplicity, we assume caller handles that or we don't care.
             return it->second->addPlayer(playerId);
         }
         return false;
     }
-
 
     void leaveRoom(uint32_t roomId, uint32_t playerId) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -52,11 +50,10 @@ public:
         if (it != rooms_.end()) {
             it->second->removePlayer(playerId);
             if (it->second->isEmpty()) {
-                rooms_.erase(it); // Auto-close empty rooms
+                rooms_.erase(it);  // Auto-close empty rooms
             }
         }
     }
-
 
     std::shared_ptr<Room> getRoom(uint32_t roomId) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -66,7 +63,6 @@ public:
         }
         return nullptr;
     }
-    
 
     std::vector<Room> getRooms() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -76,7 +72,7 @@ public:
         }
         return list;
     }
-    
+
     // NOUVEAU: Retourne toutes les rooms sous forme de map (Problème 3)
     std::map<uint32_t, std::shared_ptr<Room>> getAllRooms() {
         std::lock_guard<std::mutex> lock(mutex_);

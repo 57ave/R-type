@@ -1,38 +1,39 @@
 #ifndef ENG_ENGINE_ECS_ENTITYMANAGER_HPP
 #define ENG_ENGINE_ECS_ENTITYMANAGER_HPP
 
-#include "Types.hpp"
 #include <array>
-#include <queue>
 #include <cassert>
+#include <queue>
 #include <unordered_map>
+
+#include "Types.hpp"
 
 namespace ECS {
 
-    class EntityManager {
-     public:
-            EntityManager();
-            Entity CreateEntity();
-            void DestroyEntity(Entity entity);
-            void SetSignature(Entity entity, Signature signature);
-            Signature GetSignature(Entity entity) const;
-            std::uint32_t GetLivingEntityCount() const;
+class EntityManager {
+public:
+    EntityManager();
+    Entity CreateEntity();
+    void DestroyEntity(Entity entity);
+    void SetSignature(Entity entity, Signature signature);
+    Signature GetSignature(Entity entity) const;
+    std::uint32_t GetLivingEntityCount() const;
 
-            void SetNetworkId(Entity entity, NetworkId networkId);
-            NetworkId GetNetworkId(Entity entity) const;
-            bool HasNetworkId(Entity entity) const;
-            Entity GetEntityByNetworkId(NetworkId networkId) const;
-            bool HasEntityForNetworkId(NetworkId networkId) const;
+    void SetNetworkId(Entity entity, NetworkId networkId);
+    NetworkId GetNetworkId(Entity entity) const;
+    bool HasNetworkId(Entity entity) const;
+    Entity GetEntityByNetworkId(NetworkId networkId) const;
+    bool HasEntityForNetworkId(NetworkId networkId) const;
 
-     private:
-            std::queue<Entity> mAvailableEntities;
-            std::array<Signature, MAX_ENTITIES> mSignatures;
-            std::uint32_t mLivingEntityCount;
-            
-            std::unordered_map<Entity, NetworkId> mEntityToNetworkId;
-            std::unordered_map<NetworkId, Entity> mNetworkIdToEntity;
-    };
+private:
+    std::queue<Entity> mAvailableEntities;
+    std::array<Signature, MAX_ENTITIES> mSignatures;
+    std::uint32_t mLivingEntityCount;
 
-} // namespace ECS
+    std::unordered_map<Entity, NetworkId> mEntityToNetworkId;
+    std::unordered_map<NetworkId, Entity> mNetworkIdToEntity;
+};
 
-#endif // ENG_ENGINE_ECS_ENTITYMANAGER_HPP
+}  // namespace ECS
+
+#endif  // ENG_ENGINE_ECS_ENTITYMANAGER_HPP

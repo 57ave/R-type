@@ -5,22 +5,22 @@
 #include <ecs/System.hpp>
 
 namespace ECS {
-    class Coordinator;
+class Coordinator;
 }
 
 class RTYPE_API AnimationSystem : public ECS::System {
-    public:
-        AnimationSystem();
-        ~AnimationSystem() override = default;
+public:
+    AnimationSystem();
+    ~AnimationSystem() override = default;
 
-        void Init() override;
-        void Update(float dt) override;
-        void Shutdown() override;
+    void Init() override;
+    void Update(float dt) override;
+    void Shutdown() override;
 
-        void SetCoordinator(ECS::Coordinator* coordinator) { coordinator_ = coordinator; }
+    void SetCoordinator(ECS::Coordinator* coordinator) { coordinator_ = coordinator; }
 
-    private:
-        ECS::Coordinator* coordinator_;
+private:
+    ECS::Coordinator* coordinator_;
 };
 
-#endif // ENG_ENGINE_SYSTEMS_ANIMATIONSYSTEM_HPP
+#endif  // ENG_ENGINE_SYSTEMS_ANIMATIONSYSTEM_HPP

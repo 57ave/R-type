@@ -18,7 +18,8 @@ void eng::core::Time::reset() {
 
 void eng::core::Time::update() {
     auto currentTime = std::chrono::high_resolution_clock::now();
-    float deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - _startTime).count();
+    float deltaTime =
+        std::chrono::duration_cast<std::chrono::duration<float>>(currentTime - _startTime).count();
     _deltaTime = deltaTime * _timeScale;
     _totalTime += _deltaTime;
     _startTime = currentTime;

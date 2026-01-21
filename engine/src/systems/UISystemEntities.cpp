@@ -1,14 +1,14 @@
-#include <systems/UISystem.hpp>
-#include <ecs/Coordinator.hpp>
-#include <components/UIElement.hpp>
-#include <components/UIText.hpp>
 #include <components/UIButton.hpp>
-#include <components/UISlider.hpp>
-#include <components/UIInputField.hpp>
-#include <components/UIPanel.hpp>
 #include <components/UICheckbox.hpp>
 #include <components/UIDropdown.hpp>
+#include <components/UIElement.hpp>
+#include <components/UIInputField.hpp>
+#include <components/UIPanel.hpp>
+#include <components/UISlider.hpp>
+#include <components/UIText.hpp>
+#include <ecs/Coordinator.hpp>
 #include <iostream>
+#include <systems/UISystem.hpp>
 
 // ============================================
 // ENTITY CREATION METHODS
@@ -16,9 +16,9 @@
 
 ECS::Entity UISystem::CreateButton(float x, float y, float width, float height,
                                    const std::string& text, const std::string& callback,
-                                   const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+                                   const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -39,19 +39,17 @@ ECS::Entity UISystem::CreateButton(float x, float y, float width, float height,
     mEntities.insert(entity);
     m_navigationDirty = true;
 
-    std::cout << "[UISystem] Created Button entity " << entity
-              << " text='" << text << "' callback='" << callback
-              << "' menu='" << menuGroup << "' at (" << element.x << "," << element.y
-              << ") size(" << width << "," << height << ")" << std::endl;
+    std::cout << "[UISystem] Created Button entity " << entity << " text='" << text
+              << "' callback='" << callback << "' menu='" << menuGroup << "' at (" << element.x
+              << "," << element.y << ") size(" << width << "," << height << ")" << std::endl;
 
     return entity;
 }
 
-ECS::Entity UISystem::CreateText(float x, float y, const std::string& text,
-                                unsigned int fontSize, uint32_t color,
-                                const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+ECS::Entity UISystem::CreateText(float x, float y, const std::string& text, unsigned int fontSize,
+                                 uint32_t color, const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -75,12 +73,11 @@ ECS::Entity UISystem::CreateText(float x, float y, const std::string& text,
     return entity;
 }
 
-ECS::Entity UISystem::CreateSlider(float x, float y, float width,
-                                  float minVal, float maxVal, float currentVal,
-                                  const std::string& callback,
-                                  const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+ECS::Entity UISystem::CreateSlider(float x, float y, float width, float minVal, float maxVal,
+                                   float currentVal, const std::string& callback,
+                                   const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -108,11 +105,10 @@ ECS::Entity UISystem::CreateSlider(float x, float y, float width,
     return entity;
 }
 
-ECS::Entity UISystem::CreatePanel(float x, float y, float width, float height,
-                                 uint32_t bgColor, bool modal,
-                                 const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+ECS::Entity UISystem::CreatePanel(float x, float y, float width, float height, uint32_t bgColor,
+                                  bool modal, const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -138,9 +134,9 @@ ECS::Entity UISystem::CreatePanel(float x, float y, float width, float height,
 
 ECS::Entity UISystem::CreateInputField(float x, float y, float width, float height,
                                        const std::string& placeholder,
-                                       const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+                                       const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -163,11 +159,10 @@ ECS::Entity UISystem::CreateInputField(float x, float y, float width, float heig
     return entity;
 }
 
-ECS::Entity UISystem::CreateCheckbox(float x, float y, const std::string& label,
-                                    bool initialState, const std::string& callback,
-                                    const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+ECS::Entity UISystem::CreateCheckbox(float x, float y, const std::string& label, bool initialState,
+                                     const std::string& callback, const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -195,11 +190,10 @@ ECS::Entity UISystem::CreateCheckbox(float x, float y, const std::string& label,
 }
 
 ECS::Entity UISystem::CreateDropdown(float x, float y, float width,
-                                    const std::vector<std::string>& options,
-                                    int selectedIndex, const std::string& callback,
-                                    const std::string& menuGroup)
-{
-    if (!m_coordinator) return 0;
+                                     const std::vector<std::string>& options, int selectedIndex,
+                                     const std::string& callback, const std::string& menuGroup) {
+    if (!m_coordinator)
+        return 0;
 
     ECS::Entity entity = m_coordinator->CreateEntity();
 
@@ -230,17 +224,17 @@ ECS::Entity UISystem::CreateDropdown(float x, float y, float width,
 // UI ELEMENT MANIPULATION
 // ============================================
 
-void UISystem::SetVisible(ECS::Entity entity, bool visible)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIElement>(entity)) return;
+void UISystem::SetVisible(ECS::Entity entity, bool visible) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIElement>(entity))
+        return;
     m_coordinator->GetComponent<Components::UIElement>(entity).visible = visible;
     m_navigationDirty = true;
 }
 
-void UISystem::SetText(ECS::Entity entity, const std::string& text)
-{
-    if (!m_coordinator) return;
-    
+void UISystem::SetText(ECS::Entity entity, const std::string& text) {
+    if (!m_coordinator)
+        return;
+
     if (m_coordinator->HasComponent<Components::UIText>(entity)) {
         m_coordinator->GetComponent<Components::UIText>(entity).content = text;
     }
@@ -249,62 +243,62 @@ void UISystem::SetText(ECS::Entity entity, const std::string& text)
     }
 }
 
-void UISystem::SetPosition(ECS::Entity entity, float x, float y)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIElement>(entity)) return;
+void UISystem::SetPosition(ECS::Entity entity, float x, float y) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIElement>(entity))
+        return;
     auto& element = m_coordinator->GetComponent<Components::UIElement>(entity);
     element.x = x;
     element.y = y;
 }
 
-float UISystem::GetSliderValue(ECS::Entity entity) const
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UISlider>(entity)) return 0.0f;
+float UISystem::GetSliderValue(ECS::Entity entity) const {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UISlider>(entity))
+        return 0.0f;
     return m_coordinator->GetComponent<Components::UISlider>(entity).currentValue;
 }
 
-void UISystem::SetSliderValue(ECS::Entity entity, float value)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UISlider>(entity)) return;
+void UISystem::SetSliderValue(ECS::Entity entity, float value) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UISlider>(entity))
+        return;
     auto& slider = m_coordinator->GetComponent<Components::UISlider>(entity);
     slider.currentValue = std::max(slider.minValue, std::min(slider.maxValue, value));
 }
 
-std::string UISystem::GetInputText(ECS::Entity entity) const
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIInputField>(entity)) return "";
+std::string UISystem::GetInputText(ECS::Entity entity) const {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIInputField>(entity))
+        return "";
     return m_coordinator->GetComponent<Components::UIInputField>(entity).text;
 }
 
-void UISystem::SetInputText(ECS::Entity entity, const std::string& text)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIInputField>(entity)) return;
+void UISystem::SetInputText(ECS::Entity entity, const std::string& text) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIInputField>(entity))
+        return;
     auto& input = m_coordinator->GetComponent<Components::UIInputField>(entity);
     input.text = text.substr(0, input.maxLength);
     input.cursorPosition = input.text.length();
 }
 
-bool UISystem::GetCheckboxState(ECS::Entity entity) const
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UICheckbox>(entity)) return false;
+bool UISystem::GetCheckboxState(ECS::Entity entity) const {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UICheckbox>(entity))
+        return false;
     return m_coordinator->GetComponent<Components::UICheckbox>(entity).checked;
 }
 
-void UISystem::SetCheckboxState(ECS::Entity entity, bool checked)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UICheckbox>(entity)) return;
+void UISystem::SetCheckboxState(ECS::Entity entity, bool checked) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UICheckbox>(entity))
+        return;
     m_coordinator->GetComponent<Components::UICheckbox>(entity).checked = checked;
 }
 
-int UISystem::GetDropdownIndex(ECS::Entity entity) const
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIDropdown>(entity)) return -1;
+int UISystem::GetDropdownIndex(ECS::Entity entity) const {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIDropdown>(entity))
+        return -1;
     return m_coordinator->GetComponent<Components::UIDropdown>(entity).selectedIndex;
 }
 
-void UISystem::SetDropdownIndex(ECS::Entity entity, int index)
-{
-    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIDropdown>(entity)) return;
+void UISystem::SetDropdownIndex(ECS::Entity entity, int index) {
+    if (!m_coordinator || !m_coordinator->HasComponent<Components::UIDropdown>(entity))
+        return;
     auto& dropdown = m_coordinator->GetComponent<Components::UIDropdown>(entity);
     if (index >= 0 && index < static_cast<int>(dropdown.options.size())) {
         dropdown.selectedIndex = index;
