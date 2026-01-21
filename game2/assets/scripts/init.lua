@@ -113,6 +113,16 @@ function Init()
     -- Network is provided by C++ bindings, not a Lua module
     -- No initialization needed here
     
+    -- Register Network chat callback
+    if Network and Network.onChat then
+        Network.onChat(function(data)
+            print("[Chat] " .. data.senderName .. ": " .. data.message)
+            if UI and UI.addChatMessage then
+                UI.addChatMessage(data.senderName, data.message)
+            end
+        end)
+    end
+    
     -- Start at menu
     SetGameState(GameState.MENU)
     
@@ -794,9 +804,32 @@ function UpdateGameOver(deltaTime)
     end
 end
 
+
+-- ============================================
+-- GLOBAL INPUT CALLBACKS (Called from C++)
+-- ============================================
+function OnTextEntered(char)
+    -- Forward to UI
+    if UI and UI.onTextEntered then
+        UI.onTextEntered(char)
+    end
+end
+
+function OnKeyPressed(keyCode)
+    -- Forward to UI
+    if UI and UI.onKeyPressed then
+        UI.onKeyPressed(keyCode)
+    end
+end
+
+function OnKeyReleased(keyCode)
+    -- Optional: Forward to UI if needed
+end
+
 -- ============================================
 -- PHYSICS SYSTEMS (Lua)
 -- ============================================
+
 function UpdateGravity(deltaTime)
     for entity, gravData in pairs(Components.Gravity) do
         local birdData = Components.FlappyBird[entity]

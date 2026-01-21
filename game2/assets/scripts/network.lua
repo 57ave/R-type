@@ -162,7 +162,38 @@ function Network.handlePacket(packet)
                 score = packet.score
             })
         end
+
+    elseif packet.type == "CHAT_MESSAGE" then
+        print("[Network] Chat: " .. packet.senderName .. ": " .. packet.message)
+        if Network.chatCallback then
+            Network.chatCallback({
+                senderName = packet.senderName,
+                message = packet.message,
+                senderId = packet.senderId
+            })
+        end
     end
+end
+
+-- Send a chat message
+function Network.sendChat(message)
+    if not Network.connected or not Network.client then
+        return
+    end
+    
+    -- Packet format for C++ binding to convert to CHAT_MESSAGE
+    local packet = {
+        type = "CHAT_MESSAGE",
+        message = message,
+        roomId = 0 -- Game 2 might not use rooms explicitly or use room 0 default for validation
+    }
+    
+    Network.client:sendPacket(packet)
+end
+
+-- Register callback for chat
+function Network.onChat(callback)
+    Network.chatCallback = callback
 end
 
 return Network
