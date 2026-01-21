@@ -405,7 +405,6 @@ if(LUA_FOUND)
         src/systems/UISystem.cpp
         src/systems/UISystemRender.cpp
         src/systems/UISystemEntities.cpp
-        src/scripting/UIBindings.cpp
     )
     target_compile_definitions(UISystem PRIVATE RTYPE_BUILD_DLL)
     if(WIN32 OR MINGW)

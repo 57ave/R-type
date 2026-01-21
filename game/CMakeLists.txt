@@ -15,6 +15,9 @@ file(GLOB_RECURSE GAME_SOURCES
 )
 
 if(GAME_SOURCES)
+    # Add UIBindings.cpp explicitly (it's used by game and causes DLL issues in UISystem on Windows)
+    list(APPEND GAME_SOURCES "${CMAKE_SOURCE_DIR}/engine/src/scripting/UIBindings.cpp")
+    
     add_library(game STATIC ${GAME_SOURCES})
 
     target_include_directories(game PUBLIC
