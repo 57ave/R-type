@@ -1,12 +1,10 @@
 # ==================== Game Logic Library ====================
 # Logique métier spécifique au R-Type
 
-# Scripting is always enabled - Lua/Sol3 required
-set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/external/sol3" CACHE PATH "Path to Sol3")
-
-# Use LUA_FOUND from parent if available, otherwise find Lua
-if(NOT DEFINED LUA_FOUND OR NOT LUA_FOUND)
-    find_package(Lua REQUIRED)
+# Scripting dependencies are inherited from engine
+# Ensure we have access to variables if needed
+if(NOT SOL3_INCLUDE_DIR AND TARGET sol2)
+    get_target_property(SOL3_INCLUDE_DIR sol2 INTERFACE_INCLUDE_DIRECTORIES)
 endif()
 
 # Collect all source files
@@ -25,15 +23,23 @@ file(GLOB_RECURSE GAME_SOURCES
 list(FILTER GAME_SOURCES EXCLUDE REGEX ".*Game\\.cpp$")  # Exclude old monolithic Game.cpp
 
 if(GAME_SOURCES)
+    # Add UIBindings.cpp explicitly (it's used by game and causes DLL issues in UISystem on Windows)
+    list(APPEND GAME_SOURCES "${CMAKE_SOURCE_DIR}/engine/src/scripting/UIBindings.cpp")
+    
     add_library(game STATIC ${GAME_SOURCES})
 
     target_include_directories(game PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/engine/modules  # For shootemup module includes
         ${CMAKE_SOURCE_DIR}/server/include  # For shared network protocol (RTypeProtocol.hpp)
-        ${SOL3_INCLUDE_DIR}
-        ${LUA_INCLUDE_DIR}
     )
+
+    if(SOL3_INCLUDE_DIR)
+        target_include_directories(game PUBLIC ${SOL3_INCLUDE_DIR})
+    endif()
+    if(LUA_INCLUDE_DIR)
+        target_include_directories(game PUBLIC ${LUA_INCLUDE_DIR})
+    endif()
 
     # Game dépend de l'engine + shootemup module
     target_link_libraries(game PUBLIC
@@ -82,12 +88,13 @@ add_executable(r-type_game main.cpp)
 target_link_libraries(r-type_game PRIVATE
     # Core engine libraries
     engine
-    game
     core
     network
     scripting
+    game
     
-    # Generic engine systems
+    # Generic engine systems (UISystem must come after game)
+    UISystem
     MovementSystem
     AnimationSystem
     StateMachineAnimationSystem
@@ -95,7 +102,6 @@ target_link_libraries(r-type_game PRIVATE
     ScrollingBackgroundSystem
     BoundarySystem
     HealthSystem
-    UISystem
     AudioSystem
     
     # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
@@ -107,3 +113,32 @@ target_link_libraries(r-type_game PRIVATE
     sfml-system
     sfml-audio
 )
+
+# Install steps
+install(TARGETS r-type_game
+    RUNTIME DESTINATION bin
+)
+
+# Install assets
+# 1. Copy root assets (scripts)
+if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets"
+        DESTINATION bin
+    )
+endif()
+
+# 2. Copy game-specific assets (fonts, images, sounds)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+    # Note: Using "/" at the end of the source directory copies the *contents*
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/"
+        DESTINATION bin/assets
+    )
+endif()
+
+# 3. Copy client assets if they exist and are different
+if(EXISTS "${CMAKE_SOURCE_DIR}/client/assets")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/client/assets/"
+        DESTINATION bin/assets
+    )
+endif()
+

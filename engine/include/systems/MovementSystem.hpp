@@ -1,10 +1,11 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <ecs/Components.hpp>
 
-class MovementSystem : public ECS::System {
+class RTYPE_API MovementSystem : public ECS::System {
     public:
         explicit MovementSystem(ECS::Coordinator* coordinator);
         ~MovementSystem() override = default;

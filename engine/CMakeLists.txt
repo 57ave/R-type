@@ -27,157 +27,75 @@ else()
 endif()
 
 # ========================================
-# LUA CONFIGURATION (Architecture-aware)
+# LUA/SOL3 CONFIGURATION
 # ========================================
 option(ENABLE_SCRIPTING "Enable Lua/Sol3 scripting support" ON)
 
 if(ENABLE_SCRIPTING)
-    # Sol3 header-only library - use include/ subdirectory
-    set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "Path to Sol3 include directory")
-    if(NOT EXISTS "${SOL3_INCLUDE_DIR}/sol/sol.hpp")
-        message(WARNING "Sol3 not found at ${SOL3_INCLUDE_DIR}. Scripting features will be disabled.")
-        set(ENABLE_SCRIPTING OFF)
-    endif()
-endif()
-
-if(ENABLE_SCRIPTING)
-    # Detect architecture
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64|ARM64")
-        set(IS_ARM64 TRUE)
-        message(STATUS "🔧 Detected ARM64 architecture")
-    else()
-        set(IS_ARM64 FALSE)
-        message(STATUS "🔧 Detected x86_64/other architecture")
+    if(NOT CMAKE_CROSSCOMPILING)
+        find_package(Lua 5.4 QUIET)
+        if(LUA_FOUND)
+            set(LUA_LIBRARIES ${LUA_LIBRARIES})
+            set(LUA_INCLUDE_DIR ${LUA_INCLUDE_DIR})
+            set(LUA_FOUND TRUE)
+        endif()
     endif()
 
-    # Platform-specific Lua detection
-    if(APPLE)
-        # macOS: Use Homebrew Lua with pkg-config for reliable detection
-        find_package(PkgConfig QUIET)
-        
-        if(IS_ARM64)
-            # Apple Silicon: Homebrew installs to /opt/homebrew
-            set(HOMEBREW_PREFIX "/opt/homebrew")
-        else()
-            # Intel Mac: Homebrew installs to /usr/local
-            set(HOMEBREW_PREFIX "/usr/local")
-        endif()
-        
-        # Try pkg-config first (most reliable on macOS)
-        if(PKG_CONFIG_FOUND)
-            # Set PKG_CONFIG_PATH for Homebrew
-            set(ENV{PKG_CONFIG_PATH} "${HOMEBREW_PREFIX}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-            pkg_check_modules(LUA QUIET lua5.4 lua-5.4 lua54 lua5.3 lua-5.3 lua53 lua)
-        endif()
-        
-        if(NOT LUA_FOUND)
-            # Fallback: Try to find Lua manually in Homebrew paths
-            find_path(LUA_INCLUDE_DIR lua.h
-                PATHS
-                    ${HOMEBREW_PREFIX}/include
-                    ${HOMEBREW_PREFIX}/include/lua5.4
-                    ${HOMEBREW_PREFIX}/include/lua
-                    ${HOMEBREW_PREFIX}/opt/lua/include
-                    ${HOMEBREW_PREFIX}/opt/lua@5.4/include
-                NO_DEFAULT_PATH
-            )
-            
-            find_library(LUA_LIBRARY
-                NAMES lua lua5.4 lua54 lua-5.4
-                PATHS
-                    ${HOMEBREW_PREFIX}/lib
-                    ${HOMEBREW_PREFIX}/opt/lua/lib
-                    ${HOMEBREW_PREFIX}/opt/lua@5.4/lib
-                NO_DEFAULT_PATH
-            )
-            
-            if(LUA_INCLUDE_DIR AND LUA_LIBRARY)
-                set(LUA_FOUND TRUE)
-                set(LUA_LIBRARIES ${LUA_LIBRARY})
-                message(STATUS "✅ Found Lua via Homebrew (manual): ${LUA_LIBRARY}")
-                message(STATUS "   Include: ${LUA_INCLUDE_DIR}")
-            endif()
-        else()
-            # pkg-config found it
-            set(LUA_INCLUDE_DIR ${LUA_INCLUDE_DIRS})
-            message(STATUS "✅ Found Lua via pkg-config: ${LUA_LIBRARIES}")
-            message(STATUS "   Include: ${LUA_INCLUDE_DIR}")
-        endif()
-        
-    elseif(UNIX)
-        # Linux: Try pkg-config first, then find_package
-        find_package(PkgConfig QUIET)
-        if(PKG_CONFIG_FOUND)
-            pkg_check_modules(LUA QUIET lua5.4 lua-5.4 lua54 lua5.3 lua-5.3 lua53 lua)
-        endif()
-        
-        if(NOT LUA_FOUND)
-            find_package(Lua QUIET)
-        endif()
-        
-        if(LUA_FOUND)
-            message(STATUS "✅ Found Lua on Linux: ${LUA_LIBRARIES}")
-        endif()
-        
-    elseif(WIN32)
-        # Windows: Try find_package, or look in common locations
-        find_package(Lua QUIET)
-        
-        if(NOT LUA_FOUND)
-            # Try common Windows Lua installation paths
-            find_path(LUA_INCLUDE_DIR lua.h
-                PATHS
-                    "C:/Program Files/Lua/include"
-                    "C:/Lua/include"
-                    "$ENV{LUA_DIR}/include"
-            )
-            
-            find_library(LUA_LIBRARY
-                NAMES lua54 lua53 lua
-                PATHS
-                    "C:/Program Files/Lua/lib"
-                    "C:/Lua/lib"
-                    "$ENV{LUA_DIR}/lib"
-            )
-            
-            if(LUA_INCLUDE_DIR AND LUA_LIBRARY)
-                set(LUA_FOUND TRUE)
-                set(LUA_LIBRARIES ${LUA_LIBRARY})
-            endif()
-        endif()
-        
-        if(LUA_FOUND)
-            message(STATUS "✅ Found Lua on Windows: ${LUA_LIBRARIES}")
-        endif()
-    else()
-        # Other platforms: standard find_package
-        find_package(Lua QUIET)
-    endif()
-    
     if(NOT LUA_FOUND)
-        message(WARNING "⚠️ Lua not found. Scripting features will be disabled.")
-        message(STATUS "   To install Lua:")
-        if(APPLE)
-            message(STATUS "     brew install lua")
-        elseif(UNIX)
-            message(STATUS "     sudo apt-get install liblua5.4-dev  # Debian/Ubuntu")
-            message(STATUS "     sudo dnf install lua-devel          # Fedora")
-        elseif(WIN32)
-            message(STATUS "     Download from https://www.lua.org/download.html")
+        message(STATUS "Lua 5.4 not found on system (or cross-compiling). Fetching via CPM...")
+        
+        CPMAddPackage(
+            NAME Lua
+            GITHUB_REPOSITORY "lua/lua"
+            GIT_TAG "v5.4.6"
+            DOWNLOAD_ONLY YES
+        )
+        
+        if(Lua_ADDED OR EXISTS "${Lua_SOURCE_DIR}")
+            message(STATUS "Configuring Lua manually from source...")
+            file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
+            list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
+
+            if(WIN32 OR MINGW)
+                add_library(lua SHARED ${LUA_SOURCES})
+                target_compile_definitions(lua PUBLIC LUA_BUILD_AS_DLL)
+                target_compile_definitions(lua PRIVATE RTYPE_BUILD_DLL)
+            else()
+                add_library(lua STATIC ${LUA_SOURCES})
+                target_compile_definitions(lua PUBLIC LUA_USE_LINUX)
+            endif()
+            target_include_directories(lua PUBLIC ${Lua_SOURCE_DIR})
+            set_target_properties(lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+            set(LUA_LIBRARIES lua)
+            set(LUA_INCLUDE_DIR ${Lua_SOURCE_DIR})
+            set(LUA_FOUND TRUE)
         endif()
+    endif()
+
+    if(LUA_FOUND)
+        CPMAddPackage(
+            NAME sol2
+            GITHUB_REPOSITORY "ThePhD/sol2"
+            GIT_TAG "v3.3.1"
+        )
+        
+        if(sol2_ADDED)
+            set(SOL3_INCLUDE_DIR ${sol2_SOURCE_DIR}/include CACHE PATH "" FORCE)
+            message(STATUS "Sol2/Sol3 fetched via CPM")
+        else()
+             if(NOT DEFINED SOL3_INCLUDE_DIR)
+                 set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "" FORCE)
+             endif()
+        endif()
+
+        message(STATUS "🎯 Scripting ENABLED with Lua and Sol3")
+    else()
+        message(WARNING "⚠️ Lua not found and could not be fetched. Scripting features will be disabled.")
         set(ENABLE_SCRIPTING OFF)
     endif()
 else()
     message(STATUS "ℹ️ Scripting disabled by user option")
-    set(LUA_FOUND FALSE)
-endif()
-
-# Final status
-if(ENABLE_SCRIPTING AND LUA_FOUND)
-    message(STATUS "🎯 Scripting ENABLED with Lua and Sol3")
-else()
-    set(LUA_FOUND FALSE)
-    message(STATUS "🎯 Scripting DISABLED")
 endif()
 
 # ECS Library
@@ -241,6 +159,10 @@ target_include_directories(network PUBLIC
 )
 
 target_link_libraries(network PUBLIC ecs)
+
+if(WIN32)
+    target_link_libraries(network PUBLIC ws2_32 wsock32)
+endif()
 
 set_target_properties(network PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -322,10 +244,8 @@ if(LUA_FOUND)
         src/scripting/PrefabManager.cpp
         src/scripting/ScriptSystem.cpp
         src/scripting/ScriptingManager.cpp
-        src/scripting/PrefabManager.cpp
-        src/scripting/ScriptSystem.cpp
-        src/scripting/UIBindings.cpp
     )
+    set_target_properties(scripting PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     target_include_directories(scripting PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -349,6 +269,10 @@ endif()
 add_library(MovementSystem SHARED
     src/systems/MovementSystem.cpp
 )
+target_compile_definitions(MovementSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(MovementSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(MovementSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -371,6 +295,10 @@ target_link_libraries(MovementSystem PUBLIC ecs)
 add_library(InputSystem SHARED
     src/systems/InputSystem.cpp
 )
+target_compile_definitions(InputSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(InputSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(InputSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -382,6 +310,10 @@ target_link_libraries(InputSystem PUBLIC ecs)
 add_library(LifetimeSystem SHARED
     src/systems/LifetimeSystem.cpp
 )
+target_compile_definitions(LifetimeSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(LifetimeSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(LifetimeSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -393,6 +325,10 @@ target_link_libraries(LifetimeSystem PUBLIC ecs)
 add_library(AnimationSystem SHARED
     src/systems/AnimationSystem.cpp
 )
+target_compile_definitions(AnimationSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(AnimationSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(AnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -404,6 +340,10 @@ target_link_libraries(AnimationSystem PUBLIC ecs rendering)
 add_library(StateMachineAnimationSystem SHARED
     src/systems/StateMachineAnimationSystem.cpp
 )
+target_compile_definitions(StateMachineAnimationSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(StateMachineAnimationSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(StateMachineAnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -418,6 +358,10 @@ target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering)
 add_library(ScrollingBackgroundSystem SHARED
     src/systems/ScrollingBackgroundSystem.cpp
 )
+target_compile_definitions(ScrollingBackgroundSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(ScrollingBackgroundSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(ScrollingBackgroundSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -429,6 +373,10 @@ target_link_libraries(ScrollingBackgroundSystem PUBLIC ecs rendering)
 add_library(BoundarySystem SHARED
     src/systems/BoundarySystem.cpp
 )
+target_compile_definitions(BoundarySystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(BoundarySystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(BoundarySystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -440,6 +388,10 @@ target_link_libraries(BoundarySystem PUBLIC ecs)
 add_library(HealthSystem SHARED
     src/systems/HealthSystem.cpp
 )
+target_compile_definitions(HealthSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(HealthSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(HealthSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -454,6 +406,10 @@ if(LUA_FOUND)
         src/systems/UISystemRender.cpp
         src/systems/UISystemEntities.cpp
     )
+    target_compile_definitions(UISystem PRIVATE RTYPE_BUILD_DLL)
+    if(WIN32 OR MINGW)
+        target_link_options(UISystem PRIVATE -Wl,--export-all-symbols)
+    endif()
 
     target_include_directories(UISystem PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -463,6 +419,9 @@ if(LUA_FOUND)
 
     # Link Lua library - use the detected library from architecture-aware detection
     target_link_libraries(UISystem PUBLIC ecs rendering scripting ${LUA_LIBRARIES})
+
+    # Add to engine interface
+    target_link_libraries(engine INTERFACE UISystem)
 else()
     message(STATUS "UISystem disabled - requires Lua/Sol3")
 endif()
@@ -471,6 +430,10 @@ endif()
 add_library(AudioSystem SHARED
     src/systems/AudioSystem.cpp
 )
+target_compile_definitions(AudioSystem PRIVATE RTYPE_BUILD_DLL)
+if(WIN32 OR MINGW)
+    target_link_options(AudioSystem PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 
 target_include_directories(AudioSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -478,12 +441,43 @@ target_include_directories(AudioSystem PUBLIC
 
 target_link_libraries(AudioSystem PUBLIC ecs core)
 
+# Add to engine interface
+target_link_libraries(engine INTERFACE AudioSystem)
+
 # Installation
+set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib")
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 install(TARGETS ecs rendering core scripting network
+    MovementSystem
+    InputSystem
+    LifetimeSystem
+    AnimationSystem
+    StateMachineAnimationSystem
+    ScrollingBackgroundSystem
+    BoundarySystem
+    HealthSystem
+    AudioSystem
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
+
+if(TARGET UISystem)
+    install(TARGETS UISystem
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()
+
+if(TARGET lua)
+    install(TARGETS lua
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
+endif()
 
 install(DIRECTORY include/
     DESTINATION include

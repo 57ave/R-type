@@ -8,6 +8,7 @@
 #ifndef ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
 
+#include <core/Export.hpp>
 #include "ecs/System.hpp"
 #include "ecs/Coordinator.hpp"
 #include "ecs/Types.hpp"
@@ -22,7 +23,7 @@ namespace eng {
 namespace engine {
 namespace systems {
 
-class AudioSystem : public ::ECS::System {
+class RTYPE_API AudioSystem : public ::ECS::System {
 public:
     AudioSystem() = default;
     ~AudioSystem() override = default;

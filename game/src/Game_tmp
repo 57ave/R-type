@@ -1,46 +1,42 @@
 #include "Game.hpp"
 #include <filesystem>
 #include <fstream>
+#include <SFML/Graphics/Image.hpp>
 #include <core/GameStateCallbacks.hpp>
 #include "network/NetworkBindings.hpp"
 #include "network/RTypeProtocol.hpp"  // Pour RoomPlayersPayload et ChatMessagePayload
 
-// Cache for the resolved base path
 static std::string g_basePath = "";
 
-// Static pointers for menu music control from Lua
 static eng::engine::Sound* g_menuMusic = nullptr;
 static eng::engine::SoundBuffer* g_menuMusicBuffer = nullptr;
 
-// Helper function to resolve asset paths from different working directories
 std::string ResolveAssetPath(const std::string& relativePath) {
-    // If we already found the base path, use it
-    if (!g_basePath.empty()) {
-        return g_basePath + relativePath;
+    namespace fs = std::filesystem;
+    if (fs::exists(relativePath)) return relativePath;
+
+    std::string strippedPath = relativePath;
+    if (relativePath.rfind("game/", 0) == 0) {
+        strippedPath = relativePath.substr(5);
+        if (fs::exists(strippedPath)) return strippedPath;
     }
 
-    // List of possible base paths to check
-    std::vector<std::string> basePaths = {
-        "",                    // Current directory (running from project root)
-        "../../",              // Running from build/game/
-        "../../../",           // Running from deeper build directories
-    };
+    if (!g_basePath.empty()) {
+        if (fs::exists(g_basePath + relativePath)) return g_basePath + relativePath;
+        if (fs::exists(g_basePath + strippedPath)) return g_basePath + strippedPath;
+    }
 
-    // Test file to check if we're in the right directory
-    std::string testFile = "game/assets/fonts/Roboto-Regular.ttf";
+    if (g_basePath.empty()) {
+        std::vector<std::string> basePaths = {"", "../../", "../../../", "../", "assets/"};
+        std::string testFile = "assets/fonts/Roboto-Regular.ttf";
 
-    for (const auto& base : basePaths) {
-        std::string fullPath = base + testFile;
-        std::ifstream file(fullPath);
-        if (file.good()) {
-            g_basePath = base;
-            std::cout << "[AssetPath] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
-            return g_basePath + relativePath;
+        for (const auto& base : basePaths) {
+            if (fs::exists(base + testFile) || fs::exists(base + "game/" + testFile)) {
+                g_basePath = base;
+                return ResolveAssetPath(relativePath);
+            }
         }
     }
-
-    // Fallback: return the path as-is
-    std::cerr << "[AssetPath] Warning: Could not resolve base path, using relative path as-is" << std::endl;
     return relativePath;
 }
 
@@ -156,50 +152,55 @@ ECS::Entity Game::CreatePlayer(float x, float y, int line) {
     return player;
 }
 
-// Helper function to create background entity
-ECS::Entity Game::CreateBackground(float x, float y, float windowHeight, bool isFirst) {
-    ECS::Entity bg = gCoordinator.CreateEntity();
-    RegisterEntity(bg);
+// Helper function to create background entities (tiled)
+void Game::CreateBackground(float y, float windowHeight) {
+    if (backgroundTiles.empty()) return;
 
-    // Position
-    gCoordinator.AddComponent(bg, Position{x, y});
+    // Calculate total width of all tiles
+    float totalWidth = 0;
+    std::vector<float> tileWidths;
+    float scale = 1.0f;
 
-    // Sprite
-    auto* sprite = new SFMLSprite();
-    allSprites.push_back(sprite);
-    sprite->setTexture(backgroundTexture.get());
-    sprite->setPosition(Vector2f(x, y));
-
-    // Calculate scale to fit window height
-    Vector2u texSize = backgroundTexture->getSize();
-    float scale = windowHeight / texSize.y;
-
-    Sprite spriteComp;
-    spriteComp.sprite = sprite;
-    spriteComp.layer = -10;
-    spriteComp.scaleX = scale;
-    spriteComp.scaleY = scale;
-    gCoordinator.AddComponent(bg, spriteComp);
-
-    // Scrolling background
-    ScrollingBackground scrolling;
-    scrolling.scrollSpeed = 200.0f;
-    scrolling.horizontal = true;
-    scrolling.loop = true;
-    scrolling.spriteWidth = texSize.x * scale;
-
-    if (isFirst) {
-        scrolling.sprite1X = 0.0f;
-        scrolling.sprite2X = scrolling.spriteWidth;
-    } else {
-        scrolling.sprite1X = scrolling.spriteWidth;
-        scrolling.sprite2X = 0.0f;
+    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
+        Vector2u texSize = backgroundTiles[i]->getSize();
+        if (i == 0) {
+            scale = windowHeight / texSize.y;
+        }
+        float w = texSize.x * scale;
+        tileWidths.push_back(w);
+        totalWidth += w;
     }
 
-    gCoordinator.AddComponent(bg, scrolling);
-    gCoordinator.AddComponent(bg, Tag{"background"});
+    float currentX = 0;
+    for (size_t i = 0; i < backgroundTiles.size(); ++i) {
+        ECS::Entity bg = gCoordinator.CreateEntity();
+        RegisterEntity(bg);
 
-    return bg;
+        gCoordinator.AddComponent(bg, Position{currentX, y});
+
+        auto* sprite = new SFMLSprite();
+        allSprites.push_back(sprite);
+        sprite->setTexture(backgroundTiles[i].get());
+        sprite->setPosition(Vector2f(currentX, y));
+
+        Sprite spriteComp;
+        spriteComp.sprite = sprite;
+        spriteComp.layer = -10;
+        spriteComp.scaleX = scale;
+        spriteComp.scaleY = scale;
+        gCoordinator.AddComponent(bg, spriteComp);
+
+        ScrollingBackground scrolling;
+        scrolling.scrollSpeed = 200.0f;
+        scrolling.horizontal = true;
+        scrolling.loop = true;
+        scrolling.spriteWidth = totalWidth;
+        
+        gCoordinator.AddComponent(bg, scrolling);
+        gCoordinator.AddComponent(bg, Tag{"background"});
+
+        currentX += tileWidths[i];
+    }
 }
 
 // Helper function to create enemy entity
@@ -1355,12 +1356,28 @@ int Game::Run(int argc, char* argv[])
     
     std::cout << "[Game] Developer Tools initialized" << std::endl;
 
-    // Load textures using resolved asset paths
-    backgroundTexture = std::make_unique<SFMLTexture>();
-    if (!backgroundTexture->loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
+    sf::Image bgImage;
+    if (!bgImage.loadFromFile(ResolveAssetPath("game/assets/background.png"))) {
         std::cerr << "Error: Could not load background.png" << std::endl;
         return 1;
     }
+    unsigned int maxTextureSize = sf::Texture::getMaximumSize();
+    if (maxTextureSize < 512) maxTextureSize = 1024;
+    unsigned int tileWidth = std::min(maxTextureSize, 1024u);
+    unsigned int imgWidth = bgImage.getSize().x;
+    unsigned int imgHeight = bgImage.getSize().y;
+
+    backgroundTiles.clear();
+    for (unsigned int x = 0; x < imgWidth; x += tileWidth) {
+        unsigned int currentTileWidth = std::min(tileWidth, imgWidth - x);
+        auto tex = std::make_unique<SFMLTexture>();
+        if (!tex->loadFromImage(bgImage, sf::IntRect(x, 0, currentTileWidth, imgHeight))) {
+            std::cerr << "Error: Could not create background tile at x=" << x << std::endl;
+            return 1;
+        }
+        backgroundTiles.push_back(std::move(tex));
+    }
+    std::cout << "[Game] Background split into " << backgroundTiles.size() << " tiles (MAX_TEXTURE_SIZE=" << maxTextureSize << ")" << std::endl;
 
     playerTexture = std::make_unique<SFMLTexture>();
     if (!playerTexture->loadFromFile(ResolveAssetPath("game/assets/players/r-typesheet42.png"))) {
@@ -1374,13 +1391,12 @@ int Game::Run(int argc, char* argv[])
         return 1;
     }
 
-    // Note: enemy textures are loaded per-enemy from Lua config later
-    // Load enemy bullet texture (separate from enemy sprites)
     enemyBulletTexture = std::make_unique<SFMLTexture>();
     if (!enemyBulletTexture->loadFromFile(ResolveAssetPath("game/assets/enemies/enemy_bullets.png"))) {
         std::cerr << "Error: Could not load enemy bullet sprite" << std::endl;
         return 1;
     }
+
     std::cout << "[Game] ✅ Enemy bullet texture loaded: " << enemyBulletTexture->getSize().x << "x" << enemyBulletTexture->getSize().y << std::endl;
 
     explosionTexture = std::make_unique<SFMLTexture>();
@@ -1397,29 +1413,23 @@ int Game::Run(int argc, char* argv[])
         shootSound.setVolume(80.f);
     }
 
-    // Load menu music (from feature/game_menu)
     std::string menuMusicPath = ResolveAssetPath("game/assets/sounds/Title.ogg");
     std::cout << "[Game] Attempting to load menu music from: " << menuMusicPath << std::endl;
     
     if (!menuMusicBuffer.loadFromFile(menuMusicPath)) {
         std::cerr << "ERROR: Could not load menu music from: " << menuMusicPath << std::endl;
-        std::cerr << "       Please verify the file exists and is readable." << std::endl;
     } else {
         menuMusic.setBuffer(menuMusicBuffer);
-        menuMusic.setVolume(70.f);  // Set to match default in Lua (70%)
-        menuMusic.setLoop(true);  // Loop continuously
+        menuMusic.setVolume(70.f);
+        menuMusic.setLoop(true);
         
-        // Set static pointers for Lua access
         g_menuMusic = &menuMusic;
         g_menuMusicBuffer = &menuMusicBuffer;
         
         std::cout << "[Game] ✓ Menu music loaded successfully from: " << menuMusicPath << std::endl;
-        std::cout << "[Game]   Volume: 70%, Loop: enabled" << std::endl;
         
-        // Start menu music immediately since we're in MainMenu state
         if (GameStateManager::Instance().GetState() == GameState::MainMenu) {
             menuMusic.play();
-            std::cout << "[Game] ♪ Menu music started!" << std::endl;
         }
     }
 
@@ -1720,7 +1730,7 @@ int Game::Run(int argc, char* argv[])
     std::vector<std::unique_ptr<SFMLTexture>> dynamicTextures;
 
     // Core textures we already loaded earlier
-    textureMap["background"] = backgroundTexture.get();
+    if (!backgroundTiles.empty()) textureMap["background"] = backgroundTiles[0].get();
     textureMap["player"] = playerTexture.get();
     textureMap["missile"] = missileTexture.get();
     textureMap["explosion"] = explosionTexture.get();
@@ -1729,8 +1739,9 @@ int Game::Run(int argc, char* argv[])
     // Load enemy-specific textures referenced in EnemiesConfig (if available)
     try {
         sol::state& lua = luaState.GetState();
-        sol::table enemiesConfig = lua["EnemiesConfig"];
-        if (enemiesConfig.valid()) {
+        sol::optional<sol::table> enemiesConfigOpt = lua["EnemiesConfig"];
+        if (enemiesConfigOpt) {
+            sol::table& enemiesConfig = enemiesConfigOpt.value();
             for (auto& kv : enemiesConfig) {
                 // kv.first = key, kv.second = value
                 sol::object key = kv.first;
@@ -1830,7 +1841,7 @@ int Game::Run(int argc, char* argv[])
     bool playerCreated = false;
     
     // Only create background for now - player will be created when game starts
-    CreateBackground(0.0f, 0.0f, static_cast<float>(windowHeight), true);
+    CreateBackground(0.0f, 0.0f, 1080.0f, true);
 
     // Game variables using engine abstractions
     eng::engine::Clock clock;

@@ -1,10 +1,11 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <ecs/Components.hpp>
 
-class LifetimeSystem : public ECS::System {
+class RTYPE_API LifetimeSystem : public ECS::System {
     public:
         explicit LifetimeSystem(ECS::Coordinator* coordinator);
         ~LifetimeSystem() override = default;

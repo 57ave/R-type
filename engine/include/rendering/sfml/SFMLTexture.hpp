@@ -18,10 +18,9 @@ namespace eng
                         SFMLTexture() = default;
                         ~SFMLTexture() override = default;
 
-                        // ITexture implementation
                         Vector2u getSize() const override;
                         bool loadFromFile(const std::string &path) override;
-                        // SFML-specific: get native texture
+                        bool loadFromImage(const sf::Image &image, const sf::IntRect &area = sf::IntRect());
                         const sf::Texture &getNativeTexture() const { return texture_; }
                     private:
                         sf::Texture texture_;
