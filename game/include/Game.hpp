@@ -244,13 +244,18 @@
             bool gameFontLoaded = false;
             
             // ========================================
-            // WIN CONDITION TIMER (30 seconds)
+            // WIN/LOSE CONDITIONS
             // ========================================
             float gamePlayTime = 0.0f;
             bool winConditionTriggered = false;
             float winDisplayTimer = 0.0f;
-            const float WIN_TIME_THRESHOLD = 60.0f;  // Win after 30 seconds
+            const float WIN_TIME_THRESHOLD = 30.0f;  // Win after 30 seconds
             const float WIN_DISPLAY_DURATION = 3.0f;  // Show win message for 3 seconds
+            
+            // Game Over management
+            bool gameOverTriggered = false;
+            float gameOverDisplayTimer = 0.0f;
+            const float GAMEOVER_DISPLAY_DURATION = 3.0f;  // Show game over for 3 seconds
             
             // ========================================
             // DEVELOPER TOOLS
