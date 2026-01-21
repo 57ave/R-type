@@ -9,15 +9,16 @@
 #define ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
 
 #include <core/Export.hpp>
-#include "ecs/System.hpp"
-#include "ecs/Coordinator.hpp"
-#include "ecs/Types.hpp"
-#include "components/AudioSource.hpp"
-#include "engine/Audio.hpp"
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "components/AudioSource.hpp"
+#include "ecs/Coordinator.hpp"
+#include "ecs/System.hpp"
+#include "ecs/Types.hpp"
+#include "engine/Audio.hpp"
 
 namespace eng {
 namespace engine {
@@ -50,31 +51,31 @@ public:
 
 private:
     ::ECS::Coordinator* m_coordinator = nullptr;
-    
+
     // Base path for SFX files
     std::string m_baseSFXPath;
-    
+
     // Global SFX volume (0-100)
     float m_globalSFXVolume = 100.0f;
-    
+
     // Sound buffer cache
     std::map<std::string, std::unique_ptr<eng::engine::SoundBuffer>> m_soundBuffers;
-    
+
     // Active sounds (for one-shot sounds)
     std::vector<std::unique_ptr<eng::engine::Sound>> m_activeSounds;
-    
+
     // Entity-specific sounds
     std::map<::ECS::Entity, std::unique_ptr<eng::engine::Sound>> m_entitySounds;
-    
+
     // Helper to get or load sound buffer
     eng::engine::SoundBuffer* GetOrLoadBuffer(const std::string& soundPath);
-    
+
     // Clean up finished sounds
     void CleanupFinishedSounds();
 };
 
-} // namespace systems
-} // namespace engine
-} // namespace eng
+}  // namespace systems
+}  // namespace engine
+}  // namespace eng
 
-#endif // ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
+#endif  // ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP

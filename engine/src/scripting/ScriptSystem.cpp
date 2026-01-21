@@ -1,5 +1,5 @@
-#include <scripting/ScriptSystem.hpp>
 #include <iostream>
+#include <scripting/ScriptSystem.hpp>
 
 namespace Scripting {
 
@@ -10,11 +10,12 @@ void ScriptSystem::Init() {
 }
 
 void ScriptSystem::Update(float dt) {
-    if (!mUpdateFunction.valid()) return;
+    if (!mUpdateFunction.valid())
+        return;
 
     // Call Lua update function with entities and dt
     auto result = mUpdateFunction(mEntities, dt, mCoordinator);
-    
+
     if (!result.valid()) {
         sol::error err = result;
         std::cerr << "[ScriptSystem] Error: " << err.what() << std::endl;
@@ -28,9 +29,9 @@ void ScriptSystem::Shutdown() {
 
 void ScriptSystem::LoadScript(const std::string& scriptPath) {
     mScriptPath = scriptPath;
-    
+
     auto& lua = LuaState::Instance().GetState();
-    
+
     if (!LuaState::Instance().LoadScript(scriptPath)) {
         std::cerr << "[ScriptSystem] Failed to load: " << scriptPath << std::endl;
         return;
@@ -47,20 +48,16 @@ void ScriptSystem::LoadScript(const std::string& scriptPath) {
 }
 
 // ScriptedSystemLoader implementation
-std::shared_ptr<ScriptSystem> ScriptedSystemLoader::LoadSystem(
-    const std::string& scriptPath,
-    ECS::Coordinator* coordinator)
-{
+std::shared_ptr<ScriptSystem> ScriptedSystemLoader::LoadSystem(const std::string& scriptPath,
+                                                               ECS::Coordinator* coordinator) {
     auto system = std::make_shared<ScriptSystem>();
     system->SetCoordinator(coordinator);
     system->LoadScript(scriptPath);
     return system;
 }
 
-bool ScriptedSystemLoader::RegisterLuaSystem(
-    sol::table systemTable,
-    ECS::Coordinator* coordinator)
-{
+bool ScriptedSystemLoader::RegisterLuaSystem(sol::table systemTable,
+                                             ECS::Coordinator* coordinator) {
     // Extract signature (required components)
     sol::optional<sol::table> signatureOpt = systemTable["signature"];
     if (!signatureOpt) {
@@ -86,4 +83,4 @@ bool ScriptedSystemLoader::RegisterLuaSystem(
     return true;
 }
 
-} // namespace Scripting
+}  // namespace Scripting
