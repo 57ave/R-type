@@ -104,9 +104,10 @@ namespace Scripting {
             float width = config.get_or("width", 200.0f);
             float height = config.get_or("height", 40.0f);
             std::string placeholder = config.get_or<std::string>("placeholder", "Enter text...");
+            std::string onSubmit = config.get_or<std::string>("onSubmit", "");
             std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-            return s_uiSystem->CreateInputField(x, y, width, height, placeholder, menuGroup);
+            return s_uiSystem->CreateInputField(x, y, width, height, placeholder, onSubmit, menuGroup);
         };
 
         // CreateCheckbox({ x, y, label, checked, onChange, menuGroup })

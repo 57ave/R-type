@@ -138,6 +138,7 @@ ECS::Entity UISystem::CreatePanel(float x, float y, float width, float height,
 
 ECS::Entity UISystem::CreateInputField(float x, float y, float width, float height,
                                        const std::string& placeholder,
+                                       const std::string& onSubmit,
                                        const std::string& menuGroup)
 {
     if (!m_coordinator) return 0;
@@ -155,6 +156,7 @@ ECS::Entity UISystem::CreateInputField(float x, float y, float width, float heig
 
     Components::UIInputField input;
     input.placeholder = placeholder;
+    input.onSubmitCallback = onSubmit;
     m_coordinator->AddComponent(entity, input);
 
     mEntities.insert(entity);

@@ -127,6 +127,7 @@ public:
                             const std::string &menuGroup = "");
     ECS::Entity CreateInputField(float x, float y, float width, float height,
                                  const std::string &placeholder,
+                                 const std::string &onSubmit = "",
                                  const std::string &menuGroup = "");
     ECS::Entity CreateCheckbox(float x, float y, const std::string &label,
                                bool initialState, const std::string &callback,
