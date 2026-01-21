@@ -2,7 +2,7 @@
 #include <iostream>
 #include <exception>
 
-int main(int argc, char* argv[])
+int main(void)
 {
     try {
         RType::GameRefactored game;

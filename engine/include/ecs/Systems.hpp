@@ -4,52 +4,28 @@
 #include <cmath>
 #include <components/Collider.hpp>
 #include <components/Position.hpp>
+#include <components/Velocity.hpp>
+#include <components/Lifetime.hpp>
 #include <functional>
 #include <vector>
 
 #include "Components.hpp"
 #include "Coordinator.hpp"
 #include "RenderSystem.hpp"
-#include <components/Collider.hpp>
-#include <components/Position.hpp>
-#include <components/Velocity.hpp>
-#include <components/Lifetime.hpp>
-#include <cmath>
-#include <vector>
-#include <algorithm>
-#include <functional>
 
 namespace ECS {
 
-    // Use types from engine namespace
-    using eng::engine::ECS::Transform;
-    using eng::engine::ECS::Velocity;
+// Use types from engine namespace
+using eng::engine::ECS::Transform;
+using eng::engine::ECS::Velocity;
 
-    /**
-     * @brief MovementSystem - Handles entity movement based on velocity
-     */
-    class MovementSystem : public System {
-    public:
-        void Init() override {}
-        void Shutdown() override {}
-        
-        void Update(float deltaTime) override {
-            for (auto entity : mEntities) {
-                auto& transform = m_Coordinator->GetComponent<Transform>(entity);
-                auto& velocity = m_Coordinator->GetComponent<Velocity>(entity);
-                
-                transform.x += velocity.dx * deltaTime;
-                transform.y += velocity.dy * deltaTime;
-            }
-        }
-        
-        void SetCoordinator(Coordinator* coordinator) {
-            m_Coordinator = coordinator;
-        }
-        
-    private:
-        Coordinator* m_Coordinator = nullptr;
-    };
+/**
+ * @brief MovementSystem - Handles entity movement based on velocity
+ */
+class MovementSystem : public System {
+public:
+    void Init() override {}
+    void Shutdown() override {}
 
     void Update(float deltaTime) override {
         for (auto entity : mEntities) {
@@ -86,6 +62,7 @@ public:
     void Shutdown() override {}
 
     void Update(float deltaTime) override {
+        (void)deltaTime;  // Unused
         std::vector<Entity> entities(mEntities.begin(), mEntities.end());
 
         // Check all pairs of entities
@@ -104,36 +81,7 @@ public:
      * @brief Set the callback to be called when a collision is detected
      * @param callback Function that receives both entities involved in the collision
      */
-    class LifetimeSystem : public System {
-    public:
-        void Init() override {}
-        void Shutdown() override {}
-        
-        void Update(float deltaTime) override {
-            std::vector<Entity> toDestroy;
-            
-            for (auto entity : mEntities) {
-                auto& lifetime = m_Coordinator->GetComponent<Lifetime>(entity);
-                
-                lifetime.timeAlive += deltaTime;
-                
-                if (lifetime.destroyOnExpire && lifetime.timeAlive >= lifetime.maxLifetime) {
-                    toDestroy.push_back(entity);
-                }
-            }
-            
-            for (auto entity : toDestroy) {
-                m_Coordinator->DestroyEntity(entity);
-            }
-        }
-        
-        void SetCoordinator(Coordinator* coordinator) {
-            m_Coordinator = coordinator;
-        }
-        
-    private:
-        Coordinator* m_Coordinator = nullptr;
-    };
+    void SetCollisionCallback(CollisionCallback callback) { m_CollisionCallback = callback; }
 
     /**
      * @brief Check AABB collision between two entities
@@ -174,6 +122,10 @@ public:
             m_CollisionCallback(a, b);
         }
     }
+
+private:
+    Coordinator* m_Coordinator = nullptr;
+    CollisionCallback m_CollisionCallback;
 };
 
 /**
@@ -188,11 +140,14 @@ public:
         std::vector<Entity> toDestroy;
 
         for (auto entity : mEntities) {
-            auto& projectile = m_Coordinator->GetComponent<Projectile>(entity);
+            if (!m_Coordinator->HasComponent<Lifetime>(entity))
+                continue;
 
-            projectile.lifetime -= deltaTime;
+            auto& lifetime = m_Coordinator->GetComponent<Lifetime>(entity);
 
-            if (projectile.lifetime <= 0) {
+            lifetime.timeAlive += deltaTime;
+
+            if (lifetime.destroyOnExpire && lifetime.timeAlive >= lifetime.maxLifetime) {
                 toDestroy.push_back(entity);
             }
         }
@@ -220,13 +175,16 @@ public:
     void Shutdown() override {}
 
     void Update(float deltaTime) override {
+        (void)deltaTime;  // Unused
         std::vector<Entity> toDestroy;
 
         for (auto entity : mEntities) {
-            auto& transform = m_Coordinator->GetComponent<Transform>(entity);
+            if (!m_Coordinator->HasComponent<Position>(entity))
+                continue;
 
-            if (transform.x < m_MinX || transform.x > m_MaxX || transform.y < m_MinY ||
-                transform.y > m_MaxY) {
+            auto& pos = m_Coordinator->GetComponent<Position>(entity);
+
+            if (pos.x < m_MinX || pos.x > m_MaxX || pos.y < m_MinY || pos.y > m_MaxY) {
                 toDestroy.push_back(entity);
             }
         }
