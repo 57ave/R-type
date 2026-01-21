@@ -53,6 +53,7 @@ if(ENABLE_SCRIPTING)
         
         if(Lua_ADDED OR EXISTS "${Lua_SOURCE_DIR}")
             message(STATUS "Configuring Lua manually from source...")
+            set(LUA_IS_INTERNAL ON)
             file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
             list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
 
@@ -471,7 +472,7 @@ if(TARGET UISystem)
     )
 endif()
 
-if(TARGET lua)
+if(TARGET lua AND LUA_IS_INTERNAL)
     install(TARGETS lua
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
