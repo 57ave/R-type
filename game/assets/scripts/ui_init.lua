@@ -521,18 +521,32 @@ function CreateLobbyWaiting(centerX, centerY, width, height)
         width = 200,
         height = 35,
         placeholder = "Type message...",
+        onSubmit = "OnSendChatMessage",
         menuGroup = menuGroup
     })
     
     lobbyElements.chatSendBtn = UI.CreateButton({
         x = width - 100,
-        y = 495,
+        y = 495,    
         width = 80,
         height = 35,
         text = "Send",
         onClick = "OnSendChatMessage",
         menuGroup = menuGroup
     })
+
+    -- Chat history lines (initially empty)
+    lobbyElements.chatLines = {}
+    for i = 1, 10 do
+        lobbyElements.chatLines[i] = UI.CreateText({
+            x = width - 340,
+            y = 230 + (i - 1) * 20,
+            text = "",
+            fontSize = 14,
+            color = COLORS.LIGHT_GRAY,
+            menuGroup = menuGroup
+        })
+    end
 end
 
 -- ============================================
@@ -990,13 +1004,32 @@ function OnLeaveLobby()
     UI.HideAllMenus()
     UI.ShowMenu("server_browser")
     UI.SetActiveMenu("server_browser")
+    
+    -- Clear chat history
+    lobbyData.chatHistory = {}
+    UpdateChatUI()
 end
 
-function OnSendChatMessage()
-    local message = UI.GetInputText(lobbyElements.chatInput)
+function OnSendChatMessage(optMsg)
+    local message = optMsg
+    
+    -- If called from button (no arg) or if arg is empty, get from input
+    if not message or message == "" then
+        message = UI.GetInputText(lobbyElements.chatInput)
+    end
+
     if message and message ~= "" then
         print("[UI] Sending chat: " .. message)
-        SendChatMessage(message)
+        
+        -- Get current room ID
+        local roomId = 0
+        if lobbyData.currentRoom and lobbyData.currentRoom.id then
+            roomId = lobbyData.currentRoom.id
+        else
+            print("[UI] WARNING: No current room ID found!")
+        end
+        
+        SendChatMessage(message, roomId)
         UI.SetInputText(lobbyElements.chatInput, "")
     end
 end
@@ -1308,9 +1341,13 @@ function StartGame()
     end
 end
 
-function SendChatMessage(message)
-    print("[Network Stub] SendChatMessage: " .. message)
-    -- Will be implemented when network is ready
+function SendChatMessage(message, roomId)
+    print("[UI] Sending chat message to room " .. tostring(roomId) .. ": " .. message)
+    if Network and Network.SendChatMessage then
+        Network.SendChatMessage(message, roomId)
+    else
+        print("[UI] WARNING: Network.SendChatMessage not available!")
+    end
 end
 
 function LeaveRoom()
@@ -1336,6 +1373,7 @@ function OnRoomJoined(roomInfo)
     print("[UI] Joined room: " .. roomInfo.name)
     lobbyData.joiningRoom = false  -- Reset le flag de join
     lobbyData.currentRoom = {
+        id = roomInfo.id,
         name = roomInfo.name,
         isHost = roomInfo.isHost or false,
         maxPlayers = roomInfo.maxPlayers or 4
@@ -1381,7 +1419,6 @@ function OnPlayerReadyChanged(playerId, ready)
     UpdatePlayerListUI()
 end
 
--- NOUVEAU: Callback pour la mise à jour de la liste des joueurs (Problème 2)
 function OnRoomPlayersUpdated(players)
     print("[UI] Room players updated: " .. #players .. " players")
     lobbyData.players = {}
@@ -1418,7 +1455,49 @@ end
 
 function OnChatMessage(sender, message)
     print("[Chat] " .. sender .. ": " .. message)
-    -- Will update chat UI when implemented
+    
+    if not lobbyData.chatHistory then
+        lobbyData.chatHistory = {}
+    end
+    
+    table.insert(lobbyData.chatHistory, {
+        sender = sender,
+        message = message,
+        time = os.date("%H:%M")
+    })
+    
+    -- Keep only last 10 messages
+    if #lobbyData.chatHistory > 10 then
+        table.remove(lobbyData.chatHistory, 1)
+    end
+    
+    UpdateChatUI()
+end
+
+function UpdateChatUI()
+    if not lobbyElements.chatLines then return end
+    
+    local history = lobbyData.chatHistory or {}
+    local startIndex = math.max(1, #history - 9)
+    local lineIndex = 1
+    
+    -- Clear all lines first
+    for i = 1, 10 do
+        if lobbyElements.chatLines[i] then
+            UI.SetText(lobbyElements.chatLines[i], "")
+        end
+    end
+    
+    -- Populate with history
+    for i = 1, #history do
+        local entry = history[i]
+        local displayString = "[" .. (entry.time or "") .. "] " .. entry.sender .. ": " .. entry.message
+        
+        -- Use lines from bottom up or top down? Let's do top down for now
+        if lobbyElements.chatLines[i] then
+           UI.SetText(lobbyElements.chatLines[i], displayString)
+        end
+    end
 end
 
 -- ============================================

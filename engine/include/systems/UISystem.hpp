@@ -110,9 +110,12 @@ public:
     ECS::Entity CreatePanel(float x, float y, float width, float height, uint32_t bgColor,
                             bool modal = false, const std::string& menuGroup = "");
     ECS::Entity CreateInputField(float x, float y, float width, float height,
-                                 const std::string& placeholder, const std::string& menuGroup = "");
-    ECS::Entity CreateCheckbox(float x, float y, const std::string& label, bool initialState,
-                               const std::string& callback, const std::string& menuGroup = "");
+                                 const std::string &placeholder,
+                                 const std::string &onSubmit = "",
+                                 const std::string &menuGroup = "");
+    ECS::Entity CreateCheckbox(float x, float y, const std::string &label,
+                               bool initialState, const std::string &callback,
+                               const std::string &menuGroup = "");
     ECS::Entity CreateDropdown(float x, float y, float width,
                                const std::vector<std::string>& options, int selectedIndex,
                                const std::string& callback, const std::string& menuGroup = "");

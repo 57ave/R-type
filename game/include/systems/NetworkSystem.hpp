@@ -139,6 +139,9 @@ private:
             case GamePacketType::SERVER_SET_PAUSE:
                 handleServerSetPause(packet);
                 break;
+            case GamePacketType::CHAT_MESSAGE:
+                handleChatMessage(packet);
+                break;
             default:
                 std::cout << "[NetworkSystem] Unknown packet type: " << packet.header.type
                           << std::endl;
@@ -310,6 +313,19 @@ private:
                       << std::endl;
         }
     }
+
+    void handleChatMessage(const NetworkPacket& packet) {
+        // Deserialize chat message
+        try {
+            ChatMessagePayload payload = ChatMessagePayload::deserialize(packet.payload);
+            
+            // Forward to NetworkBindings
+            RType::Network::NetworkBindings::OnChatMessage(payload.senderName, payload.message);
+        } catch (const std::exception& e) {
+            std::cerr << "[NetworkSystem] Error deserializing CHAT_MESSAGE: " << e.what() << std::endl;
+        }
+    }
+
 
     void handleGameStart(const NetworkPacket&) {
         std::cout << "[NetworkSystem] Received GAME_START - transitioning to Playing state"

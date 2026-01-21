@@ -36,109 +36,105 @@ void UIBindings::RegisterAll(sol::state& lua, UISystem* uiSystem) {
             return 0;
         }
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        float width = config.get_or("width", 200.0f);
-        float height = config.get_or("height", 50.0f);
-        std::string text = config.get_or<std::string>("text", "Button");
-        std::string onClick = config.get_or<std::string>("onClick", "");
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            float width = config.get_or("width", 200.0f);
+            float height = config.get_or("height", 50.0f);
+            std::string text = config.get_or<std::string>("text", "Button");
+            std::string onClick = config.get_or<std::string>("onClick", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreateButton(x, y, width, height, text, onClick, menuGroup);
-    };
+            return s_uiSystem->CreateButton(x, y, width, height, text, onClick, menuGroup);
+        };
 
-    // CreateText({ x, y, text, fontSize, color, menuGroup })
-    ui["CreateText"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreateText({ x, y, text, fontSize, color, menuGroup })
+        ui["CreateText"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        std::string text = config.get_or<std::string>("text", "");
-        unsigned int fontSize = config.get_or("fontSize", 24u);
-        uint32_t color = config.get_or("color", 0xFFFFFFFFu);
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            std::string text = config.get_or<std::string>("text", "");
+            unsigned int fontSize = config.get_or("fontSize", 24u);
+            uint32_t color = config.get_or("color", 0xFFFFFFFFu);
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreateText(x, y, text, fontSize, color, menuGroup);
-    };
+            return s_uiSystem->CreateText(x, y, text, fontSize, color, menuGroup);
+        };
 
-    // CreateSlider({ x, y, width, min, max, value, onChange, menuGroup })
-    ui["CreateSlider"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreateSlider({ x, y, width, min, max, value, onChange, menuGroup })
+        ui["CreateSlider"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        float width = config.get_or("width", 200.0f);
-        float minVal = config.get_or("min", 0.0f);
-        float maxVal = config.get_or("max", 100.0f);
-        float value = config.get_or("value", 50.0f);
-        std::string onChange = config.get_or<std::string>("onChange", "");
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            float width = config.get_or("width", 200.0f);
+            float minVal = config.get_or("min", 0.0f);
+            float maxVal = config.get_or("max", 100.0f);
+            float value = config.get_or("value", 50.0f);
+            std::string onChange = config.get_or<std::string>("onChange", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreateSlider(x, y, width, minVal, maxVal, value, onChange, menuGroup);
-    };
+            return s_uiSystem->CreateSlider(x, y, width, minVal, maxVal, value, onChange, menuGroup);
+        };
 
-    // CreatePanel({ x, y, width, height, backgroundColor, modal, menuGroup })
-    ui["CreatePanel"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreatePanel({ x, y, width, height, backgroundColor, modal, menuGroup })
+        ui["CreatePanel"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        float width = config.get_or("width", 300.0f);
-        float height = config.get_or("height", 400.0f);
-        uint32_t bgColor = config.get_or("backgroundColor", 0x000000AAu);
-        bool modal = config.get_or("modal", false);
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            float width = config.get_or("width", 300.0f);
+            float height = config.get_or("height", 400.0f);
+            uint32_t bgColor = config.get_or("backgroundColor", 0x000000AAu);
+            bool modal = config.get_or("modal", false);
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreatePanel(x, y, width, height, bgColor, modal, menuGroup);
-    };
+            return s_uiSystem->CreatePanel(x, y, width, height, bgColor, modal, menuGroup);
+        };
 
-    // CreateInputField({ x, y, width, height, placeholder, menuGroup })
-    ui["CreateInputField"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreateInputField({ x, y, width, height, placeholder, menuGroup })
+        ui["CreateInputField"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        float width = config.get_or("width", 200.0f);
-        float height = config.get_or("height", 40.0f);
-        std::string placeholder = config.get_or<std::string>("placeholder", "Enter text...");
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            float width = config.get_or("width", 200.0f);
+            float height = config.get_or("height", 40.0f);
+            std::string placeholder = config.get_or<std::string>("placeholder", "Enter text...");
+            std::string onSubmit = config.get_or<std::string>("onSubmit", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreateInputField(x, y, width, height, placeholder, menuGroup);
-    };
+            return s_uiSystem->CreateInputField(x, y, width, height, placeholder, onSubmit, menuGroup);
+        };
 
-    // CreateCheckbox({ x, y, label, checked, onChange, menuGroup })
-    ui["CreateCheckbox"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreateCheckbox({ x, y, label, checked, onChange, menuGroup })
+        ui["CreateCheckbox"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        std::string label = config.get_or<std::string>("label", "");
-        bool checked = config.get_or("checked", false);
-        std::string onChange = config.get_or<std::string>("onChange", "");
-        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            std::string label = config.get_or<std::string>("label", "");
+            bool checked = config.get_or("checked", false);
+            std::string onChange = config.get_or<std::string>("onChange", "");
+            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        return s_uiSystem->CreateCheckbox(x, y, label, checked, onChange, menuGroup);
-    };
+            return s_uiSystem->CreateCheckbox(x, y, label, checked, onChange, menuGroup);
+        };
 
-    // CreateDropdown({ x, y, width, options, selectedIndex, onChange, menuGroup })
-    ui["CreateDropdown"] = [](sol::table config) -> ECS::Entity {
-        if (!s_uiSystem)
-            return 0;
+        // CreateDropdown({ x, y, width, options, selectedIndex, onChange, menuGroup })
+        ui["CreateDropdown"] = [](sol::table config) -> ECS::Entity {
+            if (!s_uiSystem) return 0;
 
-        float x = config.get_or("x", 0.0f);
-        float y = config.get_or("y", 0.0f);
-        float width = config.get_or("width", 200.0f);
-
-        std::vector<std::string> options;
-        sol::optional<sol::table> optionsTable = config["options"];
-        if (optionsTable) {
-            for (auto& kv : *optionsTable) {
-                options.push_back(kv.second.as<std::string>());
+            float x = config.get_or("x", 0.0f);
+            float y = config.get_or("y", 0.0f);
+            float width = config.get_or("width", 200.0f);
+            
+            std::vector<std::string> options;
+            sol::optional<sol::table> optionsTable = config["options"];
+            if (optionsTable) {
+                for (auto& kv : *optionsTable) {
+                    options.push_back(kv.second.as<std::string>());
+                }
             }
         }
 
