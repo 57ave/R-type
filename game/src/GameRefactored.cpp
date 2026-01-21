@@ -402,38 +402,98 @@ void GameRefactored::SetupNetworkCallbacks() {
             }
         }
         else if (tag.name == "Enemy") {
-            auto enemyTexIt = texMap.find("enemy");
+            // Get enemy type from EnemyTag component
+            std::string enemyType = "basic";
+            if (coordinator->HasComponent<ShootEmUp::Components::EnemyTag>(entity)) {
+                auto& enemyTag = coordinator->GetComponent<ShootEmUp::Components::EnemyTag>(entity);
+                enemyType = enemyTag.enemyType;
+            }
+            
+            logger.debug("Network", "Creating sprite for enemy type: " + enemyType);
+            
+            // Define sprite configurations for each enemy type
+            struct EnemySpriteConfig {
+                std::string texture;
+                int frameWidth, frameHeight;
+                int frameCount;
+                float scale;
+                float frameTime;
+            };
+            
+            // Map enemy types to sprite configs (matching enemies_config.lua)
+            EnemySpriteConfig config;
+            std::string textureKey = "enemy";  // Default
+            
+            if (enemyType == "basic" || enemyType == "shooter") {
+                // r-typesheet5.png - 33x36 frames, 8 frames
+                textureKey = "enemy";
+                config = {"enemy", 33, 36, 8, 2.5f, 0.1f};
+            }
+            else if (enemyType == "zigzag" || enemyType == "sine" || enemyType == "sinewave") {
+                // r-typesheet3.png - 17x18 frames, 12 frames
+                textureKey = "enemy2";
+                config = {"enemy2", 17, 18, 12, 2.5f, 0.08f};
+            }
+            else if (enemyType == "kamikaze") {
+                // r-typesheet8.png - 32x32 frames, 4 frames
+                textureKey = "enemy3";
+                config = {"enemy3", 32, 32, 4, 2.0f, 0.05f};
+            }
+            else if (enemyType == "turret" || enemyType == "spreader") {
+                // Use enemy sprite for turrets
+                textureKey = "enemy";
+                config = {"enemy", 33, 36, 8, 2.0f, 0.1f};
+            }
+            else {
+                // Default basic enemy
+                config = {"enemy", 33, 36, 8, 2.5f, 0.1f};
+            }
+            
+            auto enemyTexIt = texMap.find(textureKey);
+            if (enemyTexIt == texMap.end()) {
+                // Fallback to default enemy texture
+                enemyTexIt = texMap.find("enemy");
+            }
+            
             if (enemyTexIt != texMap.end()) {
                 auto* sprite = new SFMLSprite();
                 sprites.push_back(sprite);
                 sprite->setTexture(enemyTexIt->second);
                 
-                IntRect rect(0, 0, 33, 32);
+                IntRect rect(0, 0, config.frameWidth, config.frameHeight);
                 sprite->setTextureRect(rect);
                 
                 Sprite spriteComp;
                 spriteComp.sprite = sprite;
                 spriteComp.textureRect = rect;
-                spriteComp.scaleX = 2.5f;
-                spriteComp.scaleY = 2.5f;
+                spriteComp.scaleX = config.scale;
+                spriteComp.scaleY = config.scale;
                 spriteComp.layer = 5;
                 coordinator->AddComponent(entity, spriteComp);
                 
-                // Ajouter animation pour l'ennemi
+                // Animation
                 Animation anim;
-                anim.frameCount = 8;
+                anim.frameCount = config.frameCount;
                 anim.currentFrame = 0;
-                anim.frameTime = 0.1f;
+                anim.frameTime = config.frameTime;
                 anim.currentTime = 0.0f;
                 anim.loop = true;
-                anim.frameWidth = 33;
-                anim.frameHeight = 32;
+                anim.frameWidth = config.frameWidth;
+                anim.frameHeight = config.frameHeight;
                 anim.startX = 0;
                 anim.startY = 0;
                 anim.spacing = 0;
                 coordinator->AddComponent(entity, anim);
                 
-                logger.info("Network", "✅ Enemy sprite created for entity " + std::to_string(entity));
+                // Add Collider
+                Collider collider;
+                collider.width = config.frameWidth * config.scale;
+                collider.height = config.frameHeight * config.scale;
+                collider.tag = "enemy";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ Enemy sprite created for entity " + std::to_string(entity) + 
+                            " (type: " + enemyType + ", texture: " + textureKey + ")");
             }
         }
         else if (tag.name == "PlayerBullet") {
@@ -575,6 +635,100 @@ void GameRefactored::SetupNetworkCallbacks() {
                 anim.startY = 0;
                 anim.spacing = 0;
                 coordinator->AddComponent(entity, anim);
+            }
+        }
+        else if (tag.name == "Boss") {
+            auto bossTexIt = texMap.find("boss");
+            if (bossTexIt == texMap.end()) {
+                bossTexIt = texMap.find("enemy");  // Fallback
+            }
+            
+            if (bossTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(bossTexIt->second);
+                
+                IntRect rect(0, 0, 160, 128);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.0f;
+                spriteComp.scaleY = 2.0f;
+                spriteComp.layer = 6;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Boss animation
+                Animation anim;
+                anim.frameCount = 4;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.15f;
+                anim.currentTime = 0.0f;
+                anim.loop = true;
+                anim.frameWidth = 160;
+                anim.frameHeight = 128;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+                
+                // Boss collider
+                Collider collider;
+                collider.width = 160 * 2.0f;
+                collider.height = 128 * 2.0f;
+                collider.tag = "boss";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ Boss sprite created for entity " + std::to_string(entity));
+            }
+        }
+        else if (tag.name == "PowerUp") {
+            auto powerupTexIt = texMap.find("powerup");
+            if (powerupTexIt == texMap.end()) {
+                powerupTexIt = texMap.find("missile");  // Fallback
+            }
+            
+            if (powerupTexIt != texMap.end()) {
+                auto* sprite = new SFMLSprite();
+                sprites.push_back(sprite);
+                sprite->setTexture(powerupTexIt->second);
+                
+                // r-typesheet25.png is 133x133, contains capsule power-ups
+                // Each frame is approximately 33x33 pixels
+                IntRect rect(0, 0, 33, 33);
+                sprite->setTextureRect(rect);
+                
+                Sprite spriteComp;
+                spriteComp.sprite = sprite;
+                spriteComp.textureRect = rect;
+                spriteComp.scaleX = 2.5f;
+                spriteComp.scaleY = 2.5f;
+                spriteComp.layer = 7;
+                coordinator->AddComponent(entity, spriteComp);
+                
+                // Power-up animation (4 frames in a row)
+                Animation anim;
+                anim.frameCount = 4;
+                anim.currentFrame = 0;
+                anim.frameTime = 0.12f;
+                anim.currentTime = 0.0f;
+                anim.loop = true;
+                anim.frameWidth = 33;
+                anim.frameHeight = 33;
+                anim.startX = 0;
+                anim.startY = 0;
+                anim.spacing = 0;
+                coordinator->AddComponent(entity, anim);
+                
+                // Power-up collider
+                Collider collider;
+                collider.width = 33 * 2.5f;
+                collider.height = 33 * 2.5f;
+                collider.tag = "powerup";
+                coordinator->AddComponent(entity, collider);
+                
+                logger.info("Network", "✅ PowerUp sprite created for entity " + std::to_string(entity));
             }
         }
     });

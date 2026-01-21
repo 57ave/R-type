@@ -496,6 +496,23 @@ private:
             case EntityType::ENTITY_EXPLOSION:
                 coordinator_->AddComponent(entity, Tag{"Explosion"});
                 break;
+            case EntityType::ENTITY_BOSS:
+                coordinator_->AddComponent(entity, Tag{"Boss"});
+                // Add EnemyTag with boss type
+                {
+                    ShootEmUp::Components::EnemyTag enemyTag;
+                    enemyTag.enemyType = "boss";
+                    coordinator_->AddComponent(entity, enemyTag);
+                }
+                std::cout << "[NetworkSystem] Created Boss entity " << entity << " at ("
+                          << state.x << ", " << state.y << ")" << std::endl;
+                break;
+            case EntityType::ENTITY_POWERUP:
+                coordinator_->AddComponent(entity, Tag{"PowerUp"});
+                std::cout << "[NetworkSystem] Created PowerUp entity " << entity 
+                          << " (type: " << (int)state.enemyType << ") at ("
+                          << state.x << ", " << state.y << ")" << std::endl;
+                break;
             default:
                 break;
         }
