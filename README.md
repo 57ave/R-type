@@ -1,6 +1,6 @@
 # 🚀 R-Type Multiplayer Shooter
 
-Welcome to **R-Type**, a modern multiplayer shooter game built with a sophisticated Entity-Component-System architecture and real-time network synchronization. This project brings classic arcade shooter gameplay to a multiplayer experience with advanced engine capabilities.
+Welcome to **R-Type**, a modern multiplayer shooter game built with a sophisticated Entity-Component-System architecture and real-time network synchronization. This project brings classic arcade shooter gameplay to a multiplayer experience with advanced engine capabilities. The fully-detailed documentation is on the [wiki](https://github.com/57ave/R-type/wiki)
 
 ---
 
