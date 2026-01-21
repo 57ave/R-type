@@ -186,14 +186,13 @@ docs: update build instructions for macOS
 
 ## CI Pipeline
 
-Our GitHub Actions CI pipeline runs automatically on every push and pull request:
+For detailed information about our workflows, including the disabled Windows build configuration, please refer to the [CI/CD Documentation](docs/CICD.md).
 
 ### Jobs
 
 1. **Linux (GCC)** - Builds with GCC and runs tests
 2. **Linux (Clang)** - Builds with Clang and runs tests
-3. **Windows (MSVC)** - Builds with MSVC and runs tests
-4. **Code Formatting** - Validates code formatting
+3. **Code Formatting** - Validates code formatting
 
 All jobs must pass before a PR can be merged.
 
