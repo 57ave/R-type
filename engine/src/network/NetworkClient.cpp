@@ -35,14 +35,20 @@ void NetworkClient::process() {
 
 void NetworkClient::disconnect() {
     if (connected_) {
-        // Send disconnect packet (type 0x04 is common convention)
-        NetworkPacket packet(0x04);  // CLIENT_DISCONNECT
-        packet.header.seq = sequenceNumber_++;
-        packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                      std::chrono::steady_clock::now().time_since_epoch())
-                                      .count();
+        try {
+            // Send disconnect packet (type 0x04 is common convention)
+            NetworkPacket packet(0x04);  // CLIENT_DISCONNECT
+            packet.header.seq = sequenceNumber_++;
+            packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                          std::chrono::steady_clock::now().time_since_epoch())
+                                          .count();
 
-        client_.send(packet);
+            client_.send(packet);
+        } catch (const std::exception& e) {
+            // Ignore errors during disconnect (socket may already be closed)
+            std::cerr << "[NetworkClient] Error during disconnect (ignored): " << e.what() << std::endl;
+        }
+        
         connected_ = false;
 
         std::cout << "[NetworkClient] Disconnected" << std::endl;

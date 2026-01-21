@@ -1132,6 +1132,16 @@ function OnConnected(host, port)
     RefreshServerList()
 end
 
+-- Callback from C++ when connection fails
+function OnConnectionFailed(reason)
+    print("[UI] Connection failed: " .. tostring(reason))
+    lobbyData.joiningRoom = false
+    if serverBrowserElements.connectedText then
+        UI.SetText(serverBrowserElements.connectedText, "Connection failed: " .. tostring(reason))
+        UI.SetVisible(serverBrowserElements.connectedText, true)
+    end
+end
+
 function OnCreateRoomClicked()
     print("[UI] Opening create room menu")
     UI.HideAllMenus()

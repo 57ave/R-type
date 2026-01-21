@@ -2,11 +2,11 @@
 #include <iostream>
 #include <exception>
 
-int main(void)
+int main(int argc, char* argv[])
 {
     try {
         RType::GameRefactored game;
-        return game.Run();
+        return game.Run(argc, argv);
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

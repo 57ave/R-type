@@ -761,11 +761,24 @@ void GameRefactored::SetupNetworkCallbacks() {
     });
 
     // Callback de statut de connexion
-    networkManager->SetConnectionStatusCallback([&logger](bool connected, const std::string& message) {
+    networkManager->SetConnectionStatusCallback([this, &logger](bool connected, const std::string& message) {
         if (connected) {
             logger.info("Network", "Connected - " + message);
         } else {
             logger.warning("Network", "Disconnected - " + message);
+            
+            // Notifier Lua de l'échec de connexion
+            if (this->luaState) {
+                sol::state& state = this->luaState->GetState();
+                sol::protected_function onConnectionFailed = state["OnConnectionFailed"];
+                if (onConnectionFailed.valid()) {
+                    auto result = onConnectionFailed(message);
+                    if (!result.valid()) {
+                        sol::error err = result;
+                        logger.error("Lua", std::string("OnConnectionFailed error: ") + err.what());
+                    }
+                }
+            }
         }
     });
 }
@@ -847,24 +860,38 @@ void GameRefactored::SetupLuaBindings() {
     };
     
     netTable["Connect"] = [this](const std::string& host, int port) {
+        auto& logger = rtype::core::Logger::getInstance();
+        
         if (!luaState) {
-            std::cerr << "[GameRefactored] LuaState not available" << std::endl;
+            logger.error("Network", "LuaState not available");
             return;
         }
 
         sol::state& lua = luaState->GetState();
         if (!networkManager || !coordinator) {
-            std::cerr << "[GameRefactored] NetworkManager/Coordinator not available" << std::endl;
+            logger.error("Network", "NetworkManager/Coordinator not available");
+            // Notifier Lua de l'échec
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Network system not initialized");
+            }
             return;
         }
 
         if (host.empty() || port <= 0) {
-            std::cerr << "[GameRefactored] Invalid host/port" << std::endl;
+            logger.error("Network", "Invalid host/port: " + host + ":" + std::to_string(port));
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Invalid IP or port");
+            }
             return;
         }
 
+        logger.info("Network", "Attempting connection to " + host + ":" + std::to_string(port));
+
         // If already connected, just notify UI.
         if (networkManager->IsConnected()) {
+            logger.info("Network", "Already connected, updating UI");
             if (gameLoop) {
                 gameLoop->SetNetworkSystem(networkManager->GetNetworkSystem());
                 gameLoop->SetNetworkMode(true);
@@ -881,9 +908,16 @@ void GameRefactored::SetupLuaBindings() {
 
         const bool ok = networkManager->ConnectToServer(host, static_cast<short>(port), coordinator.get());
         if (!ok) {
-            std::cerr << "[GameRefactored] Connection failed" << std::endl;
+            logger.error("Network", "Failed to connect to " + host + ":" + std::to_string(port));
+            // Notifier Lua de l'échec
+            sol::protected_function onConnectFailed = lua["OnConnectionFailed"];
+            if (onConnectFailed.valid()) {
+                onConnectFailed("Connection failed - server not responding");
+            }
             return;
         }
+        
+        logger.info("Network", "Connection initiated successfully");
 
         networkMode = true;
         isNetworkClient = true;

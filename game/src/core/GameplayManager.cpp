@@ -409,23 +409,23 @@ ECS::Entity GameplayManager::CreateEnemyMissile(float x, float y, float directio
     coordinator->AddComponent(missile, Velocity{speed * directionX, speed * directionY});
 
     // ===== DIFFERENT BULLET TYPES =====
-    // Balles plus grosses et visibles pour le multijoueur
+    // Balles ennemies - taille réduite pour meilleure jouabilité
     int bulletType = rand() % 3;
-    float scale = 5.5f;  // Base: balles plus grosses et visibles
+    float scale = 3.0f;  // Réduit de 5.5f à 2.0f
     IntRect rect(166, 3, 12, 12);
     
     switch (bulletType) {
-        case 0: // Balle standard - grande
+        case 0: // Balle standard
             rect = IntRect(166, 3, 12, 12);
-            scale = 5.5f;  // Augmenté de 4.0f à 5.5f
+            scale = 2.0f;  // Réduit de 5.5f à 2.0f
             break;
-        case 1: // Grosse balle orange
+        case 1: // Balle moyenne
             rect = IntRect(166, 3, 12, 12);
-            scale = 6.5f;  // Augmenté de 5.0f à 6.5f
+            scale = 2.5f;  // Réduit de 6.5f à 2.5f
             break;
-        case 2: // Très grosse balle (boss-like)
+        case 2: // Grosse balle
             rect = IntRect(166, 3, 12, 12);
-            scale = 7.5f;  // Augmenté de 6.0f à 7.5f
+            scale = 3.0f;  // Réduit de 7.5f à 3.0f
             break;
     }
 
