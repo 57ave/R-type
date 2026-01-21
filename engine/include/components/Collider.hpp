@@ -6,12 +6,12 @@
 struct Collider {
     float width = 0.0f;
     float height = 0.0f;
-    float offsetX = 0.0f;          // Offset from position
+    float offsetX = 0.0f;  // Offset from position
     float offsetY = 0.0f;
-    bool isTrigger = false;        // Trigger-only (no physics response)
+    bool isTrigger = false;  // Trigger-only (no physics response)
 
     // Collision layers/tags for filtering
-    std::string tag = "default";   // e.g., "player", "enemy", "bullet"
+    std::string tag = "default";  // e.g., "player", "enemy", "bullet"
 
     bool enabled = true;
 };
@@ -26,4 +26,4 @@ struct Hitbox {
     unsigned char a = 255;
 };
 
-#endif // ENG_ENGINE_COMPONENTS_COLLIDER_HPP
+#endif  // ENG_ENGINE_COMPONENTS_COLLIDER_HPP

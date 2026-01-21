@@ -1,18 +1,19 @@
 #include "FlappyGame.hpp"
-#include <filesystem>
-#include <fstream>
-#include <components/UIText.hpp>
+
 #include <components/UIButton.hpp>
 #include <components/UIPanel.hpp>
+#include <components/UIText.hpp>
 #include <components/Velocity.hpp>
+#include <filesystem>
+#include <fstream>
 
 using namespace eng::engine::rendering::sfml;
 
 // Use ECS components from engine (same as Lua bindings)
 // Note: We use the eng::engine::ECS:: namespace for components that match Lua bindings
-using eng::engine::ECS::Transform;
-using eng::engine::ECS::Health;
 using eng::engine::ECS::Damage;
+using eng::engine::ECS::Health;
+using eng::engine::ECS::Transform;
 // Note: Sprite, Tag, and Velocity have two versions:
 // - eng::engine::ECS::Velocity/Sprite/Tag (for Lua)
 // - ::Velocity/Sprite/Tag from components/ (for engine systems)
@@ -28,9 +29,9 @@ std::string FlappyGame::ResolveAssetPath(const std::string& relativePath) {
 
     // List of possible base paths to check
     std::vector<std::string> basePaths = {
-        "",              // Current directory
-        "../../",        // Running from build/game2/
-        "../../../",     // Running from deeper build directories
+        "",           // Current directory
+        "../../",     // Running from build/game2/
+        "../../../",  // Running from deeper build directories
     };
 
     // Test file to check if we're in the right directory
@@ -41,13 +42,15 @@ std::string FlappyGame::ResolveAssetPath(const std::string& relativePath) {
         std::ifstream file(fullPath);
         if (file.good()) {
             basePath = base;
-            std::cout << "[FlappyGame] Base path resolved to: " << (base.empty() ? "(current dir)" : base) << std::endl;
+            std::cout << "[FlappyGame] Base path resolved to: "
+                      << (base.empty() ? "(current dir)" : base) << std::endl;
             return basePath + relativePath;
         }
     }
 
     // Fallback: return the path as-is
-    std::cerr << "[FlappyGame] Warning: Could not resolve base path, using relative path as-is" << std::endl;
+    std::cerr << "[FlappyGame] Warning: Could not resolve base path, using relative path as-is"
+              << std::endl;
     return relativePath;
 }
 
@@ -77,7 +80,8 @@ void FlappyGame::ProcessDestroyedEntities() {
         gCoordinator.DestroyEntity(entity);
 
         // Remove from allEntities
-        allEntities.erase(std::remove(allEntities.begin(), allEntities.end(), entity), allEntities.end());
+        allEntities.erase(std::remove(allEntities.begin(), allEntities.end(), entity),
+                          allEntities.end());
     }
     entitiesToDestroy.clear();
 }
@@ -97,39 +101,39 @@ FlappyGame::~FlappyGame() {
 
 void FlappyGame::InitECS() {
     std::cout << "🔧 Initializing ECS..." << std::endl;
-    
+
     gCoordinator.Init();
 
     // Register components used by Lua bindings (from eng::engine::ECS namespace)
     std::cout << "[FlappyGame] Registering Transform..." << std::endl;
-    gCoordinator.RegisterComponent<Transform>();               // ECS Transform (x, y, rotation) - for Lua
+    gCoordinator.RegisterComponent<Transform>();  // ECS Transform (x, y, rotation) - for Lua
     std::cout << "[FlappyGame] Registering ECS::Velocity..." << std::endl;
-    gCoordinator.RegisterComponent<eng::engine::ECS::Velocity>(); // ECS Velocity - for Lua
+    gCoordinator.RegisterComponent<eng::engine::ECS::Velocity>();  // ECS Velocity - for Lua
     std::cout << "[FlappyGame] Registering ECS::Sprite..." << std::endl;
-    gCoordinator.RegisterComponent<eng::engine::ECS::Sprite>(); // ECS Sprite - for Lua
+    gCoordinator.RegisterComponent<eng::engine::ECS::Sprite>();  // ECS Sprite - for Lua
     std::cout << "[FlappyGame] Registering ECS::Collider..." << std::endl;
-    gCoordinator.RegisterComponent<eng::engine::ECS::Collider>(); // ECS Collider - for Lua
+    gCoordinator.RegisterComponent<eng::engine::ECS::Collider>();  // ECS Collider - for Lua
     std::cout << "[FlappyGame] Registering Health..." << std::endl;
-    gCoordinator.RegisterComponent<Health>();                  // ECS Health - for Lua
+    gCoordinator.RegisterComponent<Health>();  // ECS Health - for Lua
     std::cout << "[FlappyGame] Registering Damage..." << std::endl;
-    gCoordinator.RegisterComponent<Damage>();                  // ECS Damage - for Lua
+    gCoordinator.RegisterComponent<Damage>();  // ECS Damage - for Lua
     std::cout << "[FlappyGame] Registering ECS::Tag..." << std::endl;
-    gCoordinator.RegisterComponent<eng::engine::ECS::Tag>();   // ECS Tag (value) - for Lua
-    
+    gCoordinator.RegisterComponent<eng::engine::ECS::Tag>();  // ECS Tag (value) - for Lua
+
     // Register components used by engine systems (from components/ namespace)
     std::cout << "[FlappyGame] Registering Position..." << std::endl;
-    gCoordinator.RegisterComponent<Position>();                // components Position (x, y) - for RenderSystem
+    gCoordinator.RegisterComponent<Position>();  // components Position (x, y) - for RenderSystem
     std::cout << "[FlappyGame] Registering ::Velocity..." << std::endl;
-    gCoordinator.RegisterComponent<::Velocity>();              // components Velocity - for MovementSystem
+    gCoordinator.RegisterComponent<::Velocity>();  // components Velocity - for MovementSystem
     std::cout << "[FlappyGame] Registering ::Sprite..." << std::endl;
-    gCoordinator.RegisterComponent<::Sprite>();                // components Sprite - for RenderSystem
+    gCoordinator.RegisterComponent<::Sprite>();  // components Sprite - for RenderSystem
     std::cout << "[FlappyGame] Registering ::Tag..." << std::endl;
-    gCoordinator.RegisterComponent<::Tag>();                   // components Tag (name) - for RenderSystem
+    gCoordinator.RegisterComponent<::Tag>();  // components Tag (name) - for RenderSystem
     std::cout << "[FlappyGame] Registering Animation..." << std::endl;
-    gCoordinator.RegisterComponent<Animation>();               // for AnimationSystem
+    gCoordinator.RegisterComponent<Animation>();  // for AnimationSystem
     std::cout << "[FlappyGame] Registering Lifetime..." << std::endl;
-    gCoordinator.RegisterComponent<Lifetime>();                // for LifetimeSystem
-    
+    gCoordinator.RegisterComponent<Lifetime>();  // for LifetimeSystem
+
     // UI components
     std::cout << "[FlappyGame] Registering UIText..." << std::endl;
     gCoordinator.RegisterComponent<Components::UIText>();
@@ -181,7 +185,7 @@ void FlappyGame::InitSystems() {
     renderSig.set(gCoordinator.GetComponentType<Position>());
     renderSig.set(gCoordinator.GetComponentType<::Sprite>());
     gCoordinator.SetSystemSignature<RenderSystem>(renderSig);
-    
+
     // UI System
     uiSystem = gCoordinator.RegisterSystem<UISystem>(&gCoordinator);
     ECS::Signature uiSig;
@@ -223,7 +227,7 @@ void FlappyGame::InitLua() {
 
     // Always register packet types
     NetworkBindings::RegisterPacketTypes(lua);
-    
+
     // Register Network bindings (if network client exists)
     if (networkClient) {
         NetworkBindings::RegisterNetworkClient(lua, networkClient.get());
@@ -233,20 +237,24 @@ void FlappyGame::InitLua() {
         lua["Network"] = lua.create_table();
         lua["Network"]["init"] = [this](const std::string& ip, int port) -> bool {
             try {
-                std::cout << "[FlappyGame] Creating NetworkClient for " << ip << ":" << port << std::endl;
+                std::cout << "[FlappyGame] Creating NetworkClient for " << ip << ":" << port
+                          << std::endl;
                 networkClient = std::make_unique<NetworkClient>(ip, port);
-                
+
                 // Now register the real network bindings
                 auto& luaState = Scripting::LuaState::Instance().GetState();
                 NetworkBindings::RegisterNetworkClient(luaState, networkClient.get());
-                std::cout << "[FlappyGame] ✅ NetworkClient created and bindings registered" << std::endl;
+                std::cout << "[FlappyGame] ✅ NetworkClient created and bindings registered"
+                          << std::endl;
                 return true;
             } catch (const std::exception& e) {
-                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what() << std::endl;
+                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what()
+                          << std::endl;
                 return false;
             }
         };
-        std::cout << "[FlappyGame] Network stub registered (client will be created on demand)" << std::endl;
+        std::cout << "[FlappyGame] Network stub registered (client will be created on demand)"
+                  << std::endl;
     }
 
     std::cout << "[FlappyGame] Lua components registered" << std::endl;
@@ -262,44 +270,48 @@ void FlappyGame::InitLua() {
     });
 
     // Register DestroyEntity
-    flappyTable.set_function("DestroyEntity", [this](ECS::Entity entity) {
-        DestroyEntityDeferred(entity);
-    });
+    flappyTable.set_function("DestroyEntity",
+                             [this](ECS::Entity entity) { DestroyEntityDeferred(entity); });
 
     // Register SetupSprite - creates and attaches a sprite to an entity
     // Uses ::Sprite from components/ (required by RenderSystem)
     using SFMLSprite = eng::engine::rendering::sfml::SFMLSprite;
     using SFMLTexture = eng::engine::rendering::sfml::SFMLTexture;
-    
-    flappyTable.set_function("SetupSprite", [this](ECS::Entity entity, int textureId, int width, int height, int layer) -> bool {
-        SFMLTexture* texture = nullptr;
-        if (textureId == 0) texture = birdTexture.get();
-        else if (textureId == 1) texture = pipeTexture.get();
-        else if (textureId == 2) texture = backgroundTexture.get();
-        
-        if (!texture) {
-            std::cerr << "[Flappy] SetupSprite: Invalid texture ID " << textureId << std::endl;
-            return false;
-        }
 
-        // Create SFML sprite (raw pointer, managed by allSprites)
-        auto* sfmlSprite = new SFMLSprite();
-        sfmlSprite->setTexture(texture);
-        sfmlSprite->setTextureRect({0, 0, width, height});
-        allSprites.push_back(sfmlSprite);
-        
-        // Create and add ::Sprite component (for RenderSystem)
-        ::Sprite spriteComp;
-        spriteComp.sprite = sfmlSprite;
-        spriteComp.textureRect = {0, 0, width, height};
-        spriteComp.layer = layer;
-        spriteComp.scaleX = 1.0f;
-        spriteComp.scaleY = 1.0f;
-        
-        gCoordinator.AddComponent(entity, spriteComp);
-        
-        return true;
-    });
+    flappyTable.set_function(
+        "SetupSprite",
+        [this](ECS::Entity entity, int textureId, int width, int height, int layer) -> bool {
+            SFMLTexture* texture = nullptr;
+            if (textureId == 0)
+                texture = birdTexture.get();
+            else if (textureId == 1)
+                texture = pipeTexture.get();
+            else if (textureId == 2)
+                texture = backgroundTexture.get();
+
+            if (!texture) {
+                std::cerr << "[Flappy] SetupSprite: Invalid texture ID " << textureId << std::endl;
+                return false;
+            }
+
+            // Create SFML sprite (raw pointer, managed by allSprites)
+            auto* sfmlSprite = new SFMLSprite();
+            sfmlSprite->setTexture(texture);
+            sfmlSprite->setTextureRect({0, 0, width, height});
+            allSprites.push_back(sfmlSprite);
+
+            // Create and add ::Sprite component (for RenderSystem)
+            ::Sprite spriteComp;
+            spriteComp.sprite = sfmlSprite;
+            spriteComp.textureRect = {0, 0, width, height};
+            spriteComp.layer = layer;
+            spriteComp.scaleX = 1.0f;
+            spriteComp.scaleY = 1.0f;
+
+            gCoordinator.AddComponent(entity, spriteComp);
+
+            return true;
+        });
 
     // Register SetPosition - adds Position component for RenderSystem
     flappyTable.set_function("SetPosition", [this](ECS::Entity entity, float x, float y) {
@@ -355,14 +367,14 @@ void FlappyGame::InitLua() {
     flappyTable["SCREEN_HEIGHT"] = 720;
 
     // Quit function
-    flappyTable.set_function("Quit", [this]() {
-        shouldQuit = true;
-    });
+    flappyTable.set_function("Quit", [this]() { shouldQuit = true; });
 
     // ===== SIMPLE UI DRAWING FUNCTIONS =====
     // Draw filled rectangle
-    flappyTable.set_function("DrawRect", [this](float x, float y, float width, float height, int r, int g, int b, int a) {
-        if (!currentWindow) return;
+    flappyTable.set_function("DrawRect", [this](float x, float y, float width, float height, int r,
+                                                int g, int b, int a) {
+        if (!currentWindow)
+            return;
         sf::RectangleShape rect(sf::Vector2f(width, height));
         rect.setPosition(x, y);
         rect.setFillColor(sf::Color(r, g, b, a));
@@ -370,8 +382,10 @@ void FlappyGame::InitLua() {
     });
 
     // Draw rectangle outline
-    flappyTable.set_function("DrawRectOutline", [this](float x, float y, float width, float height, int r, int g, int b, int thickness) {
-        if (!currentWindow) return;
+    flappyTable.set_function("DrawRectOutline", [this](float x, float y, float width, float height,
+                                                       int r, int g, int b, int thickness) {
+        if (!currentWindow)
+            return;
         sf::RectangleShape rect(sf::Vector2f(width, height));
         rect.setPosition(x, y);
         rect.setFillColor(sf::Color::Transparent);
@@ -381,25 +395,29 @@ void FlappyGame::InitLua() {
     });
 
     // Draw text (centered at x, y)
-    flappyTable.set_function("DrawText", [this](const std::string& text, float x, float y, int size, int r, int g, int b) {
-        if (!currentWindow || !uiFont) return;
+    flappyTable.set_function("DrawText", [this](const std::string& text, float x, float y, int size,
+                                                int r, int g, int b) {
+        if (!currentWindow || !uiFont)
+            return;
         sf::Text sfText;
         sfText.setFont(*uiFont);
         sfText.setString(text);
         sfText.setCharacterSize(size);
         sfText.setFillColor(sf::Color(r, g, b));
-        
+
         // Center the text
         sf::FloatRect bounds = sfText.getLocalBounds();
         sfText.setOrigin(bounds.width / 2.0f, bounds.height / 2.0f);
         sfText.setPosition(x, y);
-        
+
         currentWindow->draw(sfText);
     });
 
     // Draw text (left-aligned at x, y)
-    flappyTable.set_function("DrawTextLeft", [this](const std::string& text, float x, float y, int size, int r, int g, int b) {
-        if (!currentWindow || !uiFont) return;
+    flappyTable.set_function("DrawTextLeft", [this](const std::string& text, float x, float y,
+                                                    int size, int r, int g, int b) {
+        if (!currentWindow || !uiFont)
+            return;
         sf::Text sfText;
         sfText.setFont(*uiFont);
         sfText.setString(text);
@@ -419,7 +437,7 @@ void FlappyGame::InitLua() {
     // Load the main Lua script
     std::string luaPath = ResolveAssetPath("game2/assets/scripts/init.lua");
     std::cout << "[FlappyGame] Loading Lua script: " << luaPath << std::endl;
-    
+
     try {
         luaState.GetState().script_file(luaPath);
         std::cout << "[FlappyGame] ✅ Lua script loaded successfully!" << std::endl;
@@ -575,7 +593,7 @@ void FlappyGame::ProcessEvents(SFMLWindow& window) {
     lua["Flappy"]["Input"]["Key1Pressed"] = key1IsPressed;
     lua["Flappy"]["Input"]["Key2Pressed"] = key2IsPressed;
     lua["Flappy"]["Input"]["Key3Pressed"] = key3IsPressed;
-    
+
     spaceWasPressed = spaceIsPressed;
     escapeWasPressed = escapeIsPressed;
     mWasPressed = mIsPressed;
@@ -631,17 +649,19 @@ int FlappyGame::Run(int argc, char* argv[]) {
         if ((arg == "--network" || arg == "-n") && i + 2 < argc) {
             serverAddress = argv[i + 1];
             serverPort = static_cast<short>(std::atoi(argv[i + 2]));
-            std::cout << "[FlappyGame] Network mode enabled: " << serverAddress << ":" << serverPort << std::endl;
-            
+            std::cout << "[FlappyGame] Network mode enabled: " << serverAddress << ":" << serverPort
+                      << std::endl;
+
             // Create network client
             try {
                 networkClient = std::make_unique<NetworkClient>(serverAddress, serverPort);
                 std::cout << "[FlappyGame] ✅ NetworkClient created" << std::endl;
             } catch (const std::exception& e) {
-                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what() << std::endl;
+                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what()
+                          << std::endl;
                 networkClient = nullptr;
             }
-            
+
             i += 2;  // Skip the next two arguments
         }
     }
@@ -696,12 +716,12 @@ int FlappyGame::Run(int argc, char* argv[]) {
 
         // Render
         window.clear();
-        
+
         // Set current window for UI drawing
         currentWindow = &window.getSFMLWindow();  // Get underlying sf::RenderWindow
-        
+
         Render(renderer);
-        
+
         // Call Lua RenderUI for simple overlay UI
         auto& lua = luaState.GetState();
         sol::function renderUI = lua["RenderUI"];
@@ -712,9 +732,9 @@ int FlappyGame::Run(int argc, char* argv[]) {
                 std::cerr << "[Lua] RenderUI error: " << e.what() << std::endl;
             }
         }
-        
+
         currentWindow = nullptr;  // Clear for safety
-        
+
         window.display();
     }
 
@@ -722,4 +742,4 @@ int FlappyGame::Run(int argc, char* argv[]) {
     return 0;
 }
 
-} // namespace FlappyBird
+}  // namespace FlappyBird

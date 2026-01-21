@@ -6,81 +6,80 @@
 */
 
 #ifndef _EVENT_CORE_
-    #define _EVENT_CORE_
+#define _EVENT_CORE_
 
-    #include <cstdint>
-    #include "Types.hpp"
+#include <cstdint>
 
-    namespace eng {
-        namespace core {
+#include "Types.hpp"
 
-            // Base event class
-            struct Event {
-                virtual ~Event() = default;
-            };
+namespace eng {
+namespace core {
 
-            // Collision event
-            struct CollisionEvent : public Event {
-                uint32_t entityA;
-                uint32_t entityB;
-            };
+// Base event class
+struct Event {
+    virtual ~Event() = default;
+};
 
-            // Input event
-            struct InputEvent : public Event {
-                uint32_t entityId;
-                int inputType; // e.g., key press, mouse click
-            };
+// Collision event
+struct CollisionEvent : public Event {
+    uint32_t entityA;
+    uint32_t entityB;
+};
 
-            // Entity destroyed event
-            struct EntityDestroyedEvent : public Event {
-                uint32_t entityId;
-            };
+// Input event
+struct InputEvent : public Event {
+    uint32_t entityId;
+    int inputType;  // e.g., key press, mouse click
+};
 
-            // Client connected event
-            struct ClientConnectedEvent : public Event {
-                uint32_t clientId;
-            };
+// Entity destroyed event
+struct EntityDestroyedEvent : public Event {
+    uint32_t entityId;
+};
 
-            // Client disconnected event
-            struct ClientDisconnectedEvent : public Event {
-                uint32_t clientId;
-            };
+// Client connected event
+struct ClientConnectedEvent : public Event {
+    uint32_t clientId;
+};
 
-            // Window event
-            struct WindowEvent : public Event {
-                enum Type { Closed, Resized, LostFocus, GainedFocus };
-                Type type;
-                uint32_t width;   // pour Resized
-                uint32_t height;  // pour Resized
-                
-                WindowEvent(Type t = Closed, uint32_t w = 0, uint32_t h = 0) 
-                    : type(t), width(w), height(h) {}
-            };
+// Client disconnected event
+struct ClientDisconnectedEvent : public Event {
+    uint32_t clientId;
+};
 
-            // Network event
-            struct NetworkEvent : public Event {
-                enum Type { PacketReceived, ConnectionLost, ServerTimeout };
-                Type type;
-                uint32_t connectionId;
-                
-                NetworkEvent(Type t, uint32_t id = 0) 
-                    : type(t), connectionId(id) {}
-            };
+// Window event
+struct WindowEvent : public Event {
+    enum Type { Closed, Resized, LostFocus, GainedFocus };
+    Type type;
+    uint32_t width;   // pour Resized
+    uint32_t height;  // pour Resized
 
-            // Entity spawned event
-            struct EntitySpawnedEvent : public Event {
-                uint32_t entityId;
-                eng::engine::Vector2i spawnPosition;
-            };
+    WindowEvent(Type t = Closed, uint32_t w = 0, uint32_t h = 0) : type(t), width(w), height(h) {}
+};
 
-            // Health changed event
-            struct HealthChangedEvent : public Event {
-                uint32_t entityId;
-                int oldHealth;
-                int newHealth;
-            };
+// Network event
+struct NetworkEvent : public Event {
+    enum Type { PacketReceived, ConnectionLost, ServerTimeout };
+    Type type;
+    uint32_t connectionId;
 
-        } // namespace core
-    } // namespace eng
+    NetworkEvent(Type t, uint32_t id = 0) : type(t), connectionId(id) {}
+};
+
+// Entity spawned event
+struct EntitySpawnedEvent : public Event {
+    uint32_t entityId;
+    eng::engine::Vector2i spawnPosition;
+};
+
+// Health changed event
+struct HealthChangedEvent : public Event {
+    uint32_t entityId;
+    int oldHealth;
+    int newHealth;
+};
+
+}  // namespace core
+}  // namespace eng
 
 #endif /* !_EVENT_CORE_ */

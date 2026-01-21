@@ -1,13 +1,12 @@
 #include "network/NetworkServer.hpp"
+
 #include <iostream>
 
 // R-Type specific protocol - TODO: This should be refactored to make engine protocol-agnostic
 // For now, include the game-specific protocol from the server
 #include "../../../server/include/network/RTypeProtocol.hpp"
 
-NetworkServer::NetworkServer(short port)
-    : server_(io_context_, port) {
-}
+NetworkServer::NetworkServer(short port) : server_(io_context_, port) {}
 
 NetworkServer::~NetworkServer() {
     io_context_.stop();
@@ -18,9 +17,7 @@ NetworkServer::~NetworkServer() {
 
 void NetworkServer::start() {
     server_.start();
-    io_thread_ = std::thread([this]() {
-        io_context_.run();
-    });
+    io_thread_ = std::thread([this]() { io_context_.run(); });
 }
 
 void NetworkServer::process() {
@@ -30,12 +27,13 @@ void NetworkServer::process() {
     while (server_.popPacket(packet, sender)) {
         auto session = server_.getSession(sender);
         if (!session) {
-            std::cerr << "[NetworkServer] WARNING: No session found for " << sender << " - skipping packet" << std::endl;
+            std::cerr << "[NetworkServer] WARNING: No session found for " << sender
+                      << " - skipping packet" << std::endl;
             continue;
         }
 
         uint16_t type = packet.header.type;
-        
+
         if (type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
             std::cout << "[NetworkServer] Received CLIENT_HELLO from " << sender << std::endl;
             NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
@@ -43,11 +41,11 @@ void NetworkServer::process() {
             welcome.setPayload({(char)session->playerId});
             server_.sendTo(welcome, sender);
             std::cout << "[Network] Welcome sent to " << sender << std::endl;
-        } 
-        else if (type == static_cast<uint16_t>(GamePacketType::CREATE_ROOM)) {
+        } else if (type == static_cast<uint16_t>(GamePacketType::CREATE_ROOM)) {
             try {
                 auto payload = CreateRoomPayload::deserialize(packet.payload);
-                uint32_t roomId = roomManager_.createRoom(payload.name, payload.maxPlayers, session->playerId);
+                uint32_t roomId =
+                    roomManager_.createRoom(payload.name, payload.maxPlayers, session->playerId);
                 roomManager_.joinRoom(roomId, session->playerId);
                 session->roomId = roomId;
 
@@ -56,31 +54,33 @@ void NetworkServer::process() {
                 replyPayload.roomId = roomId;
                 reply.setPayload(replyPayload.serialize());
                 server_.sendTo(reply, sender);
-                std::cout << "[Room] Created room " << payload.name << " (ID: " << roomId << ") by player " << (int)session->playerId << std::endl;
+                std::cout << "[Room] Created room " << payload.name << " (ID: " << roomId
+                          << ") by player " << (int)session->playerId << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "[Room] Error creating room: " << e.what() << std::endl;
             }
-        }
-        else if (type == static_cast<uint16_t>(GamePacketType::RENAME_ROOM)) {
-             try {
+        } else if (type == static_cast<uint16_t>(GamePacketType::RENAME_ROOM)) {
+            try {
                 auto payload = RenameRoomPayload::deserialize(packet.payload);
                 if (roomManager_.renameRoom(payload.roomId, session->playerId, payload.newName)) {
-                    std::cout << "[Room] Room " << payload.roomId << " renamed to " << payload.newName << std::endl;
+                    std::cout << "[Room] Room " << payload.roomId << " renamed to "
+                              << payload.newName << std::endl;
                 } else {
-                    std::cerr << "[Room] Failed to rename room " << payload.roomId << " (Permission denied or not found)" << std::endl;
+                    std::cerr << "[Room] Failed to rename room " << payload.roomId
+                              << " (Permission denied or not found)" << std::endl;
                 }
             } catch (const std::exception& e) {
                 std::cerr << "[Room] Error renaming room: " << e.what() << std::endl;
             }
-        }
-        else if (type == static_cast<uint16_t>(GamePacketType::JOIN_ROOM)) {
+        } else if (type == static_cast<uint16_t>(GamePacketType::JOIN_ROOM)) {
             try {
                 auto payload = JoinRoomPayload::deserialize(packet.payload);
-                std::cout << "[NetworkServer] Received JOIN_ROOM request from " << sender << " for room " << payload.roomId << std::endl;
-                
+                std::cout << "[NetworkServer] Received JOIN_ROOM request from " << sender
+                          << " for room " << payload.roomId << std::endl;
+
                 if (roomManager_.joinRoom(payload.roomId, session->playerId)) {
                     session->roomId = payload.roomId;
-                    
+
                     // Get room details to send complete info to client
                     auto room = roomManager_.getRoom(payload.roomId);
                     if (room) {
@@ -89,13 +89,14 @@ void NetworkServer::process() {
                         replyPayload.roomName = room->name;
                         replyPayload.maxPlayers = room->maxPlayers;
                         replyPayload.hostPlayerId = room->hostPlayerId;
-                        
+
                         NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
                         reply.setPayload(replyPayload.serialize());
                         server_.sendTo(reply, sender);
-                        std::cout << "[Room] Player " << (int)session->playerId << " joined room " << payload.roomId 
-                                  << " (" << room->playerIds.size() << "/" << (int)room->maxPlayers << " players)" << std::endl;
-                        
+                        std::cout << "[Room] Player " << (int)session->playerId << " joined room "
+                                  << payload.roomId << " (" << room->playerIds.size() << "/"
+                                  << (int)room->maxPlayers << " players)" << std::endl;
+
                         // Broadcast player list update to all players in the room
                         RoomPlayersPayload playersUpdate;
                         playersUpdate.roomId = room->id;
@@ -107,10 +108,11 @@ void NetworkServer::process() {
                             playerInfo.isReady = false;
                             playersUpdate.players.push_back(playerInfo);
                         }
-                        
-                        NetworkPacket updatePacket(static_cast<uint16_t>(GamePacketType::ROOM_PLAYERS_UPDATE));
+
+                        NetworkPacket updatePacket(
+                            static_cast<uint16_t>(GamePacketType::ROOM_PLAYERS_UPDATE));
                         updatePacket.setPayload(playersUpdate.serialize());
-                        
+
                         // Send to all players in the room
                         auto sessions = server_.getActiveSessions();
                         for (const auto& s : sessions) {
@@ -118,9 +120,11 @@ void NetworkServer::process() {
                                 server_.sendTo(updatePacket, s.endpoint);
                             }
                         }
-                        std::cout << "[Room] Sent player list update to all players in room " << room->id << std::endl;
+                        std::cout << "[Room] Sent player list update to all players in room "
+                                  << room->id << std::endl;
                     } else {
-                        std::cerr << "[Room] Room " << payload.roomId << " not found after join" << std::endl;
+                        std::cerr << "[Room] Room " << payload.roomId << " not found after join"
+                                  << std::endl;
                     }
                 } else {
                     std::cerr << "[Room] Failed to join room " << payload.roomId << std::endl;
@@ -128,8 +132,7 @@ void NetworkServer::process() {
             } catch (const std::exception& e) {
                 std::cerr << "[Room] Error joining room: " << e.what() << std::endl;
             }
-        }
-        else if (type == static_cast<uint16_t>(GamePacketType::ROOM_LIST)) {
+        } else if (type == static_cast<uint16_t>(GamePacketType::ROOM_LIST)) {
             std::cout << "[NetworkServer] Received ROOM_LIST request from " << sender << std::endl;
             auto rooms = roomManager_.getRooms();
             RoomListPayload listPayload;
@@ -141,13 +144,13 @@ void NetworkServer::process() {
                 info.maxPlayers = room.maxPlayers;
                 listPayload.rooms.push_back(info);
             }
-            std::cout << "[NetworkServer] Sending ROOM_LIST_REPLY with " << listPayload.rooms.size() << " rooms to " << sender << std::endl;
+            std::cout << "[NetworkServer] Sending ROOM_LIST_REPLY with " << listPayload.rooms.size()
+                      << " rooms to " << sender << std::endl;
             NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));
             reply.setPayload(listPayload.serialize());
             server_.sendTo(reply, sender);
             std::cout << "[NetworkServer] ROOM_LIST_REPLY sent" << std::endl;
-        }
-        else {
+        } else {
             std::lock_guard<std::mutex> lock(packetsMutex_);
             receivedPackets_.push({packet, sender});
         }

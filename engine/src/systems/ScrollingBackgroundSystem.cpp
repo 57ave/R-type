@@ -1,28 +1,22 @@
-#include <systems/ScrollingBackgroundSystem.hpp>
 #include <components/Position.hpp>
 #include <components/ScrollingBackground.hpp>
 #include <components/Sprite.hpp>
 #include <ecs/Coordinator.hpp>
+#include <systems/ScrollingBackgroundSystem.hpp>
 
 ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinator)
-    : coordinator_(coordinator)
-{
-}
+    : coordinator_(coordinator) {}
 
-void ScrollingBackgroundSystem::Init()
-{
-}
+void ScrollingBackgroundSystem::Init() {}
 
-void ScrollingBackgroundSystem::Shutdown()
-{
-}
+void ScrollingBackgroundSystem::Shutdown() {}
 
-void ScrollingBackgroundSystem::Update(float dt)
-{
-    if (!coordinator_) return;
+void ScrollingBackgroundSystem::Update(float dt) {
+    if (!coordinator_)
+        return;
 
     for (auto entity : mEntities) {
-        if (!coordinator_->HasComponent<Position>(entity) || 
+        if (!coordinator_->HasComponent<Position>(entity) ||
             !coordinator_->HasComponent<ScrollingBackground>(entity))
             continue;
 

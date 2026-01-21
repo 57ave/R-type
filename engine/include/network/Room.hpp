@@ -1,15 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
-#include <algorithm>
 
-enum class RoomState {
-    WAITING,
-    PLAYING,
-    PAUSED
-};
+enum class RoomState { WAITING, PLAYING, PAUSED };
 
 class Room {
 public:
@@ -21,11 +17,10 @@ public:
     uint32_t hostPlayerId;
 
     Room(uint32_t id, const std::string& name, uint8_t maxPlayers = 4, uint32_t hostId = 0)
-        : id(id), name(name), state(RoomState::WAITING), maxPlayers(maxPlayers), hostPlayerId(hostId) {}
-    
-    void setName(const std::string& newName) {
-        name = newName;
-    }
+        : id(id), name(name), state(RoomState::WAITING), maxPlayers(maxPlayers),
+          hostPlayerId(hostId) {}
+
+    void setName(const std::string& newName) { name = newName; }
 
     bool addPlayer(uint32_t playerId) {
         if (playerIds.size() >= maxPlayers || state != RoomState::WAITING) {
@@ -47,8 +42,6 @@ public:
     bool hasPlayer(uint32_t playerId) const {
         return std::find(playerIds.begin(), playerIds.end(), playerId) != playerIds.end();
     }
-    
-    bool isEmpty() const {
-        return playerIds.empty();
-    }
+
+    bool isEmpty() const { return playerIds.empty(); }
 };

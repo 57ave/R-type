@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 #include <cstring>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
+#include <vector>
 
 #ifdef __APPLE__
 #include <machine/endian.h>
@@ -16,7 +16,7 @@
 
 struct PacketHeader {
     uint16_t magic;      // 0x5254 ('RT') but could be anything generic
-    uint8_t  version;    // Protocol version
+    uint8_t version;     // Protocol version
     uint16_t type;       // Generic Packet type (ID) - User casts this to their specific Enum
     uint32_t seq;        // Sequence number
     uint32_t timestamp;  // Timestamp in ms
@@ -46,9 +46,7 @@ public:
     PacketHeader header;
     std::vector<char> payload;
 
-    NetworkPacket(uint16_t type = 0) {
-        header.type = type;
-    }
+    NetworkPacket(uint16_t type = 0) { header.type = type; }
 
     // Serialize full packet (header + payload)
     std::vector<char> serialize() const {
@@ -74,8 +72,6 @@ public:
         }
         return packet;
     }
-    
-    void setPayload(const std::vector<char>& newPayload) {
-        payload = newPayload;
-    }
+
+    void setPayload(const std::vector<char>& newPayload) { payload = newPayload; }
 };

@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(WIN32)
+    add_compile_definitions(_WIN32_WINNT=0x0A00) # Windows 10 targeting
+endif()
+
 # Compiler warnings (only for our code, not dependencies)
 if(MSVC)
     add_compile_options(/W4)
@@ -53,6 +57,7 @@ if(ENABLE_SCRIPTING)
         
         if(Lua_ADDED OR EXISTS "${Lua_SOURCE_DIR}")
             message(STATUS "Configuring Lua manually from source...")
+            set(LUA_IS_INTERNAL ON)
             file(GLOB LUA_SOURCES "${Lua_SOURCE_DIR}/*.c")
             list(REMOVE_ITEM LUA_SOURCES "${Lua_SOURCE_DIR}/lua.c" "${Lua_SOURCE_DIR}/luac.c" "${Lua_SOURCE_DIR}/onelua.c")
 
@@ -116,31 +121,7 @@ include(cmake/CPM.cmake)
 # Dépendance ASIO
 CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0")
 
-# Dépendance SFML: Force SFML 2.6 via CPM (project not compatible with SFML 3.x API)
-# Skip system SFML to avoid version conflicts
-option(USE_SYSTEM_SFML "Use system SFML instead of CPM" OFF)
-
-# SFML build options - disable warnings as errors (causes issues on macOS with ObjC files)
-set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(SFML_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
-
-if(USE_SYSTEM_SFML)
-    find_package(SFML 2.6 COMPONENTS graphics window system audio QUIET)
-endif()
-if (NOT SFML_FOUND)
-    message(STATUS "Using CPM to download SFML 2.6.0")
-    # Add SFML with OPTIONS to disable warnings as errors
-    CPMAddPackage(
-        NAME SFML
-        GITHUB_REPOSITORY SFML/SFML
-        GIT_TAG 2.6.0
-        OPTIONS
-            "WARNINGS_AS_ERRORS OFF"
-            "SFML_BUILD_EXAMPLES OFF"
-    )
-endif()
-set(SFML_VERSION_MAJOR 2)
+# SFML is now found in root CMakeLists.txt
 
 # Enable PIC for ecs library (needed for shared library systems)
 set_target_properties(ecs PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -471,7 +452,7 @@ if(TARGET UISystem)
     )
 endif()
 
-if(TARGET lua)
+if(TARGET lua AND LUA_IS_INTERNAL)
     install(TARGETS lua
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

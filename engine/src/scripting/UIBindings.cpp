@@ -1,43 +1,40 @@
-#include <scripting/UIBindings.hpp>
-#include <systems/UISystem.hpp>
 #include <core/GameStateCallbacks.hpp>
 #include <iostream>
+#include <scripting/UIBindings.hpp>
+#include <systems/UISystem.hpp>
 
 namespace Scripting {
 
-    UISystem* UIBindings::s_uiSystem = nullptr;
-    eng::engine::core::GameStateCallbacks UIBindings::s_gameStateCallbacks;
+UISystem* UIBindings::s_uiSystem = nullptr;
+eng::engine::core::GameStateCallbacks UIBindings::s_gameStateCallbacks;
 
-    void UIBindings::SetUISystem(UISystem* uiSystem)
-    {
+void UIBindings::SetUISystem(UISystem* uiSystem) {
+    s_uiSystem = uiSystem;
+}
+
+void UIBindings::SetGameStateCallbacks(const eng::engine::core::GameStateCallbacks& callbacks) {
+    s_gameStateCallbacks = callbacks;
+    std::cout << "[UIBindings] Game state callbacks set" << std::endl;
+}
+
+void UIBindings::RegisterAll(sol::state& lua, UISystem* uiSystem) {
+    if (uiSystem) {
         s_uiSystem = uiSystem;
     }
 
-    void UIBindings::SetGameStateCallbacks(const eng::engine::core::GameStateCallbacks& callbacks)
-    {
-        s_gameStateCallbacks = callbacks;
-        std::cout << "[UIBindings] Game state callbacks set" << std::endl;
-    }
+    // Create UI namespace
+    auto ui = lua["UI"].get_or_create<sol::table>();
 
-    void UIBindings::RegisterAll(sol::state& lua, UISystem* uiSystem)
-    {
-        if (uiSystem) {
-            s_uiSystem = uiSystem;
+    // ========================================
+    // Element Creation
+    // ========================================
+
+    // CreateButton({ x, y, width, height, text, onClick, menuGroup })
+    ui["CreateButton"] = [](sol::table config) -> ECS::Entity {
+        if (!s_uiSystem) {
+            std::cerr << "[UIBindings] UISystem not set!" << std::endl;
+            return 0;
         }
-
-        // Create UI namespace
-        auto ui = lua["UI"].get_or_create<sol::table>();
-
-        // ========================================
-        // Element Creation
-        // ========================================
-
-        // CreateButton({ x, y, width, height, text, onClick, menuGroup })
-        ui["CreateButton"] = [](sol::table config) -> ECS::Entity {
-            if (!s_uiSystem) {
-                std::cerr << "[UIBindings] UISystem not set!" << std::endl;
-                return 0;
-            }
 
             float x = config.get_or("x", 0.0f);
             float y = config.get_or("y", 0.0f);
@@ -139,195 +136,208 @@ namespace Scripting {
                     options.push_back(kv.second.as<std::string>());
                 }
             }
-            
-            int selectedIndex = config.get_or("selectedIndex", 0);
-            std::string onChange = config.get_or<std::string>("onChange", "");
-            std::string menuGroup = config.get_or<std::string>("menuGroup", "");
+        }
 
-            return s_uiSystem->CreateDropdown(x, y, width, options, selectedIndex, onChange, menuGroup);
-        };
+        int selectedIndex = config.get_or("selectedIndex", 0);
+        std::string onChange = config.get_or<std::string>("onChange", "");
+        std::string menuGroup = config.get_or<std::string>("menuGroup", "");
 
-        // ========================================
-        // Element Manipulation
-        // ========================================
+        return s_uiSystem->CreateDropdown(x, y, width, options, selectedIndex, onChange, menuGroup);
+    };
 
-        ui["SetVisible"] = [](ECS::Entity entity, bool visible) {
-            if (s_uiSystem) s_uiSystem->SetVisible(entity, visible);
-        };
+    // ========================================
+    // Element Manipulation
+    // ========================================
 
-        ui["SetText"] = [](ECS::Entity entity, const std::string& text) {
-            if (s_uiSystem) s_uiSystem->SetText(entity, text);
-        };
+    ui["SetVisible"] = [](ECS::Entity entity, bool visible) {
+        if (s_uiSystem)
+            s_uiSystem->SetVisible(entity, visible);
+    };
 
-        ui["SetPosition"] = [](ECS::Entity entity, float x, float y) {
-            if (s_uiSystem) s_uiSystem->SetPosition(entity, x, y);
-        };
+    ui["SetText"] = [](ECS::Entity entity, const std::string& text) {
+        if (s_uiSystem)
+            s_uiSystem->SetText(entity, text);
+    };
 
-        ui["GetSliderValue"] = [](ECS::Entity entity) -> float {
-            return s_uiSystem ? s_uiSystem->GetSliderValue(entity) : 0.0f;
-        };
+    ui["SetPosition"] = [](ECS::Entity entity, float x, float y) {
+        if (s_uiSystem)
+            s_uiSystem->SetPosition(entity, x, y);
+    };
 
-        ui["SetSliderValue"] = [](ECS::Entity entity, float value) {
-            if (s_uiSystem) s_uiSystem->SetSliderValue(entity, value);
-        };
+    ui["GetSliderValue"] = [](ECS::Entity entity) -> float {
+        return s_uiSystem ? s_uiSystem->GetSliderValue(entity) : 0.0f;
+    };
 
-        ui["GetInputText"] = [](ECS::Entity entity) -> std::string {
-            return s_uiSystem ? s_uiSystem->GetInputText(entity) : "";
-        };
+    ui["SetSliderValue"] = [](ECS::Entity entity, float value) {
+        if (s_uiSystem)
+            s_uiSystem->SetSliderValue(entity, value);
+    };
 
-        ui["SetInputText"] = [](ECS::Entity entity, const std::string& text) {
-            if (s_uiSystem) s_uiSystem->SetInputText(entity, text);
-        };
+    ui["GetInputText"] = [](ECS::Entity entity) -> std::string {
+        return s_uiSystem ? s_uiSystem->GetInputText(entity) : "";
+    };
 
-        ui["GetCheckboxState"] = [](ECS::Entity entity) -> bool {
-            return s_uiSystem ? s_uiSystem->GetCheckboxState(entity) : false;
-        };
+    ui["SetInputText"] = [](ECS::Entity entity, const std::string& text) {
+        if (s_uiSystem)
+            s_uiSystem->SetInputText(entity, text);
+    };
 
-        ui["SetCheckboxState"] = [](ECS::Entity entity, bool checked) {
-            if (s_uiSystem) s_uiSystem->SetCheckboxState(entity, checked);
-        };
+    ui["GetCheckboxState"] = [](ECS::Entity entity) -> bool {
+        return s_uiSystem ? s_uiSystem->GetCheckboxState(entity) : false;
+    };
 
-        ui["GetDropdownIndex"] = [](ECS::Entity entity) -> int {
-            return s_uiSystem ? s_uiSystem->GetDropdownIndex(entity) : -1;
-        };
+    ui["SetCheckboxState"] = [](ECS::Entity entity, bool checked) {
+        if (s_uiSystem)
+            s_uiSystem->SetCheckboxState(entity, checked);
+    };
 
-        ui["SetDropdownIndex"] = [](ECS::Entity entity, int index) {
-            if (s_uiSystem) s_uiSystem->SetDropdownIndex(entity, index);
-        };
+    ui["GetDropdownIndex"] = [](ECS::Entity entity) -> int {
+        return s_uiSystem ? s_uiSystem->GetDropdownIndex(entity) : -1;
+    };
 
-        // ========================================
-        // Navigation
-        // ========================================
+    ui["SetDropdownIndex"] = [](ECS::Entity entity, int index) {
+        if (s_uiSystem)
+            s_uiSystem->SetDropdownIndex(entity, index);
+    };
 
-        ui["SelectNext"] = []() {
-            if (s_uiSystem) s_uiSystem->SelectNext();
-        };
+    // ========================================
+    // Navigation
+    // ========================================
 
-        ui["SelectPrevious"] = []() {
-            if (s_uiSystem) s_uiSystem->SelectPrevious();
-        };
+    ui["SelectNext"] = []() {
+        if (s_uiSystem)
+            s_uiSystem->SelectNext();
+    };
 
-        ui["ActivateSelected"] = []() {
-            if (s_uiSystem) s_uiSystem->ActivateSelected();
-        };
+    ui["SelectPrevious"] = []() {
+        if (s_uiSystem)
+            s_uiSystem->SelectPrevious();
+    };
 
-        ui["SetSelected"] = [](ECS::Entity entity) {
-            if (s_uiSystem) s_uiSystem->SetSelectedEntity(entity);
-        };
+    ui["ActivateSelected"] = []() {
+        if (s_uiSystem)
+            s_uiSystem->ActivateSelected();
+    };
 
-        ui["GetSelected"] = []() -> ECS::Entity {
-            return s_uiSystem ? s_uiSystem->GetSelectedEntity() : 0;
-        };
+    ui["SetSelected"] = [](ECS::Entity entity) {
+        if (s_uiSystem)
+            s_uiSystem->SetSelectedEntity(entity);
+    };
 
-        // ========================================
-        // Menu Management
-        // ========================================
+    ui["GetSelected"] = []() -> ECS::Entity {
+        return s_uiSystem ? s_uiSystem->GetSelectedEntity() : 0;
+    };
 
-        ui["ShowMenu"] = [](const std::string& menuGroup) {
-            if (s_uiSystem) s_uiSystem->ShowMenu(menuGroup);
-        };
+    // ========================================
+    // Menu Management
+    // ========================================
 
-        ui["HideMenu"] = [](const std::string& menuGroup) {
-            if (s_uiSystem) s_uiSystem->HideMenu(menuGroup);
-        };
+    ui["ShowMenu"] = [](const std::string& menuGroup) {
+        if (s_uiSystem)
+            s_uiSystem->ShowMenu(menuGroup);
+    };
 
-        ui["HideAllMenus"] = []() {
-            if (s_uiSystem) s_uiSystem->HideAllMenus();
-        };
+    ui["HideMenu"] = [](const std::string& menuGroup) {
+        if (s_uiSystem)
+            s_uiSystem->HideMenu(menuGroup);
+    };
 
-        ui["IsMenuVisible"] = [](const std::string& menuGroup) -> bool {
-            return s_uiSystem ? s_uiSystem->IsMenuVisible(menuGroup) : false;
-        };
+    ui["HideAllMenus"] = []() {
+        if (s_uiSystem)
+            s_uiSystem->HideAllMenus();
+    };
 
-        ui["SetActiveMenu"] = [](const std::string& menuGroup) {
-            if (s_uiSystem) s_uiSystem->SetActiveMenu(menuGroup);
-        };
+    ui["IsMenuVisible"] = [](const std::string& menuGroup) -> bool {
+        return s_uiSystem ? s_uiSystem->IsMenuVisible(menuGroup) : false;
+    };
 
-        ui["GetActiveMenu"] = []() -> std::string {
-            return s_uiSystem ? s_uiSystem->GetActiveMenu() : "";
-        };
+    ui["SetActiveMenu"] = [](const std::string& menuGroup) {
+        if (s_uiSystem)
+            s_uiSystem->SetActiveMenu(menuGroup);
+    };
 
-        // ========================================
-        // Font Loading
-        // ========================================
+    ui["GetActiveMenu"] = []() -> std::string {
+        return s_uiSystem ? s_uiSystem->GetActiveMenu() : "";
+    };
 
-        ui["LoadFont"] = [](const std::string& fontId, const std::string& filepath) -> bool {
-            return s_uiSystem ? s_uiSystem->LoadFont(fontId, filepath) : false;
-        };
+    // ========================================
+    // Font Loading
+    // ========================================
 
-        // ========================================
-        // Asset Path Resolution
-        // ========================================
+    ui["LoadFont"] = [](const std::string& fontId, const std::string& filepath) -> bool {
+        return s_uiSystem ? s_uiSystem->LoadFont(fontId, filepath) : false;
+    };
 
-        // Set the base path for assets (set from C++ side)
-        ui["SetBasePath"] = [&lua](const std::string& basePath) {
-            lua["ASSET_BASE_PATH"] = basePath;
-        };
+    // ========================================
+    // Asset Path Resolution
+    // ========================================
 
-        // Helper function to resolve a relative path
-        ui["ResolvePath"] = [&lua](const std::string& relativePath) -> std::string {
-            std::string basePath = lua.get_or<std::string>("ASSET_BASE_PATH", "");
-            return basePath + relativePath;
-        };
+    // Set the base path for assets (set from C++ side)
+    ui["SetBasePath"] = [&lua](const std::string& basePath) { lua["ASSET_BASE_PATH"] = basePath; };
 
-        // Register GameState bindings
-        RegisterGameState(lua);
+    // Helper function to resolve a relative path
+    ui["ResolvePath"] = [&lua](const std::string& relativePath) -> std::string {
+        std::string basePath = lua.get_or<std::string>("ASSET_BASE_PATH", "");
+        return basePath + relativePath;
+    };
 
-        std::cout << "[UIBindings] UI bindings registered" << std::endl;
-    }
+    // Register GameState bindings
+    RegisterGameState(lua);
 
-    void UIBindings::RegisterGameState(sol::state& lua)
-    {
-        // Create GameState namespace
-        auto gameState = lua["GameState"].get_or_create<sol::table>();
+    std::cout << "[UIBindings] UI bindings registered" << std::endl;
+}
 
-        // Use injected callbacks for game state management
-        // This keeps the engine fully abstract - no knowledge of specific game states
-        
-        gameState["Set"] = [](const std::string& state) {
-            std::cout << "[GameState] Set called with: " << state << std::endl;
-            if (s_gameStateCallbacks.setState) {
-                s_gameStateCallbacks.setState(state);
-            } else {
-                std::cerr << "[GameState] Warning: setState callback not set" << std::endl;
-            }
-        };
+void UIBindings::RegisterGameState(sol::state& lua) {
+    // Create GameState namespace
+    auto gameState = lua["GameState"].get_or_create<sol::table>();
 
-        gameState["Get"] = []() -> std::string {
-            if (s_gameStateCallbacks.getState) {
-                return s_gameStateCallbacks.getState();
-            }
-            std::cerr << "[GameState] Warning: getState callback not set" << std::endl;
-            return "Unknown";
-        };
+    // Use injected callbacks for game state management
+    // This keeps the engine fully abstract - no knowledge of specific game states
 
-        gameState["IsPaused"] = []() -> bool {
-            if (s_gameStateCallbacks.isPaused) {
-                return s_gameStateCallbacks.isPaused();
-            }
-            return false;
-        };
+    gameState["Set"] = [](const std::string& state) {
+        std::cout << "[GameState] Set called with: " << state << std::endl;
+        if (s_gameStateCallbacks.setState) {
+            s_gameStateCallbacks.setState(state);
+        } else {
+            std::cerr << "[GameState] Warning: setState callback not set" << std::endl;
+        }
+    };
 
-        gameState["IsPlaying"] = []() -> bool {
-            if (s_gameStateCallbacks.isPlaying) {
-                return s_gameStateCallbacks.isPlaying();
-            }
-            return false;
-        };
+    gameState["Get"] = []() -> std::string {
+        if (s_gameStateCallbacks.getState) {
+            return s_gameStateCallbacks.getState();
+        }
+        std::cerr << "[GameState] Warning: getState callback not set" << std::endl;
+        return "Unknown";
+    };
 
-        gameState["TogglePause"] = []() {
-            if (s_gameStateCallbacks.togglePause) {
-                s_gameStateCallbacks.togglePause();
-            }
-        };
+    gameState["IsPaused"] = []() -> bool {
+        if (s_gameStateCallbacks.isPaused) {
+            return s_gameStateCallbacks.isPaused();
+        }
+        return false;
+    };
 
-        gameState["GoBack"] = []() {
-            if (s_gameStateCallbacks.goBack) {
-                s_gameStateCallbacks.goBack();
-            }
-        };
+    gameState["IsPlaying"] = []() -> bool {
+        if (s_gameStateCallbacks.isPlaying) {
+            return s_gameStateCallbacks.isPlaying();
+        }
+        return false;
+    };
 
-        std::cout << "[UIBindings] GameState bindings registered" << std::endl;
-    }
+    gameState["TogglePause"] = []() {
+        if (s_gameStateCallbacks.togglePause) {
+            s_gameStateCallbacks.togglePause();
+        }
+    };
 
-} // namespace Scripting
+    gameState["GoBack"] = []() {
+        if (s_gameStateCallbacks.goBack) {
+            s_gameStateCallbacks.goBack();
+        }
+    };
+
+    std::cout << "[UIBindings] GameState bindings registered" << std::endl;
+}
+
+}  // namespace Scripting

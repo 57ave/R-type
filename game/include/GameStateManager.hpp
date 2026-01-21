@@ -8,19 +8,19 @@
  * @brief Game states for R-Type
  */
 enum class GameState {
-    MainMenu,       // Main menu screen
-    Playing,        // Active gameplay
-    Paused,         // Game paused (from Playing)
-    Options,        // Options/Settings menu
-    Lobby,          // Multiplayer lobby
-    Credits,        // Credits screen
-    GameOver,       // Game over screen
-    Victory         // Victory screen
+    MainMenu,  // Main menu screen
+    Playing,   // Active gameplay
+    Paused,    // Game paused (from Playing)
+    Options,   // Options/Settings menu
+    Lobby,     // Multiplayer lobby
+    Credits,   // Credits screen
+    GameOver,  // Game over screen
+    Victory    // Victory screen
 };
 
 /**
  * @brief Singleton manager for game state transitions
- * 
+ *
  * Handles state changes and notifies listeners when transitions occur.
  * Can be bound to Lua for script-controlled state changes.
  */
@@ -103,4 +103,4 @@ private:
     StateChangeCallback m_onStateChange;
 };
 
-#endif // RTYPE_GAME_GAMESTATEMANAGER_HPP
+#endif  // RTYPE_GAME_GAMESTATEMANAGER_HPP

@@ -1,24 +1,17 @@
-#include <systems/HealthSystem.hpp>
 #include <components/Health.hpp>
 #include <ecs/Coordinator.hpp>
+#include <systems/HealthSystem.hpp>
 #include <vector>
 
-HealthSystem::HealthSystem(ECS::Coordinator* coordinator)
-    : coordinator_(coordinator)
-{
-}
+HealthSystem::HealthSystem(ECS::Coordinator* coordinator) : coordinator_(coordinator) {}
 
-void HealthSystem::Init()
-{
-}
+void HealthSystem::Init() {}
 
-void HealthSystem::Shutdown()
-{
-}
+void HealthSystem::Shutdown() {}
 
-void HealthSystem::Update(float dt)
-{
-    if (!coordinator_) return;
+void HealthSystem::Update(float dt) {
+    if (!coordinator_)
+        return;
 
     std::vector<ECS::Entity> toDie;
 
@@ -41,8 +34,7 @@ void HealthSystem::Update(float dt)
     }
 }
 
-void HealthSystem::HandleDeath(ECS::Entity entity)
-{
+void HealthSystem::HandleDeath(ECS::Entity entity) {
     if (!coordinator_->HasComponent<Health>(entity))
         return;
 

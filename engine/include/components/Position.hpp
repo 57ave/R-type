@@ -6,4 +6,4 @@ struct Position {
     float y = 0.0f;
 };
 
-#endif // ENG_ENGINE_COMPONENTS_POSITION_HPP
+#endif  // ENG_ENGINE_COMPONENTS_POSITION_HPP

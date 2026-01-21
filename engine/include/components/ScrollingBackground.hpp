@@ -3,17 +3,17 @@
 
 struct ScrollingBackground {
     float scrollSpeed = 200.0f;
-    bool horizontal = true;        // Horizontal or vertical scrolling
-    bool loop = true;              // Loop infinitely
+    bool horizontal = true;  // Horizontal or vertical scrolling
+    bool loop = true;        // Loop infinitely
 
     // For multi-sprite parallax
     float sprite1X = 0.0f;
     float sprite2X = 0.0f;
-    float spriteWidth = 0.0f;      // Width of one sprite
+    float spriteWidth = 0.0f;  // Width of one sprite
 };
 
 struct BackgroundTag {
-    int layer = 0;                 // Render layer (-10 = far background)
+    int layer = 0;  // Render layer (-10 = far background)
 };
 
-#endif // ENG_ENGINE_COMPONENTS_SCROLLINGBACKGROUND_HPP
+#endif  // ENG_ENGINE_COMPONENTS_SCROLLINGBACKGROUND_HPP

@@ -1,9 +1,7 @@
 #pragma once
 
-#include <network/Packet.hpp>
 #include <array>
-
-
+#include <network/Packet.hpp>
 
 struct CreateRoomPayload {
     std::string name;
@@ -16,7 +14,7 @@ struct CreateRoomPayload {
         return serializer.getBuffer();
     }
 
-    static CreateRoomPayload deserialize(std::vector<char> data) { // Pass by value or const ref
+    static CreateRoomPayload deserialize(std::vector<char> data) {  // Pass by value or const ref
         Network::Deserializer deserializer(data);
         CreateRoomPayload payload;
         payload.name = deserializer.readString();
@@ -82,15 +80,15 @@ struct RoomInfo {
         serializer.write(maxPlayers);
         return serializer.getBuffer();
     }
-   
-   static RoomInfo deserialize(Network::Deserializer& deserializer) {
-       RoomInfo info;
-       info.id = deserializer.read<uint32_t>();
-       info.name = deserializer.readString();
-       info.currentPlayers = deserializer.read<uint8_t>();
-       info.maxPlayers = deserializer.read<uint8_t>();
-       return info;
-   }
+
+    static RoomInfo deserialize(Network::Deserializer& deserializer) {
+        RoomInfo info;
+        info.id = deserializer.read<uint32_t>();
+        info.name = deserializer.readString();
+        info.currentPlayers = deserializer.read<uint8_t>();
+        info.maxPlayers = deserializer.read<uint8_t>();
+        return info;
+    }
 };
 
 struct RoomListPayload {
@@ -99,22 +97,22 @@ struct RoomListPayload {
     std::vector<char> serialize() const {
         Network::Serializer serializer;
         serializer.write(static_cast<uint32_t>(rooms.size()));
-        for(const auto& room : rooms) {
+        for (const auto& room : rooms) {
             auto buf = room.serialize();
             serializer.writeBytes(buf.data(), buf.size());
         }
         return serializer.getBuffer();
     }
-    
+
     static RoomListPayload deserialize(const std::vector<char>& data) {
-         Network::Deserializer deserializer(data);
-         RoomListPayload payload;
-         uint32_t count = deserializer.read<uint32_t>();
-         for(uint32_t i=0; i<count; ++i) {
-             payload.rooms.push_back(RoomInfo::deserialize(deserializer));
-         }
-         return payload;
-     }
+        Network::Deserializer deserializer(data);
+        RoomListPayload payload;
+        uint32_t count = deserializer.read<uint32_t>();
+        for (uint32_t i = 0; i < count; ++i) {
+            payload.rooms.push_back(RoomInfo::deserialize(deserializer));
+        }
+        return payload;
+    }
 };
 
 struct RenameRoomPayload {
@@ -143,7 +141,7 @@ struct PlayerInRoomInfo {
     std::string playerName;
     bool isHost;
     bool isReady;
-    
+
     std::vector<char> serialize() const {
         Network::Serializer serializer;
         serializer.write(playerId);
@@ -152,7 +150,7 @@ struct PlayerInRoomInfo {
         serializer.write(isReady);
         return serializer.getBuffer();
     }
-    
+
     static PlayerInRoomInfo deserialize(Network::Deserializer& deserializer) {
         PlayerInRoomInfo info;
         info.playerId = deserializer.read<uint32_t>();
@@ -167,7 +165,7 @@ struct PlayerInRoomInfo {
 struct RoomPlayersPayload {
     uint32_t roomId;
     std::vector<PlayerInRoomInfo> players;
-    
+
     std::vector<char> serialize() const {
         Network::Serializer serializer;
         serializer.write(roomId);
@@ -178,7 +176,7 @@ struct RoomPlayersPayload {
         }
         return serializer.getBuffer();
     }
-    
+
     static RoomPlayersPayload deserialize(const std::vector<char>& data) {
         Network::Deserializer deserializer(data);
         RoomPlayersPayload payload;
@@ -197,7 +195,7 @@ struct ChatMessagePayload {
     std::string senderName;
     std::string message;
     uint32_t roomId;
-    
+
     std::vector<char> serialize() const {
         Network::Serializer serializer;
         serializer.write(senderId);
@@ -206,7 +204,7 @@ struct ChatMessagePayload {
         serializer.write(roomId);
         return serializer.getBuffer();
     }
-    
+
     static ChatMessagePayload deserialize(const std::vector<char>& data) {
         Network::Deserializer deserializer(data);
         ChatMessagePayload payload;
@@ -217,7 +215,6 @@ struct ChatMessagePayload {
         return payload;
     }
 };
-
 
 enum class GamePacketType : uint16_t {
     CLIENT_HELLO = 0x01,
@@ -261,7 +258,7 @@ enum class EntityType : uint8_t {
 struct ClientInput {
     uint8_t playerId;
     uint8_t inputMask;
-    uint8_t chargeLevel; // 0 = normal shot, 1-5 = charge levels
+    uint8_t chargeLevel;  // 0 = normal shot, 1-5 = charge levels
 
     ClientInput() : playerId(0), inputMask(0), chargeLevel(0) {}
 
@@ -290,8 +287,8 @@ struct SnapshotHeader {
     }
 
     static SnapshotHeader deserialize(const char* data) {
-         Network::Deserializer deserializer(data, sizeof(SnapshotHeader));
-         return deserializer.read<SnapshotHeader>();
+        Network::Deserializer deserializer(data, sizeof(SnapshotHeader));
+        return deserializer.read<SnapshotHeader>();
     }
 };
 
@@ -301,19 +298,20 @@ struct EntityState {
     EntityType type;
     int16_t x;  // Quantized position (pixel coordinates)
     int16_t y;
-    int16_t vx; // Quantized velocity
+    int16_t vx;  // Quantized velocity
     int16_t vy;
     uint8_t hp;
-    uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
-    uint8_t playerId; // Player ID for player-associated entities (0 = none)
-    
-    // Extended fields for variety
-    uint8_t chargeLevel;    // For missiles (0 = normal, 1-5 = charge levels)
-    uint8_t enemyType;      // For enemies (0 = basic, 1 = zigzag, etc.)
-    uint8_t projectileType; // For projectiles (0 = normal, 1 = charged, etc.)
+    uint8_t playerLine;  // Pour la couleur du vaisseau (ligne dans la spritesheet)
+    uint8_t playerId;    // Player ID for player-associated entities (0 = none)
 
-    EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0), y(0), vx(0), vy(0), hp(0), playerLine(0), 
-                    playerId(0), chargeLevel(0), enemyType(0), projectileType(0) {}
+    // Extended fields for variety
+    uint8_t chargeLevel;     // For missiles (0 = normal, 1-5 = charge levels)
+    uint8_t enemyType;       // For enemies (0 = basic, 1 = zigzag, etc.)
+    uint8_t projectileType;  // For projectiles (0 = normal, 1 = charged, etc.)
+
+    EntityState()
+        : id(0), type(EntityType::ENTITY_PLAYER), x(0), y(0), vx(0), vy(0), hp(0), playerLine(0),
+          playerId(0), chargeLevel(0), enemyType(0), projectileType(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -330,7 +328,6 @@ struct EntityState {
 #pragma pack(pop)
 
 struct RTypeProtocol {
-    
     static NetworkPacket createClientInputPacket(const ClientInput& input) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::CLIENT_INPUT));
         packet.setPayload(input.serialize());
@@ -339,13 +336,14 @@ struct RTypeProtocol {
 
     static ClientInput getClientInput(const NetworkPacket& packet) {
         if (packet.header.type != static_cast<uint16_t>(GamePacketType::CLIENT_INPUT)) {
-             throw std::runtime_error("Invalid packet type for CLIENT_INPUT");
+            throw std::runtime_error("Invalid packet type for CLIENT_INPUT");
         }
         Network::Deserializer deserializer(packet.payload);
         return deserializer.read<ClientInput>();
     }
 
-    static NetworkPacket createWorldSnapshotPacket(const SnapshotHeader& snapHeader, const std::vector<EntityState>& entities) {
+    static NetworkPacket createWorldSnapshotPacket(const SnapshotHeader& snapHeader,
+                                                   const std::vector<EntityState>& entities) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
         Network::Serializer serializer;
         serializer.write(snapHeader);
@@ -356,16 +354,17 @@ struct RTypeProtocol {
         return packet;
     }
 
-    static std::pair<SnapshotHeader, std::vector<EntityState>> getWorldSnapshot(const NetworkPacket& packet) {
+    static std::pair<SnapshotHeader, std::vector<EntityState>> getWorldSnapshot(
+        const NetworkPacket& packet) {
         if (packet.header.type != static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT)) {
             throw std::runtime_error("Invalid packet type for WORLD_SNAPSHOT");
         }
-        
+
         Network::Deserializer deserializer(packet.payload);
         SnapshotHeader snapHeader = deserializer.read<SnapshotHeader>();
         std::vector<EntityState> entities;
         entities.reserve(snapHeader.entityCount);
-        
+
         for (uint32_t i = 0; i < snapHeader.entityCount; ++i) {
             entities.push_back(deserializer.read<EntityState>());
         }

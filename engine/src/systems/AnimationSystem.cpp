@@ -1,29 +1,22 @@
-#include <systems/AnimationSystem.hpp>
 #include <components/Animation.hpp>
 #include <components/Sprite.hpp>
 #include <ecs/Coordinator.hpp>
 #include <rendering/Types.hpp>
+#include <systems/AnimationSystem.hpp>
 
-AnimationSystem::AnimationSystem()
-    : coordinator_(nullptr)
-{
-}
+AnimationSystem::AnimationSystem() : coordinator_(nullptr) {}
 
-void AnimationSystem::Init()
-{
-}
+void AnimationSystem::Init() {}
 
-void AnimationSystem::Shutdown()
-{
-}
+void AnimationSystem::Shutdown() {}
 
-void AnimationSystem::Update(float dt)
-{
-    if (!coordinator_) return;
+void AnimationSystem::Update(float dt) {
+    if (!coordinator_)
+        return;
 
     // Update basic frame-based animations
     for (auto entity : mEntities) {
-        if (!coordinator_->HasComponent<Animation>(entity) || 
+        if (!coordinator_->HasComponent<Animation>(entity) ||
             !coordinator_->HasComponent<Sprite>(entity))
             continue;
 
@@ -62,7 +55,8 @@ void AnimationSystem::Update(float dt)
             }
 
             // Update sprite texture rect
-            sprite.textureRect.left = anim.startX + (anim.currentFrame * (anim.frameWidth + anim.spacing));
+            sprite.textureRect.left =
+                anim.startX + (anim.currentFrame * (anim.frameWidth + anim.spacing));
             sprite.textureRect.top = anim.startY;
             sprite.textureRect.width = anim.frameWidth;
             sprite.textureRect.height = anim.frameHeight;

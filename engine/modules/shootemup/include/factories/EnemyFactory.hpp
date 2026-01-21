@@ -1,22 +1,22 @@
 #ifndef ENEMY_FACTORY_HPP
 #define ENEMY_FACTORY_HPP
 
-#include <ecs/Coordinator.hpp>
-#include <rendering/sfml/SFMLTexture.hpp>
-#include <rendering/sfml/SFMLSprite.hpp>
-#include <components/Position.hpp>
-#include <components/Velocity.hpp>
-#include <components/Sprite.hpp>
 #include <components/Animation.hpp>
 #include <components/Collider.hpp>
 #include <components/Health.hpp>
-#include <components/Tag.hpp>
 #include <components/MovementPattern.hpp>
+#include <components/Position.hpp>
 #include <components/ShootEmUpTags.hpp>
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include <components/Sprite.hpp>
+#include <components/Tag.hpp>
+#include <components/Velocity.hpp>
+#include <ecs/Coordinator.hpp>
+#include <rendering/sfml/SFMLSprite.hpp>
+#include <rendering/sfml/SFMLTexture.hpp>
 #include <sol/sol.hpp>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 using namespace eng::engine::rendering::sfml;
 
@@ -30,95 +30,64 @@ public:
     /**
      * @brief Crée un ennemi BASIC - Simple mouvement horizontal
      */
-    static ECS::Entity CreateBasicEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateBasicEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                        SFMLTexture* texture, std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un ennemi ZIGZAG - Mouvement en zigzag
      */
-    static ECS::Entity CreateZigZagEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateZigZagEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                         SFMLTexture* texture,
+                                         std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un ennemi SINE_WAVE - Mouvement sinusoïdal
      */
-    static ECS::Entity CreateSineWaveEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateSineWaveEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                           SFMLTexture* texture,
+                                           std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un ennemi KAMIKAZE - Fonce vers le joueur
      */
-    static ECS::Entity CreateKamikazeEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateKamikazeEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                           SFMLTexture* texture,
+                                           std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée une TURRET - Statique qui tire
      */
-    static ECS::Entity CreateTurretEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateTurretEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                         SFMLTexture* texture,
+                                         std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un BOSS - Ennemi puissant avec patterns complexes
      */
-    static ECS::Entity CreateBossEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateBossEnemy(ECS::Coordinator& coordinator, float x, float y,
+                                       SFMLTexture* texture, std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un ennemi générique selon le type (string-based)
      * @param enemyType Type d'ennemi défini en Lua (ex: "basic", "zigzag", "boss")
      */
-    static ECS::Entity CreateEnemy(
-        ECS::Coordinator& coordinator,
-        const std::string& enemyType,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static ECS::Entity CreateEnemy(ECS::Coordinator& coordinator, const std::string& enemyType,
+                                   float x, float y, SFMLTexture* texture,
+                                   std::vector<SFMLSprite*>& spriteList);
 
     /**
      * @brief Crée un ennemi à partir d'une configuration Lua (table)
      */
     static ECS::Entity CreateEnemyFromLuaConfig(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        sol::table config,
+        ECS::Coordinator& coordinator, float x, float y, sol::table config,
         std::unordered_map<std::string, eng::engine::rendering::sfml::SFMLTexture*>& textures,
-        std::vector<eng::engine::rendering::sfml::SFMLSprite*>& spriteList
-    );
+        std::vector<eng::engine::rendering::sfml::SFMLSprite*>& spriteList);
 
 private:
     // Helper pour créer le sprite de base
-    static SFMLSprite* CreateEnemySprite(
-        float x, float y,
-        SFMLTexture* texture,
-        int spriteX, int spriteY,
-        int spriteWidth, int spriteHeight,
-        std::vector<SFMLSprite*>& spriteList
-    );
+    static SFMLSprite* CreateEnemySprite(float x, float y, SFMLTexture* texture, int spriteX,
+                                         int spriteY, int spriteWidth, int spriteHeight,
+                                         std::vector<SFMLSprite*>& spriteList);
 };
 
-#endif // ENEMY_FACTORY_HPP
+#endif  // ENEMY_FACTORY_HPP

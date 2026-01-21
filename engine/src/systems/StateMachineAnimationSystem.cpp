@@ -1,21 +1,22 @@
 #include "systems/StateMachineAnimationSystem.hpp"
+
 #include <components/Position.hpp>
 #include <iostream>
 
 StateMachineAnimationSystem::StateMachineAnimationSystem(ECS::Coordinator* coordinator)
-    : m_Coordinator(coordinator) {
-}
+    : m_Coordinator(coordinator) {}
 
 void StateMachineAnimationSystem::Init() {
     std::cout << "[StateMachineAnimationSystem] Initialized" << std::endl;
 }
 
 void StateMachineAnimationSystem::Update(float dt) {
-    if (!m_Coordinator) return;
+    if (!m_Coordinator)
+        return;
 
     // Update state machine animations
     for (auto entity : mEntities) {
-        if (!m_Coordinator->HasComponent<StateMachineAnimation>(entity) || 
+        if (!m_Coordinator->HasComponent<StateMachineAnimation>(entity) ||
             !m_Coordinator->HasComponent<Sprite>(entity))
             continue;
 
@@ -26,11 +27,10 @@ void StateMachineAnimationSystem::Update(float dt) {
         anim.transitionTime += dt;
 
         // Perform column transition
-        if (anim.currentColumn != anim.targetColumn && 
+        if (anim.currentColumn != anim.targetColumn &&
             anim.transitionTime >= anim.transitionSpeed) {
-            
             anim.transitionTime = 0.0f;
-            
+
             if (anim.currentColumn < anim.targetColumn) {
                 anim.currentColumn++;
             } else if (anim.currentColumn > anim.targetColumn) {
@@ -43,7 +43,7 @@ void StateMachineAnimationSystem::Update(float dt) {
             rect.top = anim.spriteHeight * anim.currentRow;
             rect.width = anim.spriteWidth;
             rect.height = anim.spriteHeight;
-            
+
             sprite.textureRect = rect;
 
             // Apply to native sprite if exists
@@ -60,19 +60,19 @@ void StateMachineAnimationSystem::Shutdown() {
 
 // C API implementation
 extern "C" {
-    ECS::System* CreateSystem(ECS::Coordinator* coordinator) {
-        return new StateMachineAnimationSystem(coordinator);
-    }
-    
-    void DestroySystem(ECS::System* system) {
-        delete system;
-    }
-    
-    const char* GetSystemName() {
-        return "StateMachineAnimationSystem";
-    }
-    
-    uint32_t GetSystemVersion() {
-        return 1;
-    }
+ECS::System* CreateSystem(ECS::Coordinator* coordinator) {
+    return new StateMachineAnimationSystem(coordinator);
+}
+
+void DestroySystem(ECS::System* system) {
+    delete system;
+}
+
+const char* GetSystemName() {
+    return "StateMachineAnimationSystem";
+}
+
+uint32_t GetSystemVersion() {
+    return 1;
+}
 }

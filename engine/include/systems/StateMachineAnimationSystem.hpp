@@ -1,14 +1,14 @@
 #pragma once
 
-#include <core/Export.hpp>
-#include <ecs/System.hpp>
-#include <ecs/Coordinator.hpp>
 #include <components/Animation.hpp>
 #include <components/Sprite.hpp>
+#include <core/Export.hpp>
+#include <ecs/Coordinator.hpp>
+#include <ecs/System.hpp>
 
 /**
  * @brief StateMachineAnimationSystem - Handles state-based animations for player ships
- * 
+ *
  * This system manages animations that transition between states (columns in spritesheet)
  * Used for player ships that tilt up/down/neutral
  */
@@ -30,8 +30,8 @@ private:
 
 // C API for dynamic loading
 extern "C" {
-    ECS::System* CreateSystem(ECS::Coordinator* coordinator);
-    void DestroySystem(ECS::System* system);
-    const char* GetSystemName();
-    uint32_t GetSystemVersion();
+ECS::System* CreateSystem(ECS::Coordinator* coordinator);
+void DestroySystem(ECS::System* system);
+const char* GetSystemName();
+uint32_t GetSystemVersion();
 }

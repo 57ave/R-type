@@ -1,24 +1,24 @@
-#include <scripting/PrefabManager.hpp>
 #include <ecs/Components.hpp>
 #include <iostream>
+#include <scripting/PrefabManager.hpp>
 
 namespace Scripting {
 
 // Use ECS namespace for GENERIC components only
+using eng::engine::ECS::Collider;
+using eng::engine::ECS::Damage;
+using eng::engine::ECS::Health;
+using eng::engine::ECS::Sprite;
+using eng::engine::ECS::Tag;
 using eng::engine::ECS::Transform;
 using eng::engine::ECS::Velocity;
-using eng::engine::ECS::Sprite;
-using eng::engine::ECS::Health;
-using eng::engine::ECS::Damage;
-using eng::engine::ECS::Collider;
-using eng::engine::ECS::Tag;
 
 // NOTE: PrefabManager currently only supports generic engine components.
 // Game-specific components (Player, Enemy, etc.) should be handled in game code.
 
 bool PrefabManager::LoadPrefab(const std::string& name, const std::string& scriptPath) {
     auto& lua = LuaState::Instance().GetState();
-    
+
     if (!LuaState::Instance().LoadScript(scriptPath)) {
         return false;
     }
@@ -26,7 +26,8 @@ bool PrefabManager::LoadPrefab(const std::string& name, const std::string& scrip
     // Expect script to return a table
     sol::optional<sol::table> prefabTable = lua["prefab"];
     if (!prefabTable) {
-        std::cerr << "[PrefabManager] Script must return 'prefab' table: " << scriptPath << std::endl;
+        std::cerr << "[PrefabManager] Script must return 'prefab' table: " << scriptPath
+                  << std::endl;
         return false;
     }
 
@@ -47,11 +48,11 @@ ECS::Entity PrefabManager::CreateEntity(const std::string& prefabName, sol::tabl
     }
 
     ECS::Entity entity = mCoordinator->CreateEntity();
-    
+
     // Apply components from prefab
     sol::table prefab = it->second;
     sol::optional<sol::table> components = prefab["components"];
-    
+
     if (components) {
         ApplyComponentsFromTable(entity, components.value());
     }
@@ -137,4 +138,4 @@ void PrefabManager::ApplyComponentsFromTable(ECS::Entity entity, sol::table comp
     // are not handled here. Extend this in your game code if needed.
 }
 
-} // namespace Scripting
+}  // namespace Scripting

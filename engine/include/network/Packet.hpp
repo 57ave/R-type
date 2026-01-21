@@ -1,10 +1,11 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 #include <cstring>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
+#include <vector>
+
 #include "Serializer.hpp"
 
 #ifdef _WIN32
@@ -18,15 +19,13 @@
 
 struct PacketHeader {
     uint16_t magic;      // 0x5254 ('RT')
-    uint8_t  version;    // Protocol version
-    uint8_t  flags;      // Flags (1 = Compressed)
+    uint8_t version;     // Protocol version
+    uint8_t flags;       // Flags (1 = Compressed)
     uint16_t type;       // Packet type
     uint32_t seq;        // Sequence number
     uint32_t timestamp;  // Timestamp in ms
 
     PacketHeader() : magic(0x5254), version(1), flags(0), type(0), seq(0), timestamp(0) {}
-
-
 
     // Serialize to buffer
     std::vector<char> serialize() const {
@@ -50,9 +49,7 @@ public:
     PacketHeader header;
     std::vector<char> payload;
 
-    NetworkPacket(uint16_t type = 0) {
-        header.type = type;
-    }
+    NetworkPacket(uint16_t type = 0) { header.type = type; }
 
     // Serialize full packet (header + payload)
     std::vector<char> serialize() const {
@@ -70,10 +67,10 @@ public:
             throw std::runtime_error("Packet too short");
         }
         Network::Deserializer deserializer(data, size);
-        
+
         NetworkPacket packet;
         packet.header = deserializer.read<PacketHeader>();
-        
+
         // Remaining bytes are payload
         size_t payloadSize = size - sizeof(PacketHeader);
         if (payloadSize > 0) {
@@ -81,8 +78,6 @@ public:
         }
         return packet;
     }
-    
-    void setPayload(const std::vector<char>& newPayload) {
-        payload = newPayload;
-    }
+
+    void setPayload(const std::vector<char>& newPayload) { payload = newPayload; }
 };

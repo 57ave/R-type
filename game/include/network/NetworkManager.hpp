@@ -1,10 +1,10 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
-#include <functional>
 #include <vector>
-#include <cstdint>
 
 class NetworkClient;
 struct NetworkPacket;
@@ -17,9 +17,12 @@ class NetworkManager {
 public:
     // Callback types
     using RoomListCallback = std::function<void(const std::vector<RoomInfo>&)>;
-    using RoomCreatedCallback = std::function<void(uint32_t roomId, bool success, const std::string& errorMsg)>;
-    using RoomJoinedCallback = std::function<void(uint32_t roomId, bool success, const std::string& errorMsg)>;
-    using ChatMessageCallback = std::function<void(const std::string& sender, const std::string& message)>;
+    using RoomCreatedCallback =
+        std::function<void(uint32_t roomId, bool success, const std::string& errorMsg)>;
+    using RoomJoinedCallback =
+        std::function<void(uint32_t roomId, bool success, const std::string& errorMsg)>;
+    using ChatMessageCallback =
+        std::function<void(const std::string& sender, const std::string& message)>;
     using PlayerReadyCallback = std::function<void(uint32_t playerId, bool ready)>;
     using GameStartCallback = std::function<void()>;
 
@@ -33,7 +36,8 @@ public:
 
     // Room management
     void requestRoomList();
-    void createRoom(const std::string& name, uint8_t maxPlayers, uint8_t difficulty = 1, const std::string& password = "");
+    void createRoom(const std::string& name, uint8_t maxPlayers, uint8_t difficulty = 1,
+                    const std::string& password = "");
     void joinRoom(uint32_t roomId, const std::string& password = "");
     void leaveRoom();
     void setReady(bool ready);
@@ -78,5 +82,5 @@ private:
     GameStartCallback onGameStart_;
 };
 
-} // namespace Game
-} // namespace RType
+}  // namespace Game
+}  // namespace RType

@@ -7,15 +7,14 @@
 
 #include "core/EventBus.hpp"
 
-template<typename T>
+template <typename T>
 void eng::core::EventBus::subscribe(std::function<void(const T&)> callback) {
     auto& subscribers = _subscribers[typeid(T)];
-    subscribers.push_back([callback](const void* event) {
-        callback(*static_cast<const T*>(event));
-    });
+    subscribers.push_back(
+        [callback](const void* event) { callback(*static_cast<const T*>(event)); });
 }
 
-template<typename T>
+template <typename T>
 void eng::core::EventBus::publish(const T& event) {
     auto it = _subscribers.find(typeid(T));
     if (it != _subscribers.end()) {

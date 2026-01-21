@@ -1,12 +1,13 @@
 #pragma once
 
 #include <asio.hpp>
-#include <queue>
-#include <mutex>
-#include <thread>
 #include <chrono>
-#include "UdpClient.hpp"
+#include <mutex>
+#include <queue>
+#include <thread>
+
 #include "Packet.hpp"
+#include "UdpClient.hpp"
 // Removed: "GameProtocol.hpp" - Engine should not depend on game-specific protocol
 // Game-specific methods (sendInput, etc.) should be in a game wrapper class
 
@@ -40,14 +41,14 @@ private:
     asio::io_context io_context_;
     std::thread io_thread_;
     UdpClient client_;
-    
+
     std::queue<NetworkPacket> receivedPackets_;
     std::mutex packetsMutex_;
-    
+
     uint32_t sequenceNumber_;
     uint8_t playerId_;
     bool connected_;
-    
+
     std::chrono::steady_clock::time_point lastInputSent_;
     std::chrono::steady_clock::time_point lastPingSent_;
 };

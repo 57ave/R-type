@@ -1,13 +1,14 @@
 #pragma once
 
 #include <asio.hpp>
-#include <vector>
+#include <iostream>
 #include <map>
 #include <mutex>
-#include <iostream>
 #include <queue>
-#include "Packet.hpp"
+#include <vector>
+
 #include "ClientSession.hpp"
+#include "Packet.hpp"
 // Removed: "GameProtocol.hpp" - Engine should not depend on game-specific protocol
 
 using asio::ip::udp;
@@ -32,7 +33,7 @@ public:
 
     // Check for timeouts and remove inactive clients
     void checkTimeouts();
-    
+
     std::shared_ptr<ClientSession> getSession(const udp::endpoint& endpoint);
     bool removeSession(const udp::endpoint& endpoint);
     std::vector<ClientSession> getActiveSessions() const;
@@ -40,7 +41,7 @@ public:
 private:
     void startReceive();
     void handleReceive(const std::error_code& error, std::size_t bytes_transferred);
-    
+
     // Internal helper to get or create session
     void handleClientSession(const udp::endpoint& sender, const NetworkPacket& packet);
 
@@ -50,7 +51,7 @@ private:
     std::array<char, 65536> recvBuffer_;
 
     // Client management
-    std::map<std::string, std::shared_ptr<ClientSession>> sessions_; // Key: "IP:Port"
+    std::map<std::string, std::shared_ptr<ClientSession>> sessions_;  // Key: "IP:Port"
     mutable std::mutex sessionsMutex_;  // mutable to allow const methods to lock
     uint8_t nextPlayerId_ = 1;
 

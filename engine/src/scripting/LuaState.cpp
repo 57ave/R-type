@@ -1,28 +1,21 @@
-#include <scripting/LuaState.hpp>
 #include <iostream>
+#include <scripting/LuaState.hpp>
 
 namespace Scripting {
 
-LuaState::LuaState() {
-}
+LuaState::LuaState() {}
 
 void LuaState::Init() {
-    mLua.open_libraries(
-        sol::lib::base,
-        sol::lib::math,
-        sol::lib::string,
-        sol::lib::table,
-        sol::lib::package,
-        sol::lib::os
-    );
+    mLua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table,
+                        sol::lib::package, sol::lib::os);
 
     // Set default error handler
     mErrorCallback = [](const std::string& error) {
         std::cerr << "[Lua Error] " << error << std::endl;
     };
 
-    std::cout << "[LuaState] Initialized (Lua " << LUA_VERSION_MAJOR << "." 
-              << LUA_VERSION_MINOR << ")" << std::endl;
+    std::cout << "[LuaState] Initialized (Lua " << LUA_VERSION_MAJOR << "." << LUA_VERSION_MINOR
+              << ")" << std::endl;
 }
 
 void LuaState::Shutdown() {
@@ -33,7 +26,7 @@ void LuaState::Shutdown() {
 bool LuaState::LoadScript(const std::string& path) {
     try {
         namespace fs = std::filesystem;
-        
+
         if (!fs::exists(path)) {
             if (mErrorCallback) {
                 mErrorCallback("Script file not found: " + path);
@@ -42,7 +35,7 @@ bool LuaState::LoadScript(const std::string& path) {
         }
 
         auto result = mLua.safe_script_file(path);
-        
+
         if (!result.valid()) {
             sol::error err = result;
             HandleError(err);
@@ -78,13 +71,15 @@ void LuaState::ReloadAllScripts() {
 }
 
 void LuaState::CheckForChanges() {
-    if (!mHotReloadEnabled) return;
+    if (!mHotReloadEnabled)
+        return;
 
     namespace fs = std::filesystem;
-    
+
     for (auto& [path, info] : mLoadedScripts) {
         try {
-            if (!fs::exists(info.path)) continue;
+            if (!fs::exists(info.path))
+                continue;
 
             auto currentModified = fs::last_write_time(info.path);
             if (currentModified > info.lastModified) {
@@ -106,4 +101,4 @@ void LuaState::HandleError(const sol::error& err) {
     }
 }
 
-} // namespace Scripting
+}  // namespace Scripting

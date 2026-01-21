@@ -1,35 +1,32 @@
 #include <rendering/sfml/SFMLSprite.hpp>
 
-namespace eng
-{
-    namespace engine
-    {
-        namespace rendering
-        {
-            namespace sfml
-            {
+namespace eng {
+namespace engine {
+namespace rendering {
+namespace sfml {
 
-                void SFMLSprite::setTexture(ITexture *texture)
-                {
-                    if (!texture)
-                        return;
+SFMLSprite::SFMLSprite() : currentTexture_(nullptr) {}
 
-                    currentTexture_ = dynamic_cast<SFMLTexture *>(texture);
-                    if (currentTexture_)
-                        sprite_.setTexture(currentTexture_->getNativeTexture());
-                }
+SFMLSprite::~SFMLSprite() = default;
 
-                void SFMLSprite::setPosition(Vector2f position)
-                {
-                    sprite_.setPosition(position.x, position.y);
-                }
+void SFMLSprite::setTexture(ITexture* texture) {
+    if (!texture)
+        return;
 
-                void SFMLSprite::setTextureRect(IntRect rect)
-                {
-                    sprite_.setTextureRect(sf::IntRect(rect.left, rect.top, rect.width, rect.height));
-                }
-
-            }
-        }
-    }
+    currentTexture_ = dynamic_cast<SFMLTexture*>(texture);
+    if (currentTexture_)
+        sprite_.setTexture(currentTexture_->getNativeTexture());
 }
+
+void SFMLSprite::setPosition(Vector2f position) {
+    sprite_.setPosition(position.x, position.y);
+}
+
+void SFMLSprite::setTextureRect(IntRect rect) {
+    sprite_.setTextureRect(sf::IntRect(rect.left, rect.top, rect.width, rect.height));
+}
+
+}  // namespace sfml
+}  // namespace rendering
+}  // namespace engine
+}  // namespace eng

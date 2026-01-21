@@ -4,16 +4,16 @@
 #include "engine/Input.hpp"
 
 namespace eng {
-    namespace engine {
+namespace engine {
 
-        // Keyboard input helper class
-        class Keyboard {
-        public:
-            // Check if a key is currently pressed
-            static bool isKeyPressed(Key key);
-        };
+// Keyboard input helper class
+class Keyboard {
+public:
+    // Check if a key is currently pressed
+    static bool isKeyPressed(Key key);
+};
 
-    } // namespace engine
-} // namespace eng
+}  // namespace engine
+}  // namespace eng
 
-#endif // ENG_ENGINE_KEYBOARD_HPP
+#endif  // ENG_ENGINE_KEYBOARD_HPP

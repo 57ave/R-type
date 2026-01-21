@@ -1,13 +1,12 @@
 #include "../../include/network/UdpServer.hpp"
+
 #include <iostream>
 #include <sstream>
 
 UdpServer::UdpServer(asio::io_context& io_context, short port)
-    : socket_(io_context, udp::endpoint(udp::v4(), port)) {
-}
+    : socket_(io_context, udp::endpoint(udp::v4(), port)) {}
 
-UdpServer::~UdpServer() {
-}
+UdpServer::~UdpServer() {}
 
 void UdpServer::start() {
     startReceive();
@@ -15,17 +14,17 @@ void UdpServer::start() {
 }
 
 void UdpServer::startReceive() {
-    socket_.async_receive_from(
-        asio::buffer(recvBuffer_), receiverEndpoint_,
-        [this](const std::error_code& error, std::size_t bytes_transferred) {
-            handleReceive(error, bytes_transferred);
-        });
+    socket_.async_receive_from(asio::buffer(recvBuffer_), receiverEndpoint_,
+                               [this](const std::error_code& error, std::size_t bytes_transferred) {
+                                   handleReceive(error, bytes_transferred);
+                               });
 }
 
 void UdpServer::handleReceive(const std::error_code& error, std::size_t bytes_transferred) {
     if (!error) {
         try {
-            NetworkPacket packet = NetworkPacket::deserialize(recvBuffer_.data(), bytes_transferred);
+            NetworkPacket packet =
+                NetworkPacket::deserialize(recvBuffer_.data(), bytes_transferred);
 
             if (packet.header.magic != 0x5254 || packet.header.version != 1) {
                 // Invalid packet, ignore
@@ -59,16 +58,17 @@ void UdpServer::handleClientSession(const udp::endpoint& sender, const NetworkPa
         // New Client
         // Only accept if it's a CLIENT_HELLO (strict mode) or just accept implicitely (loose mode)
         // For robustness, usually we wait for HELLO, but for now we auto-add.
-        
-        std::cout << "[Server] New session: " << key << " (ID: " << (int)nextPlayerId_ << ")" << std::endl;
+
+        std::cout << "[Server] New session: " << key << " (ID: " << (int)nextPlayerId_ << ")"
+                  << std::endl;
         auto session = std::make_shared<ClientSession>(sender, nextPlayerId_++);
         sessions_[key] = session;
-        
+
         // Auto-reply Welcome could go here or in main loop
     } else {
         // Existing Client: Update Keep Alive
         it->second->updateLastPacketTime();
-        
+
         // Simple Seq check (can be advanced to drop duplicates)
         if (packet.header.seq > it->second->lastSequenceNumber) {
             it->second->lastSequenceNumber = packet.header.seq;
@@ -91,26 +91,26 @@ bool UdpServer::popPacket(NetworkPacket& outPacket, udp::endpoint& outSender) {
 void UdpServer::sendTo(const NetworkPacket& packet, const udp::endpoint& endpoint) {
     auto buffer = packet.serialize();
     socket_.async_send_to(asio::buffer(buffer), endpoint,
-        [](const std::error_code& /*error*/, std::size_t /*bytes_transferred*/) {
+                          [](const std::error_code& /*error*/, std::size_t /*bytes_transferred*/) {
 
-        });
+                          });
 }
 
 void UdpServer::broadcast(const NetworkPacket& packet) {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
     auto buffer = packet.serialize();
-    
+
     for (const auto& pair : sessions_) {
         if (pair.second->isConnected) {
             socket_.async_send_to(asio::buffer(buffer), pair.second->endpoint,
-                [](const std::error_code&, std::size_t) {});
+                                  [](const std::error_code&, std::size_t) {});
         }
     }
 }
 
 void UdpServer::checkTimeouts() {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
-    
+
     // timeout threshold (e.g., 5 seconds)
     auto timeout = std::chrono::seconds(5);
 
@@ -151,12 +151,12 @@ std::vector<ClientSession> UdpServer::getActiveSessions() const {
     std::lock_guard<std::mutex> lock(sessionsMutex_);
     std::vector<ClientSession> result;
     result.reserve(sessions_.size());
-    
+
     for (const auto& pair : sessions_) {
         if (pair.second && pair.second->isConnected) {
             result.push_back(*pair.second);
         }
     }
-    
+
     return result;
 }

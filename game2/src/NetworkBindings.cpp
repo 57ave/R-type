@@ -1,6 +1,7 @@
 #include "NetworkBindings.hpp"
-#include <scripting/LuaState.hpp>
+
 #include <iostream>
+#include <scripting/LuaState.hpp>
 
 namespace FlappyBird {
 
@@ -8,20 +9,20 @@ namespace FlappyBird {
 // MUST MATCH SimpleProtocol.hpp on server side!
 enum class FlappyPacketType : uint16_t {
     // Connection (used by NetworkClient auto-send)
-    CLIENT_HELLO    = 0x01,
-    SERVER_WELCOME  = 0x02,
-    CLIENT_PING     = 0x03,
-    
+    CLIENT_HELLO = 0x01,
+    SERVER_WELCOME = 0x02,
+    CLIENT_PING = 0x03,
+
     // Game Control
-    GAME_START      = 0x10,
+    GAME_START = 0x10,
     START_COUNTDOWN = 0x11,
-    GAME_OVER       = 0x12,
-    
+    GAME_OVER = 0x12,
+
     // Gameplay
-    PLAYER_INPUT    = 0x20,
-    GAME_STATE      = 0x21,
-    SPAWN_PIPE      = 0x22,
-    PLAYER_DIED     = 0x23,
+    PLAYER_INPUT = 0x20,
+    GAME_STATE = 0x21,
+    SPAWN_PIPE = 0x22,
+    PLAYER_DIED = 0x23,
 };
 
 void NetworkBindings::RegisterPacketTypes(sol::state& lua) {
@@ -50,16 +51,18 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
         lua["Network"] = networkTable;
         std::cout << "[NetworkBindings] Created new Network table" << std::endl;
     }
-    
+
     if (!client) {
-        std::cerr << "[NetworkBindings] Warning: NetworkClient is null - only stub functions will be available" << std::endl;
-        
+        std::cerr << "[NetworkBindings] Warning: NetworkClient is null - only stub functions will "
+                     "be available"
+                  << std::endl;
+
         // Stub connect function that returns error
         networkTable["connect"] = [](const std::string& ip, int port) -> bool {
             std::cerr << "[Network] ERROR: NetworkClient not available" << std::endl;
             return false;
         };
-        
+
         return;
     }
 
@@ -84,9 +87,7 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
     };
 
     // Vérifier si connecté
-    networkTable["isConnected"] = [client]() -> bool {
-        return client->isConnected();
-    };
+    networkTable["isConnected"] = [client]() -> bool { return client->isConnected(); };
 
     // Obtenir l'ID du joueur
     networkTable["getPlayerId"] = [client]() -> int {
@@ -102,9 +103,7 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
     };
 
     // Vérifier si des paquets sont disponibles
-    networkTable["hasPackets"] = [client]() -> bool {
-        return client->hasReceivedPackets();
-    };
+    networkTable["hasPackets"] = [client]() -> bool { return client->hasReceivedPackets(); };
 
     // Recevoir le prochain paquet
     networkTable["getNextPacket"] = [client]() -> sol::optional<sol::table> {
@@ -113,20 +112,20 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
         }
 
         NetworkPacket packet = client->getNextReceivedPacket();
-        
+
         // Créer une table Lua pour le paquet
         auto& lua = Scripting::LuaState::Instance().GetState();
         sol::table packetTable = lua.create_table();
         packetTable["type"] = packet.header.type;
         packetTable["size"] = packet.payload.size();
-        
+
         // Copier les données du payload dans un array Lua
         sol::table dataTable = lua.create_table();
         for (size_t i = 0; i < packet.payload.size(); ++i) {
             dataTable[i + 1] = static_cast<uint8_t>(packet.payload[i]);  // Lua arrays start at 1
         }
         packetTable["data"] = dataTable;
-        
+
         return packetTable;
     };
 
@@ -142,14 +141,14 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
             std::cerr << "[NetworkBindings] bytesToFloat requires exactly 4 bytes" << std::endl;
             return 0.0f;
         }
-        
+
         // Extract bytes (Lua tables are 1-indexed)
         uint8_t b[4];
         b[0] = bytes[1];
         b[1] = bytes[2];
         b[2] = bytes[3];
         b[3] = bytes[4];
-        
+
         // Reinterpret as float
         float result;
         std::memcpy(&result, b, sizeof(float));
@@ -159,4 +158,4 @@ void NetworkBindings::RegisterNetworkClient(sol::state& lua, NetworkClient* clie
     std::cout << "[NetworkBindings] NetworkClient bindings registered" << std::endl;
 }
 
-} // namespace FlappyBird
+}  // namespace FlappyBird

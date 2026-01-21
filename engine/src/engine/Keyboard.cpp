@@ -6,18 +6,19 @@
 */
 
 #include "engine/Keyboard.hpp"
+
 #include <SFML/Window/Keyboard.hpp>
 
 namespace eng {
-    namespace engine {
+namespace engine {
 
-        bool Keyboard::isKeyPressed(Key key) {
-            int sfmlKey = internal::engineKeyToSfmlKey(key);
-            if (sfmlKey == -1) {
-                return false;
-            }
-            return sf::Keyboard::isKeyPressed(static_cast<sf::Keyboard::Key>(sfmlKey));
-        }
+bool Keyboard::isKeyPressed(Key key) {
+    int sfmlKey = internal::engineKeyToSfmlKey(key);
+    if (sfmlKey == -1) {
+        return false;
+    }
+    return sf::Keyboard::isKeyPressed(static_cast<sf::Keyboard::Key>(sfmlKey));
+}
 
-    } // namespace engine
-} // namespace eng
+}  // namespace engine
+}  // namespace eng

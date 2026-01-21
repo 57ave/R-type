@@ -1,13 +1,14 @@
 #pragma once
 
 #include <asio.hpp>
-#include <queue>
 #include <mutex>
+#include <queue>
 #include <thread>
 #include <utility>
+
+#include "Packet.hpp"
 #include "RoomManager.hpp"
 #include "UdpServer.hpp"
-#include "Packet.hpp"
 
 class NetworkServer {
 public:
@@ -19,7 +20,7 @@ public:
 
     bool hasReceivedPackets();
     std::pair<NetworkPacket, asio::ip::udp::endpoint> getNextReceivedPacket();
-    
+
     RoomManager& getRoomManager() { return roomManager_; }
 
     void broadcast(const NetworkPacket& packet);

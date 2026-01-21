@@ -3,72 +3,60 @@
 
 namespace ECS {
 
-void Coordinator::Init()
-{
+void Coordinator::Init() {
     // Create pointers to each manager
     mComponentManager = std::make_unique<ComponentManager>();
     mEntityManager = std::make_unique<EntityManager>();
     mSystemManager = std::make_unique<SystemManager>();
 }
 
-void Coordinator::Shutdown()
-{
+void Coordinator::Shutdown() {
     // Shutdown all systems
     mSystemManager->ShutdownAll();
 }
 
-Entity Coordinator::CreateEntity()
-{
+Entity Coordinator::CreateEntity() {
     return mEntityManager->CreateEntity();
 }
 
-void Coordinator::DestroyEntity(Entity entity)
-{
+void Coordinator::DestroyEntity(Entity entity) {
     mEntityManager->DestroyEntity(entity);
     mComponentManager->EntityDestroyed(entity);
     mSystemManager->EntityDestroyed(entity);
 }
 
-Signature Coordinator::GetEntitySignature(Entity entity) const
-{
+Signature Coordinator::GetEntitySignature(Entity entity) const {
     return mEntityManager->GetSignature(entity);
 }
 
-std::uint32_t Coordinator::GetLivingEntityCount() const
-{
+std::uint32_t Coordinator::GetLivingEntityCount() const {
     return mEntityManager->GetLivingEntityCount();
 }
 
-void Coordinator::SetNetworkId(Entity entity, NetworkId networkId)
-{
+void Coordinator::SetNetworkId(Entity entity, NetworkId networkId) {
     mEntityManager->SetNetworkId(entity, networkId);
 }
 
-NetworkId Coordinator::GetNetworkId(Entity entity) const
-{
+NetworkId Coordinator::GetNetworkId(Entity entity) const {
     return mEntityManager->GetNetworkId(entity);
 }
 
-bool Coordinator::HasNetworkId(Entity entity) const
-{
+bool Coordinator::HasNetworkId(Entity entity) const {
     return mEntityManager->HasNetworkId(entity);
 }
 
-Entity Coordinator::GetEntityByNetworkId(NetworkId networkId) const
-{
+Entity Coordinator::GetEntityByNetworkId(NetworkId networkId) const {
     return mEntityManager->GetEntityByNetworkId(networkId);
 }
 
-bool Coordinator::HasEntityForNetworkId(NetworkId networkId) const
-{
+bool Coordinator::HasEntityForNetworkId(NetworkId networkId) const {
     return mEntityManager->HasEntityForNetworkId(networkId);
 }
 
-void Coordinator::RegisterDefaultComponents()
-{
+void Coordinator::RegisterDefaultComponents() {
     // Delegate to helper so the list of core components remains in a
     // single place and can be extended without touching Coordinator.
     ECS::RegisterCoreComponents(*this);
 }
 
-} // namespace ECS
+}  // namespace ECS
