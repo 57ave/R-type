@@ -3,9 +3,11 @@
 #include <chrono>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <random>
 #include <cstdint>
 #include <algorithm>
+#include <cmath>
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
 #include "engine/Clock.hpp"
@@ -588,7 +590,7 @@ private:
         std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ") with lifetime " << explosion.lifetime << "s" << std::endl;
     }
 
-    void sendWorldSnapshot() {
+    void sendWorldSnapshot(bool forceFull = false) {
         auto& roomManager = server_.getRoomManager();
         auto allRooms = roomManager.getAllRooms();
         
@@ -601,6 +603,24 @@ private:
             }
         }
         
+        // helper: comparison with small epsilon to avoid sending tiny float noise
+        auto changed = [](const EntityState& a, const EntityState& b) {
+            const float posEps = 0.05f; // 5cm tolerance
+            const float velEps = 0.01f;
+            if (a.type != b.type) return true;
+            if (std::abs(a.x - b.x) > posEps) return true;
+            if (std::abs(a.y - b.y) > posEps) return true;
+            if (std::abs(a.vx - b.vx) > velEps) return true;
+            if (std::abs(a.vy - b.vy) > velEps) return true;
+            if (a.hp != b.hp) return true;
+            if (a.playerLine != b.playerLine) return true;
+            if (a.playerId != b.playerId) return true;
+            if (a.chargeLevel != b.chargeLevel) return true;
+            if (a.enemyType != b.enemyType) return true;
+            if (a.projectileType != b.projectileType) return true;
+            return false;
+        };
+
         // MODE ROOMS: Envoyer un snapshot par room
         if (hasPlayingRooms) {
             for (auto& [roomId, room] : allRooms) {
@@ -626,16 +646,23 @@ private:
                     if (entity.type == EntityType::ENTITY_PLAYER) continue;
                     snapshotEntities.push_back(&entity);
                 }
-                
-                // Construire le packet
+
+                // Build a list of entities that are new or changed compared to last snapshot for this room
                 SnapshotHeader header;
-                header.entityCount = snapshotEntities.size();
+                header.entityCount = 0; // will be updated
                 NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
                 packet.header.timestamp = getCurrentTimestamp();
-                
+
                 auto headerData = header.serialize();
-                packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
-                
+                // we'll reserve payload but insert header later after we know count
+                std::vector<char> payload;
+
+                // reference to the per-room cache
+                auto& cache = lastSnapshotPerRoom_[roomId];
+
+                // mark seen ids to cleanup stale cache entries later
+                std::unordered_set<uint32_t> seenIds;
+
                 for (const auto* entity : snapshotEntities) {
                     EntityState state;
                     state.id = entity->id;
@@ -650,12 +677,46 @@ private:
                     state.chargeLevel = entity->chargeLevel;
                     state.enemyType = entity->enemyType;
                     state.projectileType = entity->projectileType;
-                    
-                    auto stateData = state.serialize();
-                    packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
+
+                    seenIds.insert(state.id);
+
+                    bool isNew = (cache.find(state.id) == cache.end());
+                    bool isChanged = false;
+                    if (!isNew) {
+                        isChanged = changed(state, cache[state.id]);
+                    }
+
+                    if (forceFull || isNew || isChanged) {
+                        auto stateData = state.serialize();
+                        payload.insert(payload.end(), stateData.begin(), stateData.end());
+                        header.entityCount++;
+                        // update cache immediately so repeated comparisons in same frame are consistent
+                        cache[state.id] = state;
+                    } else {
+                        // not sent; keep existing cache entry as-is
+                    }
                 }
-                
-                // broadcastToRoom(roomId, packet);
+
+                // Cleanup cache entries that are no longer present in current snapshotEntities
+                std::vector<uint32_t> toErase;
+                for (auto& [cachedId, _s] : cache) {
+                    if (seenIds.find(cachedId) == seenIds.end()) {
+                        toErase.push_back(cachedId);
+                    }
+                }
+                for (uint32_t id : toErase) cache.erase(id);
+
+                // If there are no changed/new entities and not forcing full, skip sending
+                if (header.entityCount == 0 && !forceFull) {
+                    continue;
+                }
+
+                // Prepend header with correct entityCount
+                auto hdr = header.serialize();
+                packet.payload.insert(packet.payload.end(), hdr.begin(), hdr.end());
+                packet.payload.insert(packet.payload.end(), payload.begin(), payload.end());
+
+                // Send to room
                 broadcastToRoom(roomId, packet);
             }
         } else {
@@ -665,15 +726,17 @@ private:
                 if (entity.type == EntityType::ENTITY_EXPLOSION) continue;
                 snapshotEntities.push_back(&entity);
             }
-            
+
             SnapshotHeader header;
-            header.entityCount = snapshotEntities.size();
+            header.entityCount = 0;
             NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
             packet.header.timestamp = getCurrentTimestamp();
-            
-            auto headerData = header.serialize();
-            packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
-            
+
+            std::vector<char> payload;
+
+            auto& cache = lastSnapshotGlobal_;
+            std::unordered_set<uint32_t> seenIds;
+
             for (const auto* entity : snapshotEntities) {
                 EntityState state;
                 state.id = entity->id;
@@ -688,11 +751,40 @@ private:
                 state.chargeLevel = entity->chargeLevel;
                 state.enemyType = entity->enemyType;
                 state.projectileType = entity->projectileType;
-                
-                auto stateData = state.serialize();
-                packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
+
+                seenIds.insert(state.id);
+
+                bool isNew = (cache.find(state.id) == cache.end());
+                bool isChanged = false;
+                if (!isNew) {
+                    isChanged = changed(state, cache[state.id]);
+                }
+
+                if (forceFull || isNew || isChanged) {
+                    auto stateData = state.serialize();
+                    payload.insert(payload.end(), stateData.begin(), stateData.end());
+                    header.entityCount++;
+                    cache[state.id] = state;
+                }
             }
-            
+
+            // Cleanup
+            std::vector<uint32_t> toErase;
+            for (auto& [cachedId, _s] : cache) {
+                if (seenIds.find(cachedId) == seenIds.end()) {
+                    toErase.push_back(cachedId);
+                }
+            }
+            for (uint32_t id : toErase) cache.erase(id);
+
+            if (header.entityCount == 0 && !forceFull) {
+                return;
+            }
+
+            auto hdr = header.serialize();
+            packet.payload.insert(packet.payload.end(), hdr.begin(), hdr.end());
+            packet.payload.insert(packet.payload.end(), payload.begin(), payload.end());
+
             // use broadcast wrapper to count bytes for all recipients
             broadcastCount(packet);
         }
@@ -716,7 +808,7 @@ private:
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_SPAWN));
         packet.header.timestamp = getCurrentTimestamp();
         packet.setPayload(state.serialize());
-        
+
         // use broadcast wrapper
         broadcastCount(packet);
     }
@@ -724,7 +816,7 @@ private:
     void broadcastEntityDestroy(uint32_t entityId) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_DESTROY));
         packet.header.timestamp = getCurrentTimestamp();
-        
+
         std::vector<char> payload(sizeof(uint32_t));
         std::memcpy(payload.data(), &entityId, sizeof(uint32_t));
         packet.setPayload(payload);
@@ -751,24 +843,24 @@ private:
         NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));
         reply.setPayload(payload.serialize());
         reply.header.timestamp = getCurrentTimestamp();
-        
+
         sendToCount(reply, sender);
 
-        std::cout << "[GameServer] Sent room list (" << rooms.size() << " rooms) to " 
+        std::cout << "[GameServer] Sent room list (" << rooms.size() << " rooms) to "
                   << sender << std::endl;
     }
-    
+
     void handleCreateRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         try {
             CreateRoomPayload payload = CreateRoomPayload::deserialize(packet.payload);
-            
+
             // Find player ID from session
             auto session = server_.getSession(sender);
             if (!session) {
                 std::cerr << "[GameServer] CREATE_ROOM from unknown client" << std::endl;
                 return;
             }
-            
+
             uint8_t playerId = session->playerId;
             uint32_t roomId = server_.getRoomManager().createRoom(
                 payload.name, 
@@ -956,8 +1048,8 @@ private:
         // Send initial world snapshot to all players in the room
         // This ensures all players see each other from the start
         std::cout << "[GameServer] Sending initial world snapshot to all players..." << std::endl;
-        sendWorldSnapshot();
-        
+        sendWorldSnapshot(true); // true = force full snapshot
+
         // Mark server as running game logic
         gameRunning_ = true;
     }
@@ -1134,6 +1226,11 @@ private:
     uint64_t bytesReceivedTotal_ = 0;
     uint64_t bytesSentLastInterval_ = 0;
     uint64_t bytesReceivedLastInterval_ = 0;
+
+    // Cache for last sent snapshot per room (for delta updates)
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, EntityState>> lastSnapshotPerRoom_;
+    // Global cache for last sent snapshot (classique mode)
+    std::unordered_map<uint32_t, EntityState> lastSnapshotGlobal_;
 };
 
 int main() {
