@@ -12,7 +12,7 @@ namespace sfml {
 
 class SFMLSprite : public ISprite {
 public:
-    SFMLSprite() : currentTexture_(nullptr) {};
+    SFMLSprite() : currentTexture_(nullptr) {}
     ~SFMLSprite() override = default;
 
     // ISprite implementation
