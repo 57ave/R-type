@@ -58,12 +58,13 @@ add_executable(r-type_game main.cpp)
 target_link_libraries(r-type_game PRIVATE
     # Core engine libraries
     engine
-    game
     core
     network
     scripting
+    game
     
-    # Generic engine systems
+    # Generic engine systems (UISystem must come after game)
+    UISystem
     MovementSystem
     AnimationSystem
     StateMachineAnimationSystem
@@ -71,7 +72,6 @@ target_link_libraries(r-type_game PRIVATE
     ScrollingBackgroundSystem
     BoundarySystem
     HealthSystem
-    UISystem
     AudioSystem
     
     # Shoot'em up module (contains WeaponSystem, MovementPatternSystem, etc.)
