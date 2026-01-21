@@ -75,14 +75,16 @@ if(ENABLE_SCRIPTING)
 
     if(LUA_FOUND)
         CPMAddPackage(
+            # Note: ThePhD/sol2 v3.x IS Sol3. The repository name remains sol2.
+            # We are using v3.3.1 which is the Sol3 version.
             NAME sol2
             GITHUB_REPOSITORY "ThePhD/sol2"
-            GIT_TAG "v3.3.1"
+            GIT_TAG "main"
         )
         
         if(sol2_ADDED)
             set(SOL3_INCLUDE_DIR ${sol2_SOURCE_DIR}/include CACHE PATH "" FORCE)
-            message(STATUS "Sol2/Sol3 fetched via CPM")
+            message(STATUS "Sol3 (sol2 v3.3.1) fetched via CPM")
         else()
              if(NOT DEFINED SOL3_INCLUDE_DIR)
                  set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "" FORCE)
