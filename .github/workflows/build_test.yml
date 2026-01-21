@@ -1,0 +1,107 @@
+name: Build & Test
+
+on: [push, pull_request]
+
+jobs:
+  # Job 1: Linux GCC Build
+  linux-gcc:
+    name: Linux (GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev \
+            libfreetype6-dev \
+            python3
+
+      - name: Configure CMake (GCC)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure --verbose
+
+  # Job 2: Linux Clang Build
+  linux-clang:
+    name: Linux (Clang)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev \
+            libfreetype6-dev \
+            python3
+
+      - name: Configure CMake (Clang)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Run Tests
+        run: |
+          cd build
+          ctest --output-on-failure --verbose
+
+
+  # Job 4: Code Formatting Check
+  format-check:
+    name: Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-19
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 100
+
+      - name: Check Formatting
+        run: |
+          chmod +x scripts/format.sh
+          ./scripts/format.sh --check
