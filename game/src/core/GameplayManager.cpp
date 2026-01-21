@@ -110,8 +110,8 @@ ECS::Entity GameplayManager::CreatePlayer(float x, float y, int line) {
 
     // Health
     Health health;
-    health.current = 100;
-    health.max = 100;
+    health.current = 50;  // Player starts with 50 HP
+    health.max = 50;
     health.invincibilityDuration = 2.0f;
     coordinator->AddComponent(player, health);
 

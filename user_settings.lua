@@ -1,6 +1,6 @@
 {
   "audio": {
-    "music_volume": 70,
-    "sfx_volume": 80
+    "music_volume": 49,
+    "sfx_volume": 50
   }
 }

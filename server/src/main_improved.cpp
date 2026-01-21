@@ -755,8 +755,8 @@ private:
 
     // Spawn a random power-up
     void spawnRandomPowerUp() {
-        // Power-up types: 0=speed, 1=shield, 2=weapon, 3=health, 4=missile
-        int powerUpType = dist_(rng_) % 5;
+        // Only spawn bomb power-ups (type 4 = missile/bomb)
+        int powerUpType = 4;  // Bomb only
         float y = 150.0f + (dist_(rng_) % 780);
         spawnPowerUp(powerUpType, 1920.0f, y);
     }
@@ -779,22 +779,14 @@ private:
         powerUp.enemyType = static_cast<uint8_t>(type);  // Use enemyType field for power-up type
         powerUp.patternTimer = 0.0f;
 
-        // Set power-up type string
-        switch (type) {
-            case 0: powerUp.powerUpType = "speed"; break;
-            case 1: powerUp.powerUpType = "shield"; break;
-            case 2: powerUp.powerUpType = "weapon"; break;
-            case 3: powerUp.powerUpType = "health"; break;
-            case 4: powerUp.powerUpType = "missile"; break;
-            default: powerUp.powerUpType = "speed"; break;
-        }
+        // Set power-up type string - only bomb now
+        powerUp.powerUpType = "bomb";
 
         entities_[powerUp.id] = powerUp;
         broadcastEntitySpawn(powerUp);
 
-        std::cout << "[GameServer] ⭐ Spawned power-up " << powerUp.id << " (type "
-                  << powerUp.powerUpType << ") at (" << powerUp.x << ", " << powerUp.y << ")"
-                  << std::endl;
+        std::cout << "[GameServer] 💣 Spawned BOMB power-up " << powerUp.id << " at (" 
+                  << powerUp.x << ", " << powerUp.y << ")" << std::endl;
     }
 
     // Spawn a boss
@@ -1377,7 +1369,7 @@ private:
             player.y = 200.0f + (playerIndex * 200.0f);  // Offset players vertically
             player.vx = 0.0f;
             player.vy = 0.0f;
-            player.hp = 100;
+            player.hp = 50;  // Player starts with 50 HP
             player.playerId = playerId;
             player.playerLine = playerIndex % 5;  // Cycle through 5 different ship colors
 

@@ -487,7 +487,7 @@ void GameLoop::UpdateWinCondition(float dt) {
         // ========================================
         // CHECK WIN CONDITION
         // ========================================
-        const float WIN_TIME_THRESHOLD = 30.0f;
+        const float WIN_TIME_THRESHOLD = 75.0f;  // 1m15 seconds
         if (gamePlayTime >= WIN_TIME_THRESHOLD) {
             std::cout << "[GameLoop] 🎉 WIN! Player survived for " << gamePlayTime << " seconds!" << std::endl;
             winConditionTriggered = true;
