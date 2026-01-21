@@ -1,6 +1,8 @@
 #ifndef ENG_ENGINE_COMPONENTS_HEALTH_HPP
 #define ENG_ENGINE_COMPONENTS_HEALTH_HPP
 
+#include <string>
+
 struct Health {
     int current = 100;
     int max = 100;

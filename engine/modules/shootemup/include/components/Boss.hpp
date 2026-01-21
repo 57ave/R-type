@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "ecs/Types.hpp"
+
 namespace ShootEmUp {
 namespace Components {
 
