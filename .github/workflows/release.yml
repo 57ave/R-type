@@ -4,11 +4,6 @@ permissions:
   contents: write
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version_bump:
@@ -20,6 +15,9 @@ on:
           - major
           - minor
           - patch
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   create-release:
