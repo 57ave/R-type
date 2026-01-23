@@ -77,12 +77,15 @@ if(ENABLE_SCRIPTING)
         CPMAddPackage(
             NAME sol2
             GITHUB_REPOSITORY "ThePhD/sol2"
-            GIT_TAG "develop"
+            GIT_TAG "v3.3.1"
         )
         
         if(sol2_ADDED)
             set(SOL3_INCLUDE_DIR ${sol2_SOURCE_DIR}/include CACHE PATH "" FORCE)
             message(STATUS "Sol2/Sol3 fetched via CPM")
+            
+            # Workaround for GCC 15 compatibility with sol2/sol3
+            add_compile_options(-Wno-error=template-body)
         else()
              if(NOT DEFINED SOL3_INCLUDE_DIR)
                  set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "" FORCE)

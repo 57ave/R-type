@@ -12,6 +12,7 @@ NetworkClient::NetworkClient(const std::string& serverAddress, short serverPort)
 }
 
 NetworkClient::~NetworkClient() {
+    std::cout << "[NetworkClient] Destructor called!" << std::endl;
     disconnect();
     if (io_thread_.joinable()) {
         io_thread_.join();
@@ -47,6 +48,7 @@ void NetworkClient::process() {
 }
 
 void NetworkClient::disconnect() {
+    std::cout << "[NetworkClient] disconnect() called, connected_=" << connected_ << std::endl;
     if (connected_) {
         // Send disconnect packet (type 0x04 is common convention)
         NetworkPacket packet(0x04);  // CLIENT_DISCONNECT

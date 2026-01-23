@@ -70,11 +70,12 @@ bool NetworkManager::connectToServer(const std::string& address, uint16_t port, 
 }
 
 void NetworkManager::disconnect() {
+    // Debug: Print stack trace to find who called disconnect
+    std::cout << "[NetworkManager] disconnect() called!" << std::endl;
+    
     if (client_ && connected_) {
-        // Send CLIENT_DISCONNECT packet
-        NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::CLIENT_DISCONNECT));
-        client_->sendPacket(packet);
-        
+        // NetworkClient::disconnect() already sends CLIENT_DISCONNECT packet
+        // So we just need to call it, not send our own packet
         client_->disconnect();
         std::cout << "[NetworkManager] Disconnected from server" << std::endl;
     }
@@ -279,7 +280,13 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
 
     switch (type) {
         case Network::PacketType::SERVER_ACCEPT: {
-            std::cout << "[NetworkManager] Server accepted connection" << std::endl;
+            // Extract player ID from payload
+            if (payloadSize >= 1) {
+                clientId_ = static_cast<uint32_t>(static_cast<uint8_t>(payload[0]));
+                std::cout << "[NetworkManager] Server accepted connection, assigned Player ID: " << clientId_ << std::endl;
+            } else {
+                std::cout << "[NetworkManager] Server accepted connection (no ID in payload)" << std::endl;
+            }
             break;
         }
 

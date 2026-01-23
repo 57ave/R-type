@@ -67,6 +67,10 @@ function on_back()
     print("[LUA] Back clicked!")
 end
 
+function on_room_select()
+    print("[LUA] Room selected!")
+end
+
 print("[LUA] ✅ Join Menu UI loaded")
 
 return JoinMenu

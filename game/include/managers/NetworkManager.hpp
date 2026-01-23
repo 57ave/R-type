@@ -117,6 +117,11 @@ public:
     uint32_t getCurrentRoomId() const { return currentRoomId_; }
 
     /**
+     * Get local player ID (assigned by server)
+     */
+    uint32_t getLocalPlayerId() const { return clientId_; }
+
+    /**
      * Get players in current room
      */
     const std::vector<PlayerInfo>& getRoomPlayers() const { return roomPlayers_; }
