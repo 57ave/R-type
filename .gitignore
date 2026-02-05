@@ -1,0 +1,31 @@
+# Build directories
+build/
+out/
+bin/
+lib/
+vcpkg_installed/
+vcpkg/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.ipch
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+build_log.txt
+
+# Artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Misc
+.DS_Store
