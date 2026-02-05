@@ -5,9 +5,10 @@ project(RType VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(WIN32)
-    set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
-endif()
+# Toolchain is handled by CMakePresets.json or build scripts
+# if(WIN32)
+#     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake")
+# endif()
 
 find_package(SFML 3 COMPONENTS Graphics Audio Network REQUIRED)
 find_package(Boost REQUIRED)
