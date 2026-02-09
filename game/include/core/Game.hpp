@@ -46,6 +46,7 @@ public:
     // Getters for subsystems
     ECS::Coordinator* getCoordinator() { return coordinator_.get(); }
     eng::engine::rendering::sfml::SFMLWindow* getWindow() { return window_.get(); }
+    eng::engine::rendering::IRenderer* getRenderer() { return renderer_.get(); }
     Scripting::LuaState& getLuaState() { return Scripting::LuaState::Instance(); }
     StateManager* getStateManager() { return stateManager_.get(); }
     NetworkManager* getNetworkManager() { return networkManager_.get(); }
