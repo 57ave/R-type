@@ -1,0 +1,56 @@
+-- Fetching OpenAL-Soft for Windows...
+-- CPM: Adding package OpenAL@1.23.1 (1.23.1)
+CMake Deprecation Warning at build/windows-release/_deps/openal-src/CMakeLists.txt:3 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- Could NOT find PkgConfig (missing: PKG_CONFIG_EXECUTABLE) 
+-- Could NOT find PulseAudio (missing: PULSEAUDIO_LIBRARY PULSEAUDIO_INCLUDE_DIR) 
+-- Could NOT find JACK (missing: JACK_LIBRARY JACK_INCLUDE_DIR) 
+-- Could NOT find OpenSL (missing: OPENSL_LIBRARY OPENSL_INCLUDE_DIR OPENSL_ANDROID_INCLUDE_DIR) 
+-- Could NOT find PortAudio (missing: PORTAUDIO_LIBRARY PORTAUDIO_INCLUDE_DIR) 
+-- 
+-- Building OpenAL with support for the following backends:
+--     WinMM, DirectSound, WASAPI, WaveFile, Null
+-- 
+-- Building with support for CPU extensions:
+--     Default, SSE, SSE2, SSE3, SSE4.1
+-- 
+-- Building with legacy EAX extension support
+-- 
+-- Embedding HRTF datasets
+-- 
+-- Installing library and headers
+-- Installing sample configuration
+-- Installing HRTF data files
+-- Installing AmbDec presets
+-- 
+-- CPM: Adding package SFML@2.6.1 (2.6.1)
+Version MSBuild 17.14.14+a129329f1 pour .NET Framework
+
+  1>Checking Build System
+  Performing update step for 'sfml-populate'
+  -- Already at requested tag: 2.6.1
+  Building Custom Rule C:/Users/paulc/R-type/build/windows-release/_deps/sfml-subbuild/CMakeLists.txt
+  Performing patch step for 'sfml-populate'
+  Python est introuvable ; ex├Ücutez sans arguments ├ô installer ├ô partir du Microsoft Store ou d├Üsactivez ce raccourci dans Param├×tres > Applications > param├×tres d
+C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppCommon.targets(254,5): error MSB8066: la build personnalis├®e de 'C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-update.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-patch.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-configure.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-build.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-install.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\9eeb0001311792ff03e602f9837cc2c5\sfml-populate-test.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\f8c2c25974b7bdcb8866a4a0c86c6672\sfml-populate-complete.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeFiles\513415fc1badb92657238f4dc72c06f9\sfml-populate.rule;C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\CMakeLists.txt' s'est arr├¬t├®e. Code┬á9009. [C:\Users\paulc\R-type\build\windows-release\_deps\sfml-subbuild\sfml-populate.vcxproj]
+
+CMake Error at C:/Program Files/CMake/share/cmake-4.2/Modules/FetchContent.cmake:1928 (message):
+  Build step for sfml failed: 1
+Call Stack (most recent call first):
+  C:/Program Files/CMake/share/cmake-4.2/Modules/FetchContent.cmake:1619 (__FetchContent_populateSubbuild)
+  C:/Program Files/CMake/share/cmake-4.2/Modules/FetchContent.cmake:2155:EVAL:2 (__FetchContent_doPopulation)
+  C:/Program Files/CMake/share/cmake-4.2/Modules/FetchContent.cmake:2155 (cmake_language)
+  C:/Program Files/CMake/share/cmake-4.2/Modules/FetchContent.cmake:2394 (__FetchContent_Populate)
+  build/windows-release/cmake/CPM_0.42.0.cmake:1208 (FetchContent_MakeAvailable)
+  build/windows-release/cmake/CPM_0.42.0.cmake:989 (cpm_fetch_package)
+  CMakeLists.txt:64 (CPMAddPackage)
+
+
+-- Configuring incomplete, errors occurred!

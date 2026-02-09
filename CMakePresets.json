@@ -10,7 +10,7 @@
             "installDir": "${sourceDir}/install/${presetName}",
             "cacheVariables": {
                 "CMAKE_CXX_COMPILER": "cl.exe",
-                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
             },
             "condition": {
                 "type": "equals",
@@ -51,9 +51,6 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "installDir": "${sourceDir}/install/${presetName}",
-            "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",

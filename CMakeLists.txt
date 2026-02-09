@@ -1,33 +1,88 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.15)
 
-project(RType VERSION 1.0.0 LANGUAGES CXX)
+# On macOS, SFML requires Objective-C/C++ support
+if(APPLE)
+    project(RType VERSION 1.0.0 LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(RType VERSION 1.0.0 LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(SFML 3 COMPONENTS Graphics Audio Network REQUIRED)
-find_package(Boost REQUIRED)
+# Export compile commands for IntelliSense
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(r-type_client src/client/main.cpp)
-target_link_libraries(r-type_client PRIVATE SFML::Graphics SFML::Audio SFML::Network Boost::boost)
+# Build Options
+option(BUILD_CLIENT "Build client executable" ON)
+option(BUILD_SERVER "Build server executable" ON)
+option(BUILD_GAME "Build game executable" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
-add_executable(r-type_server src/server/main.cpp)
-target_link_libraries(r-type_server PRIVATE SFML::Network Boost::boost)
+# Compiler warnings
+if(MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra)
+endif()
 
-if(WIN32)
-    add_custom_command(TARGET r-type_client POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::Graphics>
-            $<TARGET_FILE:SFML::Window>
-            $<TARGET_FILE:SFML::System>
-            $<TARGET_FILE:SFML::Audio>
-            $<TARGET_FILE:SFML::Network>
-            $<TARGET_FILE_DIR:r-type_client>
+# Include CPM
+include(cmake/CPM.cmake)
+
+# Configure RPATH for installed executables
+# This ensures executables find shared libraries in ../lib relative to them
+# AND shared libraries find each other in standard locations
+set(CMAKE_INSTALL_RPATH "\$ORIGIN/../lib" "\$ORIGIN")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+
+if(WIN32 OR MINGW)
+    message(STATUS "Fetching OpenAL-Soft for Windows...")
+    CPMAddPackage(
+        NAME OpenAL
+        GITHUB_REPOSITORY kcat/openal-soft
+        GIT_TAG 1.23.1
+        OPTIONS
+            "ALSOFT_UTILS OFF"
+            "ALSOFT_EXAMPLES OFF"
+            "ALSOFT_TESTS OFF"
+            "ALSOFT_INSTALL_EXAMPLES OFF"
+            "LIBTYPE STATIC"
     )
-    add_custom_command(TARGET r-type_server POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::System>
-            $<TARGET_FILE:SFML::Network>
-            $<TARGET_FILE_DIR:r-type_server>
+    if(OpenAL_ADDED)
+        set(OPENAL_LIBRARY OpenAL)
+        set(OPENAL_INCLUDE_DIR ${OpenAL_SOURCE_DIR}/include)
+        set(OPENAL_FOUND TRUE)
+        set(OPENAL_LIBRARIES OpenAL)
+    endif()
+endif()
+
+# Find SFML (required by all sub-projects)
+find_package(SFML 2.6 COMPONENTS system window graphics audio network QUIET)
+if(NOT SFML_FOUND)
+    CPMAddPackage(
+        NAME SFML
+        GITHUB_REPOSITORY SFML/SFML
+        GIT_TAG 2.6.1
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/patch_sfml.cmake
+        OPTIONS
+            "SFML_INSTALL_PKGCONFIG_FILES OFF"
     )
+endif()
+add_subdirectory(engine)
+
+# Build client if requested
+if(BUILD_CLIENT)
+    add_subdirectory(client)
+endif()
+
+# Build server if requested
+if(BUILD_SERVER)
+    add_subdirectory(server)
+endif()
+
+# Build game if requested
+if(BUILD_GAME)
+    add_subdirectory(game)
 endif()

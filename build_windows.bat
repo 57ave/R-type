@@ -27,33 +27,9 @@ exit /b 1
 
 :cmake_found
 
-:: Check if vcpkg exists
-if not exist "vcpkg" (
-    echo [INFO] vcpkg not found. Cloning from GitHub...
-    git clone https://github.com/microsoft/vcpkg.git
-    if %ERRORLEVEL% NEQ 0 (
-        echo [ERROR] Failed to clone vcpkg.
-        exit /b 1
-    )
-    echo [INFO] Bootstrapping vcpkg...
-    call vcpkg\bootstrap-vcpkg.bat
-    if %ERRORLEVEL% NEQ 0 (
-        echo [ERROR] Failed to bootstrap vcpkg.
-        exit /b 1
-    )
-)
-
-:check_vcpkg
-tasklist /FI "IMAGENAME eq vcpkg.exe" 2>NUL | find /I /N "vcpkg.exe">NUL
-if "%ERRORLEVEL%"=="0" (
-    cls
-    echo [INFO] Another vcpkg instance is running. Waiting for it to finish...
-    timeout /t 2 >nul
-    goto check_vcpkg
-)
-
 echo [INFO] Configuring project with CMake...
 :: Use the windows-release preset as default
+:: Note: Dependencies are managed via CPM (cached in build directory)
 cmake --preset windows-release
 
 if %ERRORLEVEL% NEQ 0 (
@@ -62,7 +38,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [INFO] Building project...
-cmake --build --preset windows-release
+cmake --build --preset windows-release --config Release
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Build failed.
@@ -70,5 +46,5 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [SUCCESS] Build completed successfully.
-echo Output binaries are in build\windows-release\
+echo Output binaries are in build\windows-release\Release\ (or Debug\)
 endlocal

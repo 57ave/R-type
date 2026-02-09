@@ -1,0 +1,42 @@
+name: requirement
+
+on:
+  push:
+    branches-ignore:
+      - "ga-ignore-**"
+  pull_request:
+    branches-ignore:
+      - "ga-ignore-**"
+
+jobs:
+  push_to_mirror:
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event_name == 'push' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if not pushing to same repository
+        id: check_repo
+        env:
+          MIRROR_URL: ${{ secrets.MIRROR_URL }}
+        run: |
+          CURRENT_REPO="${{ github.repository }}"
+          TARGET_REPO=$(echo "$MIRROR_URL" | sed -n 's|.*github.com[:/]\(.*\)\.git|\1|p' | sed 's|\.git$||')
+          if [ "$CURRENT_REPO" = "$TARGET_REPO" ]; then
+            echo "same_repo=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Current repository is the same as target repository. Skipping push."
+          else
+            echo "same_repo=false" >> $GITHUB_OUTPUT
+            echo "✅ Different repositories. Proceeding with push."
+          fi
+
+      - uses: pixta-dev/repository-mirroring-action@v1
+        if: steps.check_repo.outputs.same_repo == 'false'
+        with:
+          target_repo_url: ${{ secrets.MIRROR_URL }}
+          ssh_private_key: ${{ secrets.PRIVATE_KEY }}

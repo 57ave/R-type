@@ -31,5 +31,36 @@ build_log.txt
 *.ilk
 *.exp
 
+# External dependencies (downloaded by CMake)
+engine/external/
+
+# CMake generated files
+.cache/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# CPM dependencies
+cpm-package-lock.cmake
+
+# Compiled binaries
+*.so
+*.dylib
+*.o
+*.a
+*.out
+
+# Object files
+*.slo
+*.lo
+*.obj
+
 # Misc
 .DS_Store
+Subject.md
+SubjectCompilation.md
+
