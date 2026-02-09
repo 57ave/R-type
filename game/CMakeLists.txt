@@ -5,6 +5,11 @@ project(rtype_game)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Ignore Sol2 template warnings
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wno-error=template-body)
+endif()
+
 message(STATUS "🎮 R-Type Game - Configuring...")
 
 # Collect all source files
@@ -14,7 +19,6 @@ file(GLOB_RECURSE GAME_SOURCES
 
 # Add main.cpp
 set(GAME_SOURCES ${GAME_SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
-
 # Create game executable
 add_executable(game ${GAME_SOURCES})
 
