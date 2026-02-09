@@ -25,3 +25,15 @@ target_include_directories(r-type_client PRIVATE
 target_link_libraries(r-type_client PRIVATE
     engine
 )
+
+if(WIN32)
+    add_custom_command(TARGET r-type_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:sfml-graphics>
+            $<TARGET_FILE:sfml-window>
+            $<TARGET_FILE:sfml-system>
+            $<TARGET_FILE:sfml-audio>
+            $<TARGET_FILE:sfml-network>
+            $<TARGET_FILE_DIR:r-type_client>
+    )
+endif()

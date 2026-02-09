@@ -63,6 +63,18 @@ add_custom_command(TARGET game POST_BUILD
     COMMENT "Copying game assets to build directory"
 )
 
+if(WIN32)
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:sfml-graphics>
+            $<TARGET_FILE:sfml-window>
+            $<TARGET_FILE:sfml-system>
+            $<TARGET_FILE:sfml-audio>
+            $<TARGET_FILE:sfml-network>
+            $<TARGET_FILE_DIR:game>
+    )
+endif()
+
 message(STATUS "✅ R-Type Game configured successfully")
 message(STATUS "   Sources: ${CMAKE_CURRENT_SOURCE_DIR}/src")
 message(STATUS "   Assets: ${CMAKE_CURRENT_SOURCE_DIR}/assets")
