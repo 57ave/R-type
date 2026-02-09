@@ -5,6 +5,22 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <filesystem>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+void SetWorkingDirectory() {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    std::filesystem::path exePath(path);
+    std::filesystem::current_path(exePath.parent_path());
+#else
+    // Linux implementation if needed
+#endif
+}
 
 class Background
 {
@@ -779,6 +795,9 @@ class Missile
 
 int main()
 {
+    SetWorkingDirectory();
+    std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
+
     sf::Event ev;
     sf::RenderWindow window(sf::VideoMode(1920, 1080), "R-Type");
     sf::Clock clock;
