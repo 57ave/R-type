@@ -2,7 +2,8 @@
  * NetworkManager.hpp - Network Manager (Client & Server)
  * 
  * Manages network connections, hosting, and communication.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * Phase 5.3: Real ASIO Network Integration
+ * Phase 5.3: Real ASIO Network Integration
+ * Phase 6.5: Gameplay synchronization (WORLD_SNAPSHOT + CLIENT_INPUT)
  */
 
 #pragma once
@@ -13,6 +14,7 @@
 #include <memory>
 #include "network/GamePackets.hpp"
 #include "network/NetworkClient.hpp"
+#include "network/RTypeProtocol.hpp"
 
 // Player information in a room
 struct PlayerInfo {
@@ -104,6 +106,24 @@ public:
      */
     void startGame();
 
+    // === Gameplay Functions (Phase 6.5) ===
+    
+    /**
+     * Send player input to server
+     * @param up Moving up
+     * @param down Moving down
+     * @param left Moving left
+     * @param right Moving right
+     * @param fire Shooting
+     * @param chargeLevel Charge level (0-5)
+     */
+    void sendInput(bool up, bool down, bool left, bool right, bool fire, uint8_t chargeLevel = 0);
+
+    /**
+     * Check if game is in multiplayer mode (in a room with game started)
+     */
+    bool isInGame() const { return inGame_; }
+
     // === Data Access ===
     
     /**
@@ -137,11 +157,13 @@ public:
     using RoomListCallback = std::function<void(const std::vector<Network::RoomInfo>&)>;
     using RoomUpdateCallback = std::function<void(const Network::RoomInfo&)>;
     using GameStartCallback = std::function<void()>;
+    using WorldSnapshotCallback = std::function<void(const std::vector<RType::EntityState>&)>;
     
     void setConnectionCallback(ConnectionCallback callback) { onConnection_ = callback; }
     void setRoomListCallback(RoomListCallback callback) { onRoomList_ = callback; }
     void setRoomUpdateCallback(RoomUpdateCallback callback) { onRoomUpdate_ = callback; }
     void setGameStartCallback(GameStartCallback callback) { gameStartCallback_ = callback; }
+    void setWorldSnapshotCallback(WorldSnapshotCallback callback) { onWorldSnapshot_ = callback; }
 
     /**
      * Update network (process packets)
@@ -152,6 +174,7 @@ private:
     // Connection state
     bool connected_ = false;
     bool hosting_ = false;
+    bool inGame_ = false;  // True when game has started
     uint32_t clientId_ = 0;
     std::string playerName_ = "Player";
     
@@ -165,6 +188,7 @@ private:
     RoomListCallback onRoomList_;
     RoomUpdateCallback onRoomUpdate_;
     GameStartCallback gameStartCallback_;
+    WorldSnapshotCallback onWorldSnapshot_;
     
     // Phase 5.3: Real network client
     std::unique_ptr<NetworkClient> client_;
