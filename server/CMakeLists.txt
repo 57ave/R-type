@@ -52,4 +52,12 @@ if(WIN32)
             $<TARGET_FILE:sfml-network>
             $<TARGET_FILE_DIR:r-type_server>
     )
+
+    # Copy dependencies
+    add_custom_command(TARGET r-type_server POST_BUILD
+        COMMAND ${CMAKE_COMMAND} 
+            -DSOURCE_DIR=$<TARGET_FILE_DIR:sfml-network> 
+            -DDEST_DIR=$<TARGET_FILE_DIR:r-type_server> 
+            -P ${CMAKE_SOURCE_DIR}/scripts/CopyRuntimeDlls.cmake
+    )
 endif()

@@ -64,6 +64,7 @@ add_custom_command(TARGET game POST_BUILD
 )
 
 if(WIN32)
+    # Copy SFML DLLs explicitly
     add_custom_command(TARGET game POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:sfml-graphics>
@@ -73,6 +74,29 @@ if(WIN32)
             $<TARGET_FILE:sfml-network>
             $<TARGET_FILE_DIR:game>
     )
+
+    # Copy dependencies (freetype, flac, ogg, etc.)
+    add_custom_command(TARGET game POST_BUILD
+        COMMAND ${CMAKE_COMMAND} 
+            -DSOURCE_DIR=$<TARGET_FILE_DIR:sfml-graphics> 
+            -DDEST_DIR=$<TARGET_FILE_DIR:game> 
+            -P ${CMAKE_SOURCE_DIR}/scripts/CopyRuntimeDlls.cmake
+    )
+    
+     # Copy OpenAL if needed
+    if(EXISTS "${SFML_SOURCE_DIR}/extlibs/bin/x64/openal32.dll")
+        add_custom_command(TARGET game POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${SFML_SOURCE_DIR}/extlibs/bin/x64/openal32.dll"
+                $<TARGET_FILE_DIR:game>
+        )
+    elseif(EXISTS "${SFML_SOURCE_DIR}/extlibs/bin/x86/openal32.dll")
+         add_custom_command(TARGET game POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${SFML_SOURCE_DIR}/extlibs/bin/x86/openal32.dll"
+                $<TARGET_FILE_DIR:game>
+        )
+    endif()
 endif()
 
 message(STATUS "✅ R-Type Game configured successfully")
