@@ -85,7 +85,9 @@ if(ENABLE_SCRIPTING)
             message(STATUS "Sol2/Sol3 fetched via CPM")
             
             # Workaround for GCC 15 compatibility with sol2/sol3
-            add_compile_options(-Wno-error=template-body)
+            if(NOT MSVC)
+                add_compile_options(-Wno-error=template-body)
+            endif()
         else()
              if(NOT DEFINED SOL3_INCLUDE_DIR)
                  set(SOL3_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/sol3/include" CACHE PATH "" FORCE)

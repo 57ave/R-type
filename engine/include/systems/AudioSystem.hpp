@@ -28,6 +28,14 @@ public:
     AudioSystem() = default;
     ~AudioSystem() override = default;
 
+    // Disable copying
+    AudioSystem(const AudioSystem&) = delete;
+    AudioSystem& operator=(const AudioSystem&) = delete;
+
+    // Enable moving
+    AudioSystem(AudioSystem&&) = default;
+    AudioSystem& operator=(AudioSystem&&) = default;
+
     // Initialize with base path for SFX files
     void Init(const std::string& sfxPath);
     void Update(float deltaTime) override;

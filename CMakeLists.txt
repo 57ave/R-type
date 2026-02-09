@@ -38,6 +38,8 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 
 if(WIN32 OR MINGW)
+
+    
     message(STATUS "Fetching OpenAL-Soft for Windows...")
     CPMAddPackage(
         NAME OpenAL
@@ -70,6 +72,13 @@ if(NOT SFML_FOUND)
             "SFML_INSTALL_PKGCONFIG_FILES OFF"
     )
 endif()
+
+if(WIN32 OR MINGW)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN)
+    add_compile_definitions(NOMINMAX)
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
+endif()
+
 add_subdirectory(engine)
 
 # Build client if requested
