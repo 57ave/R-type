@@ -19,7 +19,20 @@ jobs:
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Configure CMake
-      run: cmake -S . -B build -G "NMake Makefiles" -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Debug
+      # Override toolchain file to use the one provided by the action
+      run: cmake --preset windows-release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
-      run: cmake --build build --config Debug
+      run: cmake --build --preset windows-release
+
+    - name: Upload Client Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-type_client-windows
+        path: build/windows-release/r-type_client.exe
+
+    - name: Upload Server Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-type_server-windows
+        path: build/windows-release/r-type_server.exe

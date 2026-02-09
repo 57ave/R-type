@@ -17,7 +17,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential tar curl zip unzip pkg-config autoconf libtool autoconf-archive bison flex
-        sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libudev-dev libgl1-mesa-dev libflac-dev libogg-dev libvorbis-dev libopenal-dev libxcursor-dev
+        sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libudev-dev libgl1-mesa-dev libflac-dev libogg-dev libvorbis-dev libopenal-dev libxcursor-dev ninja-build
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
@@ -25,7 +25,20 @@ jobs:
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Configure CMake
-      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake"
+      # Override toolchain file to use the one provided by the action
+      run: cmake --preset linux-release -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
-      run: cmake --build build --config Debug
+      run: cmake --build --preset linux-release
+
+    - name: Upload Client Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-type_client-linux
+        path: build/linux-release/r-type_client
+
+    - name: Upload Server Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: r-type_server-linux
+        path: build/linux-release/r-type_server

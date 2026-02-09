@@ -5,6 +5,10 @@ bin/
 lib/
 vcpkg_installed/
 vcpkg/
+vcpkg_downloads/
+vcpkg_buildtrees/
+vcpkg_packages/
+*.log
 
 # Visual Studio
 .vs/
