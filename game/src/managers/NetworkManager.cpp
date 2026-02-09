@@ -1,10 +1,12 @@
 /**
  * NetworkManager.cpp - Network Manager Implementation (Real ASIO)
  * Phase 5.3: Real network using engine's NetworkClient
+ * Phase 6.5: Gameplay synchronization (WORLD_SNAPSHOT + CLIENT_INPUT)
  */
 
 #include "managers/NetworkManager.hpp"
 #include "network/Serializer.hpp"
+#include "network/RTypeProtocol.hpp"
 #include <iostream>
 #include <cstring>
 #include <thread>
@@ -242,6 +244,22 @@ void NetworkManager::startGame() {
     std::cout << "[NetworkManager] 🚀 Sending GAME_START for room " << currentRoomId_ << std::endl;
 }
 
+void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool fire, uint8_t chargeLevel) {
+    if (!connected_ || !client_ || !inGame_) {
+        return;  // Silently ignore if not in game
+    }
+
+    // Build input packet
+    RType::ClientInput input;
+    input.playerId = static_cast<uint8_t>(clientId_);
+    input.inputMask = RType::ClientInput::buildInputMask(up, down, left, right, fire);
+    input.chargeLevel = chargeLevel;
+
+    // Create and send packet
+    NetworkPacket packet = RType::Protocol::createInputPacket(input);
+    client_->sendPacket(packet);
+}
+
 void NetworkManager::update() {
     if (!client_ || !connected_) {
         return;
@@ -423,13 +441,15 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             // Confirmation of leaving room
             currentRoomId_ = 0;
             hosting_ = false;
+            inGame_ = false;
 
             std::cout << "[NetworkManager] Left room" << std::endl;
             break;
         }
 
         case Network::PacketType::GAME_START: {
-            std::cout << "[NetworkManager] Game starting!" << std::endl;
+            std::cout << "[NetworkManager] 🎮 Game starting!" << std::endl;
+            inGame_ = true;  // Mark as in game
             if (gameStartCallback_) {
                 gameStartCallback_();
             }
@@ -438,12 +458,30 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
 
         case Network::PacketType::ENTITY_UPDATE: {
             // WORLD_SNAPSHOT (0x11) - Game state updates
-            // Ignore during lobby, will be handled in PlayState
+            if (!inGame_) {
+                break;  // Ignore during lobby
+            }
+            
+            try {
+                // Parse the full packet (header + payload were passed as data)
+                NetworkPacket fullPacket = NetworkPacket::deserialize(data, length);
+                
+                // Parse world snapshot
+                auto [snapHeader, entities] = RType::Protocol::parseWorldSnapshot(fullPacket);
+                
+                // Call snapshot callback if set
+                if (onWorldSnapshot_) {
+                    onWorldSnapshot_(entities);
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[NetworkManager] Error parsing WORLD_SNAPSHOT: " << e.what() << std::endl;
+            }
             break;
         }
 
         default:
-            std::cout << "[NetworkManager] Received unknown packet type: " << header.type << std::endl;
+            // Don't spam log for unknown packets
             break;
     }
 }
