@@ -13,6 +13,8 @@ void MovementSystem::Init() {
 }
 
 void MovementSystem::Update(float dt) {
+    static int frameCount = 0;
+    
     for (auto entity : mEntities) {
         // Check if entity has Position and Velocity components
         if (!m_Coordinator->HasComponent<Position>(entity) || 
