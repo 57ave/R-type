@@ -23,6 +23,7 @@
 #include <components/NetworkId.hpp>
 #include <components/ScrollingBackground.hpp>
 #include <components/Tag.hpp>
+#include <components/Collectable.hpp>
 #include <components/UIElement.hpp>
 #include <components/UIText.hpp>
 #include <components/UIButton.hpp>
@@ -255,6 +256,7 @@ void Game::setupECS()
     coordinator_->RegisterComponent<NetworkId>();
     coordinator_->RegisterComponent<ScrollingBackground>();
     coordinator_->RegisterComponent<Tag>();
+    coordinator_->RegisterComponent<Collectable>();
 
     // Register UI components (Phase 4)
     coordinator_->RegisterComponent<UIElement>();
@@ -266,7 +268,7 @@ void Game::setupECS()
     coordinator_->RegisterComponent<UIInputField>();
     coordinator_->RegisterComponent<UIDropdown>();
 
-    std::cout << "[GAME] " << 20 << " components registered (12 gameplay + 8 UI)" << std::endl;
+    std::cout << "[GAME] " << 21 << " components registered (13 gameplay + 8 UI)" << std::endl;
 
     // === Register and configure Systems (Phase 4) ===
     std::cout << "[GAME] Registering ECS systems..." << std::endl;
