@@ -6,7 +6,7 @@ Player = {
     -- Stats de base
     max_health = 100,
     starting_health = 100,
-    speed = 300.0, -- pixels par seconde
+    speed = 600.0, -- pixels par seconde
     
     -- Dimensions et collision
     sprite = {

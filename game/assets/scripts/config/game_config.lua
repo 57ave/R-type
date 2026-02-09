@@ -20,6 +20,7 @@ Game = {
         starting_score = 0,
         extra_life_score = 100000,
         invincibility_duration = 3.0, -- secondes après respawn
+        input_system_speed = 300.0, -- Vitesse de base du InputSystem (engine) - NE PAS MODIFIER sauf si tu changes l'engine
         
         -- Difficulté
         difficulty = {
@@ -47,6 +48,14 @@ Game = {
         server_port = 4242,
         timeout_ms = 5000,
         max_players = 4
+    },
+    
+    background = {
+        path = "assets/background.png",
+        original_width = 9306,   -- Largeur du PNG
+        original_height = 199,   -- Hauteur du PNG
+        scroll_speed = 300.0,    -- Vitesse de défilement (pixels/sec)
+        scale_to_window = true   -- Scale pour remplir la hauteur de la fenêtre
     },
     
     audio = {
