@@ -785,25 +785,26 @@ int main()
 
     // Initialiser le background
     Background background;
-    if (!background.loadTexture("../../client/assets/background.png"))
+    if (!background.loadTexture("assets/background.png"))
     {
-        std::cerr << "Error: Could not load background.png" << std::endl;
+        std::cerr << "Error: Could not load assets/background.png" << std::endl;
         return 1;
     }
     background.init(window.getSize());
 
     // Initialiser le player
     Player player;
-    if (!player.loadTexture("../../client/assets/players/r-typesheet42.png"))
+    if (!player.loadTexture("assets/players/r-typesheet42.png"))
     {
-        std::cerr << "Error: Could not load player sprite" << std::endl;
+        std::cerr << "Error: Could not load assets/players/r-typesheet42.png" << std::endl;
         return 1;
     }
+
     player.init();
 
     // Charger la texture des missiles
     sf::Texture missileTexture;
-    if (!missileTexture.loadFromFile("../../client/assets/players/r-typesheet1.png"))
+    if (!missileTexture.loadFromFile("assets/players/r-typesheet1.png"))
     {
         std::cerr << "Error: Could not load missile sprite" << std::endl;
         return 1;
@@ -812,7 +813,7 @@ int main()
     // Charger le son de tir (vfx/shoot.ogg)
     sf::SoundBuffer shootBuffer;
     sf::Sound shootSound;
-    if (!shootBuffer.loadFromFile("../../client/assets/vfx/shoot.ogg"))
+    if (!shootBuffer.loadFromFile("assets/vfx/shoot.ogg"))
     {
         std::cerr << "Warning: Could not load shoot.ogg (no shoot sound)" << std::endl;
         // Ne pas échouer la compilation/exécution si le son manque, on continue sans son
@@ -825,7 +826,7 @@ int main()
 
     // Charger la texture des ennemis (vaisseau rouge)
     sf::Texture enemyTexture;
-    if (!enemyTexture.loadFromFile("../../client/assets/enemies/r-typesheet5.png"))
+    if (!enemyTexture.loadFromFile("assets/enemies/r-typesheet5.png"))
     {
         std::cerr << "Error: Could not load enemy sprite" << std::endl;
         return 1;
@@ -833,7 +834,7 @@ int main()
 
     // Charger la texture des explosions
     sf::Texture explosionTexture;
-    if (!explosionTexture.loadFromFile("../../client/assets/enemies/r-typesheet44.png"))
+    if (!explosionTexture.loadFromFile("assets/enemies/r-typesheet44.png"))
     {
         std::cerr << "Error: Could not load explosion sprite" << std::endl;
         return 1;

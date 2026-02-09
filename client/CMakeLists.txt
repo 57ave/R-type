@@ -26,6 +26,13 @@ target_link_libraries(r-type_client PRIVATE
     engine
 )
 
+add_custom_command(TARGET r-type_client POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:r-type_client>/assets
+    COMMENT "Copying client assets to build directory"
+)
+
 if(WIN32)
     # Copy SFML DLLs explicitly
     add_custom_command(TARGET r-type_client POST_BUILD
