@@ -64,3 +64,13 @@ cpm-package-lock.cmake
 Subject.md
 SubjectCompilation.md
 
+# Archives / binaries that should not be tracked
+*.zip
+*.tar.gz
+
+# Windows install scripts (auto-generated)
+install.cmd
+
+# Release dirs
+release_linux/
+release_windows/

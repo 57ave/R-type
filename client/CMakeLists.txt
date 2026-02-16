@@ -69,4 +69,12 @@ if(WIN32)
                 $<TARGET_FILE_DIR:r-type_client>
         )
     endif()
+
+    # Explicitly copy freetype.dll if it exists next to sfml-graphics
+    add_custom_command(TARGET r-type_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE_DIR:sfml-graphics>/freetype.dll"
+            $<TARGET_FILE_DIR:r-type_client>
+        COMMENT "Explicitly copying freetype.dll"
+    )
 endif()

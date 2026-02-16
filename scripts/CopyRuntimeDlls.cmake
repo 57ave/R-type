@@ -1,6 +1,3 @@
-# CopyRuntimeDlls.cmake
-# Copies all .dll files from SOURCE_DIR to DEST_DIR
-
 if(NOT EXISTS "${SOURCE_DIR}")
     message(FATAL_ERROR "SOURCE_DIR does not exist: ${SOURCE_DIR}")
 endif()
