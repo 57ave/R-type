@@ -16,6 +16,7 @@ require("config.weapons_config")
 require("config.enemies_config")
 require("config.bosses_config")
 require("config.assets_paths")
+require("config.patterns")
 
 print("[LUA] ✅ All configurations loaded")
 print("[LUA] 🚀 R-Type ready!")
