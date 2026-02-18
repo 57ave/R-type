@@ -23,6 +23,12 @@
 #include <components/NetworkId.hpp>
 #include <components/ScrollingBackground.hpp>
 #include <components/Tag.hpp>
+#include <components/Collectable.hpp>
+#include <components/Weapon.hpp>
+#include "components/WaveMotion.hpp"
+#include "components/Homing.hpp"
+#include "components/LaserBeam.hpp"
+#include <components/Score.hpp>
 #include <components/UIElement.hpp>
 #include <components/UIText.hpp>
 #include <components/UIButton.hpp>
@@ -255,6 +261,12 @@ void Game::setupECS()
     coordinator_->RegisterComponent<NetworkId>();
     coordinator_->RegisterComponent<ScrollingBackground>();
     coordinator_->RegisterComponent<Tag>();
+    coordinator_->RegisterComponent<Collectable>();
+    coordinator_->RegisterComponent<Weapon>();
+    coordinator_->RegisterComponent<WaveMotion>();
+    coordinator_->RegisterComponent<Homing>();
+    coordinator_->RegisterComponent<LaserBeam>();
+    coordinator_->RegisterComponent<Score>();
 
     // Register UI components (Phase 4)
     coordinator_->RegisterComponent<UIElement>();
@@ -266,7 +278,7 @@ void Game::setupECS()
     coordinator_->RegisterComponent<UIInputField>();
     coordinator_->RegisterComponent<UIDropdown>();
 
-    std::cout << "[GAME] " << 20 << " components registered (12 gameplay + 8 UI)" << std::endl;
+    std::cout << "[GAME] " << 25 << " components registered (17 gameplay + 8 UI)" << std::endl;
 
     // === Register and configure Systems (Phase 4) ===
     std::cout << "[GAME] Registering ECS systems..." << std::endl;
