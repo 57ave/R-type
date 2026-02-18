@@ -18,6 +18,7 @@ struct Animation {
     int startX = 0;                // Start X position in spritesheet
     int startY = 0;                // Start Y position in spritesheet
     int spacing = 0;               // Spacing between frames
+    bool vertical = false;         // If true, frames are stacked vertically
 };
 
 struct StateMachineAnimation {
