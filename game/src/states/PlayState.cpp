@@ -3242,7 +3242,6 @@ void PlayState::updateLevelSystem(float deltaTime) {
         if (coordinator && !coordinator->HasComponent<Health>(bossEntity_)) {
             // Boss entity was destroyed
             bossAlive_ = false;
-            // std::cout << "[PlayState] 🏆 Boss defeated! Level " << currentLevel_ << " complete!" << std::endl;
             
             if (currentLevel_ < 3) {
                 currentLevel_++;
@@ -3250,7 +3249,6 @@ void PlayState::updateLevelSystem(float deltaTime) {
                 // Small delay before next level starts
                 startLevel(currentLevel_);
             } else {
-                // std::cout << "[PlayState] 🎉 ALL LEVELS COMPLETE! You win!" << std::endl;
                 showLevelText_ = true;
                 levelTransitionTimer_ = 5.0f;
                 if (levelText_) {
@@ -3269,7 +3267,6 @@ void PlayState::updateLevelSystem(float deltaTime) {
                 activeEnemies_.erase(
                     std::remove(activeEnemies_.begin(), activeEnemies_.end(), bossEntity_),
                     activeEnemies_.end());
-                // std::cout << "[PlayState] 🏆 Boss HP reached 0! Level " << currentLevel_ << " complete!" << std::endl;
                 addScore(500); // Boss kill score
                 
                 if (currentLevel_ < 3) {
@@ -3321,7 +3318,6 @@ void PlayState::updateLevelSystem(float deltaTime) {
             waveSpawnState_.enemyIdx = 0;
             waveSpawnState_.spawnedCount = 0;
             waveSpawnState_.spawnTimer = 0.0f;
-            // std::cout << "[PlayState] 🌊 Wave " << (currentWaveIndex_ + 1) << " at " << levelTimer_ << "s" << std::endl;
         }
     }
     
@@ -3374,7 +3370,6 @@ void PlayState::spawnBoss() {
     
     auto config = getSoloLevelConfig(currentLevel_);
     
-    // std::cout << "[PlayState] 👹 Spawning boss for Level " << currentLevel_ << "!" << std::endl;
     
     ECS::Entity boss = coordinator->CreateEntity();
     
@@ -3473,5 +3468,4 @@ void PlayState::spawnBoss() {
     bossEntity_ = boss;
     activeEnemies_.push_back(boss);
     
-    // std::cout << "[PlayState] 👹 Boss spawned! HP=" << config.bossHealth << std::endl;
 }
