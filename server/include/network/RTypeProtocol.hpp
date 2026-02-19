@@ -244,7 +244,8 @@ enum class GamePacketType : uint16_t {
     CLIENT_TOGGLE_PAUSE = 0x34,  // Client requests server to toggle pause for the room (host-only)
     SERVER_SET_PAUSE = 0x35,     // Server informs clients that the room is paused or resumed
     CHAT_MESSAGE = 0x40,         // Nouveau: messages de chat
-    PLAYER_READY = 0x50          // Player marks ready in room
+    PLAYER_READY = 0x50,         // Player marks ready in room
+    LEVEL_CHANGE = 0x60          // Server informs clients of level change (payload: uint8_t levelId)
 };
 
 // Enum for EntityType
@@ -254,7 +255,9 @@ enum class EntityType : uint8_t {
     ENTITY_PLAYER_MISSILE = 2,
     ENTITY_MONSTER_MISSILE = 3,
     ENTITY_OBSTACLE = 4,
-    ENTITY_EXPLOSION = 5
+    ENTITY_EXPLOSION = 5,
+    ENTITY_POWERUP = 6,
+    ENTITY_MODULE = 7
 };
 
 #pragma pack(push, 1)
@@ -313,9 +316,10 @@ struct EntityState {
     uint8_t chargeLevel;    // For missiles (0 = normal, 1-5 = charge levels)
     uint8_t enemyType;      // For enemies (0 = basic, 1 = zigzag, etc.)
     uint8_t projectileType; // For projectiles (0 = normal, 1 = charged, etc.)
+    uint32_t score;         // For players: current score (0 for non-players)
 
     EntityState() : id(0), type(EntityType::ENTITY_PLAYER), x(0), y(0), vx(0), vy(0), hp(0), playerLine(0), 
-                    playerId(0), chargeLevel(0), enemyType(0), projectileType(0) {}
+                    playerId(0), chargeLevel(0), enemyType(0), projectileType(0), score(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;

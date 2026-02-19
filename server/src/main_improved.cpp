@@ -4,6 +4,8 @@
 #include <vector>
 #include <unordered_map>
 #include <random>
+#include <cmath>
+#include <algorithm>
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
 #include "engine/Clock.hpp"
@@ -25,16 +27,40 @@ struct ServerEntity {
     EntityType type;
     float x, y;
     float vx, vy;
-    uint8_t hp;
+    int32_t hp;           // Internal HP (can be > 255 for bosses)
     uint8_t playerId; // For player entities
     uint8_t playerLine; // For player ship color (spritesheet line)
     float fireTimer = 0.0f; // For rate limiting
     float lifetime = -1.0f; // For temporary entities like explosions (-1 = permanent)
+    uint32_t score = 0; // Player score (0 for non-players)
     
     // Extended fields for variety
     uint8_t chargeLevel = 0;    // For missiles (0 = normal, 1-5 = charge levels)
-    uint8_t enemyType = 0;      // For enemies (0 = basic, 1 = zigzag, 2 = sine, etc.)
+    uint8_t enemyType = 0;      // 0=bug, 1=fighter(zigzag), 2=kamikaze, 3=drone
     uint8_t projectileType = 0; // For projectiles (0 = normal, 1 = charged, etc.)
+    
+    // Movement pattern state
+    float zigzagTimer = 0.0f;   // Timer for zigzag direction changes
+    float baseVy = 0.0f;        // Original vy for zigzag pattern
+    
+    // Fire pattern: 0=straight, 1=aimed, 2=circle, 3=spread
+    uint8_t firePattern = 0;
+    float fireRate = 2.0f;      // Seconds between shots
+    
+    // Shield
+    float shieldTimer = 0.0f;   // Remaining shield time (0 = no shield)
+    
+    // Module equipped by player: 0=none, 1=laser, 2=homing, 3=spread, 4=wave
+    uint8_t moduleType = 0;
+    
+    // Wave motion for wave projectiles
+    float waveTime = 0.0f;
+    float waveAmplitude = 0.0f;
+    float waveFrequency = 0.0f;
+    
+    // Homing missile fields
+    uint32_t homingTarget = 0;
+    float homingSpeed = 0.0f;
 };
 
 class GameServer {
@@ -55,8 +81,6 @@ public:
         eng::engine::Clock snapshotClock;
         
         const float fixedDeltaTime = 1.0f / 60.0f; // 60 FPS simulation
-        float enemySpawnTimer = 0.0f;
-        const float enemySpawnInterval = 2.0f;
         
         const float snapshotRate = 1.0f / 30.0f; // 30 snapshots per second
         float accumulatedTime = 0.0f;
@@ -87,11 +111,7 @@ public:
                 }
                 
                 if (hasActiveGame) {
-                    enemySpawnTimer += fixedDeltaTime;
-                    if (enemySpawnTimer >= enemySpawnInterval) {
-                        enemySpawnTimer = 0.0f;
-                        spawnEnemy();
-                    }
+                    updateLevelSystem(fixedDeltaTime);
                 }
                 
                 // Send world snapshot at reduced rate (30Hz)
@@ -109,6 +129,390 @@ public:
     }
 
 private:
+    // ==========================================
+    // LEVEL SYSTEM
+    // ==========================================
+    
+    // Level configuration (hardcoded from Lua design)
+    struct WaveEnemy {
+        uint8_t type;       // 0=bug, 1=fighter, 2=kamikaze
+        int count;
+        float interval;     // seconds between spawns in this wave
+    };
+    
+    struct Wave {
+        float time;         // seconds since level start
+        std::vector<WaveEnemy> enemies;
+    };
+    
+    struct BossConfig {
+        uint8_t type;       // enemyType (3=FirstBoss, 4=SecondBoss, 5=LastBoss)
+        uint16_t health;
+        float speed;
+        float fireRate;
+        uint8_t firePattern;
+        float spawnTime;    // seconds since level start
+    };
+    
+    struct LevelConfig {
+        int id;
+        std::string name;
+        std::vector<uint8_t> enemyTypes;    // Allowed enemy types
+        std::vector<uint8_t> moduleTypes;   // Allowed module types
+        float enemyInterval;
+        float powerupInterval;
+        float moduleInterval;
+        int maxEnemies;
+        std::vector<Wave> waves;
+        BossConfig boss;
+        bool stopSpawningAtBoss;
+    };
+    
+    // Level state
+    int currentLevel_ = 1;
+    float levelTimer_ = 0.0f;
+    float enemySpawnTimer_ = 0.0f;
+    float powerupSpawnTimer_ = 0.0f;
+    float moduleSpawnTimer_ = 0.0f;
+    int currentWaveIndex_ = 0;
+    bool bossSpawned_ = false;
+    uint32_t bossEntityId_ = 0;
+    bool bossAlive_ = false;
+    bool levelActive_ = false;
+    uint8_t moduleRotationIdx_ = 0;
+
+    // Wave spawn state
+    struct WaveSpawnState {
+        int enemyIdx = 0;       // Current enemy group index
+        int spawnedCount = 0;   // How many spawned in current group
+        float spawnTimer = 0.0f;
+        bool active = false;
+    };
+    WaveSpawnState waveSpawnState_;
+    
+    LevelConfig getLevelConfig(int level) {
+        LevelConfig config;
+        config.stopSpawningAtBoss = true;
+        
+        switch (level) {
+            case 1:
+                config.id = 1;
+                config.name = "First Contact";
+                config.enemyTypes = {0};           // Only bugs
+                config.moduleTypes = {3, 4};       // spread, wave (NO homing)
+                config.enemyInterval = 2.5f;
+                config.powerupInterval = 15.0f;
+                config.moduleInterval = 25.0f;
+                config.maxEnemies = 8;
+                config.waves = {
+                    {3.0f,  {{0, 3, 1.5f}}},
+                    {15.0f, {{0, 5, 1.0f}}},
+                    {30.0f, {{0, 6, 0.8f}}},
+                    {50.0f, {{0, 8, 0.6f}}},
+                    {70.0f, {{0, 10, 0.5f}}},
+                };
+                config.boss = {3, 1000, 80.0f, 2.0f, 0, 90.0f};  // FirstBoss
+                break;
+            case 2:
+                config.id = 2;
+                config.name = "Rising Threat";
+                config.enemyTypes = {0, 1};        // Bugs + Bats
+                config.moduleTypes = {3, 4};       // spread, wave (NO homing)
+                config.enemyInterval = 2.0f;
+                config.powerupInterval = 12.0f;
+                config.moduleInterval = 22.0f;
+                config.maxEnemies = 12;
+                config.waves = {
+                    {3.0f,  {{0, 3, 1.2f}, {1, 2, 1.5f}}},
+                    {18.0f, {{0, 4, 0.8f}, {1, 3, 1.0f}}},
+                    {35.0f, {{1, 5, 0.7f}, {0, 3, 1.0f}}},
+                    {55.0f, {{0, 6, 0.5f}, {1, 4, 0.6f}}},
+                    {75.0f, {{0, 8, 0.4f}, {1, 5, 0.5f}}},
+                };
+                config.boss = {4, 2000, 60.0f, 1.5f, 2, 95.0f};  // SecondBoss
+                break;
+            case 3:
+            default:
+                config.id = 3;
+                config.name = "Final Assault";
+                config.enemyTypes = {0, 1, 2};    // ALL enemies
+                config.moduleTypes = {1, 3, 4};   // ALL modules including homing!
+                config.enemyInterval = 1.5f;
+                config.powerupInterval = 10.0f;
+                config.moduleInterval = 20.0f;
+                config.maxEnemies = 15;
+                config.waves = {
+                    {3.0f,  {{0, 4, 0.8f}, {1, 3, 1.0f}, {2, 2, 1.2f}}},
+                    {18.0f, {{2, 5, 0.6f}, {0, 3, 0.8f}}},
+                    {35.0f, {{0, 5, 0.5f}, {1, 4, 0.6f}, {2, 3, 0.7f}}},
+                    {55.0f, {{0, 8, 0.3f}, {1, 5, 0.4f}, {2, 4, 0.5f}}},
+                    {75.0f, {{0, 10, 0.3f}, {1, 6, 0.4f}, {2, 5, 0.4f}}},
+                };
+                config.boss = {5, 3000, 100.0f, 1.0f, 3, 95.0f}; // LastBoss
+                break;
+        }
+        return config;
+    }
+    
+    void startLevel(int level) {
+        currentLevel_ = level;
+        levelTimer_ = 0.0f;
+        enemySpawnTimer_ = 0.0f;
+        powerupSpawnTimer_ = 0.0f;
+        moduleSpawnTimer_ = 0.0f;
+        currentWaveIndex_ = 0;
+        bossSpawned_ = false;
+        bossEntityId_ = 0;
+        bossAlive_ = false;
+        levelActive_ = true;
+        moduleRotationIdx_ = 0;
+        waveSpawnState_ = WaveSpawnState{};
+        
+        auto config = getLevelConfig(level);
+        std::cout << "[GameServer] 🎮 === LEVEL " << level << ": " << config.name << " ===" << std::endl;
+        
+        // Broadcast level change to all clients
+        broadcastLevelChange(level);
+    }
+    
+    void updateLevelSystem(float dt) {
+        if (!levelActive_) {
+            // Start level 1 if no level is active
+            startLevel(currentLevel_);
+            return;
+        }
+        
+        levelTimer_ += dt;
+        auto config = getLevelConfig(currentLevel_);
+        
+        // Count current enemies
+        int enemyCount = 0;
+        for (const auto& [id, entity] : entities_) {
+            if (entity.type == EntityType::ENTITY_MONSTER) {
+                enemyCount++;
+            }
+        }
+        
+        // Check if boss was killed → advance to next level
+        if (bossSpawned_ && bossAlive_) {
+            if (entities_.find(bossEntityId_) == entities_.end()) {
+                bossAlive_ = false;
+                std::cout << "[GameServer] 🏆 Boss defeated! Level " << currentLevel_ << " complete!" << std::endl;
+                
+                // Clear remaining enemies
+                std::vector<uint32_t> toRemove;
+                for (const auto& [id, entity] : entities_) {
+                    if (entity.type == EntityType::ENTITY_MONSTER || 
+                        entity.type == EntityType::ENTITY_MONSTER_MISSILE) {
+                        toRemove.push_back(id);
+                    }
+                }
+                for (uint32_t id : toRemove) {
+                    entities_.erase(id);
+                    broadcastEntityDestroy(id);
+                }
+                
+                if (currentLevel_ < 3) {
+                    // Advance to next level after a short delay
+                    currentLevel_++;
+                    levelActive_ = false; // Will restart on next tick
+                    std::cout << "[GameServer] ⏭️ Advancing to Level " << currentLevel_ << "..." << std::endl;
+                } else {
+                    std::cout << "[GameServer] 🎉 ALL LEVELS COMPLETE! Game Won!" << std::endl;
+                    // Restart from level 1
+                    currentLevel_ = 1;
+                    levelActive_ = false;
+                }
+                return;
+            }
+        }
+        
+        // Process wave spawning (ongoing wave)
+        if (waveSpawnState_.active) {
+            processWaveSpawning(dt, config);
+        }
+        
+        // Check for new waves to trigger
+        if (currentWaveIndex_ < (int)config.waves.size() && !waveSpawnState_.active) {
+            if (levelTimer_ >= config.waves[currentWaveIndex_].time) {
+                // Start this wave
+                waveSpawnState_.active = true;
+                waveSpawnState_.enemyIdx = 0;
+                waveSpawnState_.spawnedCount = 0;
+                waveSpawnState_.spawnTimer = 0.0f;
+                std::cout << "[GameServer] 🌊 Wave " << (currentWaveIndex_ + 1) 
+                          << " triggered at " << levelTimer_ << "s" << std::endl;
+            }
+        }
+        
+        // Spawn boss when time comes
+        if (!bossSpawned_ && levelTimer_ >= config.boss.spawnTime) {
+            spawnBoss(config.boss);
+            bossSpawned_ = true;
+            bossAlive_ = true;
+            std::cout << "[GameServer] 👹 BOSS SPAWNED! (Level " << currentLevel_ << ")" << std::endl;
+        }
+        
+        // Regular spawning between waves (only if boss hasn't spawned or stopSpawningAtBoss is false)
+        bool canSpawnRegular = !(bossSpawned_ && config.stopSpawningAtBoss);
+        
+        if (canSpawnRegular && enemyCount < config.maxEnemies) {
+            enemySpawnTimer_ += dt;
+            if (enemySpawnTimer_ >= config.enemyInterval) {
+                enemySpawnTimer_ = 0.0f;
+                spawnLevelEnemy(config);
+            }
+        }
+        
+        // Spawn powerups
+        powerupSpawnTimer_ += dt;
+        if (powerupSpawnTimer_ >= config.powerupInterval) {
+            powerupSpawnTimer_ = 0.0f;
+            spawnPowerup();
+        }
+        
+        // Spawn modules (only allowed types for this level)
+        moduleSpawnTimer_ += dt;
+        if (moduleSpawnTimer_ >= config.moduleInterval) {
+            moduleSpawnTimer_ = 0.0f;
+            uint8_t modType = config.moduleTypes[moduleRotationIdx_ % config.moduleTypes.size()];
+            spawnModule(modType);
+            moduleRotationIdx_++;
+        }
+    }
+    
+    void processWaveSpawning(float dt, const LevelConfig& config) {
+        if (currentWaveIndex_ >= (int)config.waves.size()) {
+            waveSpawnState_.active = false;
+            return;
+        }
+        
+        const Wave& wave = config.waves[currentWaveIndex_];
+        
+        waveSpawnState_.spawnTimer += dt;
+        
+        // Find current enemy group
+        if (waveSpawnState_.enemyIdx >= (int)wave.enemies.size()) {
+            // Wave complete
+            waveSpawnState_.active = false;
+            currentWaveIndex_++;
+            return;
+        }
+        
+        const WaveEnemy& group = wave.enemies[waveSpawnState_.enemyIdx];
+        
+        if (waveSpawnState_.spawnTimer >= group.interval) {
+            waveSpawnState_.spawnTimer = 0.0f;
+            spawnEnemyOfType(group.type);
+            waveSpawnState_.spawnedCount++;
+            
+            if (waveSpawnState_.spawnedCount >= group.count) {
+                // Move to next enemy group
+                waveSpawnState_.enemyIdx++;
+                waveSpawnState_.spawnedCount = 0;
+            }
+        }
+    }
+    
+    void spawnLevelEnemy(const LevelConfig& config) {
+        // Pick random allowed enemy type for this level
+        uint8_t enemyType = config.enemyTypes[dist_(rng_) % config.enemyTypes.size()];
+        spawnEnemyOfType(enemyType);
+    }
+    
+    void spawnEnemyOfType(uint8_t enemyType) {
+        ServerEntity enemy;
+        enemy.id = nextEntityId_++;
+        enemy.type = EntityType::ENTITY_MONSTER;
+        enemy.x = 1920.0f;
+        enemy.y = 100.0f + (dist_(rng_) % 880);
+        enemy.playerId = 0;
+        enemy.playerLine = 0;
+        
+        switch (enemyType) {
+            case 0: // Bug - straight, slow, straight fire
+                enemy.enemyType = 0;
+                enemy.vx = -400.0f;
+                enemy.vy = 0.0f;
+                enemy.hp = 10;
+                enemy.firePattern = 0; // straight
+                enemy.fireRate = 2.0f;
+                break;
+            case 1: // Fighter/Bat - zigzag, circle fire
+                enemy.enemyType = 1;
+                enemy.vx = -350.0f;
+                enemy.vy = 80.0f;
+                enemy.baseVy = 80.0f;
+                enemy.hp = 30;
+                enemy.firePattern = 2; // circle
+                enemy.fireRate = 1.5f;
+                break;
+            case 2: // Kamikaze - rushes player, no fire
+                enemy.enemyType = 2;
+                enemy.vx = -500.0f;
+                enemy.vy = 0.0f;
+                enemy.hp = 20;
+                enemy.firePattern = 255; // no fire
+                enemy.fireRate = 999.0f;
+                break;
+            default:
+                enemy.enemyType = 0;
+                enemy.vx = -400.0f;
+                enemy.vy = 0.0f;
+                enemy.hp = 10;
+                enemy.firePattern = 0;
+                enemy.fireRate = 2.0f;
+                break;
+        }
+        
+        enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f;
+        
+        entities_[enemy.id] = enemy;
+        broadcastEntitySpawn(enemy);
+    }
+    
+    void spawnBoss(const BossConfig& bossConfig) {
+        ServerEntity boss;
+        boss.id = nextEntityId_++;
+        boss.type = EntityType::ENTITY_MONSTER;
+        boss.x = 1920.0f;
+        boss.y = 400.0f; // Spawn at center-ish height
+        boss.vx = -bossConfig.speed;
+        boss.vy = 0.0f;
+        boss.hp = bossConfig.health; // Full HP (internal int32_t)
+        boss.playerId = 0;
+        boss.playerLine = 0;
+        boss.enemyType = bossConfig.type; // 3=FirstBoss, 4=SecondBoss, 5=LastBoss
+        boss.firePattern = bossConfig.firePattern;
+        boss.fireRate = bossConfig.fireRate;
+        boss.fireTimer = 1.0f;
+        
+        bossEntityId_ = boss.id;
+        
+        entities_[boss.id] = boss;
+        broadcastEntitySpawn(boss);
+        
+        std::cout << "[GameServer] 👹 Boss " << (int)bossConfig.type 
+                  << " spawned (HP=" << (int)boss.hp << ")" << std::endl;
+    }
+    
+    void broadcastLevelChange(int level) {
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::LEVEL_CHANGE));
+        uint8_t levelId = static_cast<uint8_t>(level);
+        packet.payload.push_back(static_cast<char>(levelId));
+        
+        // Broadcast to all rooms
+        auto& roomManager = server_.getRoomManager();
+        auto allRooms = roomManager.getAllRooms();
+        for (auto& [roomId, room] : allRooms) {
+            if (room->state == RoomState::PLAYING) {
+                broadcastToRoom(roomId, packet);
+            }
+        }
+        
+        std::cout << "[GameServer] 📡 Broadcast LEVEL_CHANGE: Level " << level << std::endl;
+    }
+
     void processPackets() {
         while (server_.hasReceivedPackets()) {
             auto [packet, sender] = server_.getNextReceivedPacket();
@@ -215,11 +619,30 @@ private:
         if (input.inputMask & (1 << 2)) player.vx = -speed; // Left
         if (input.inputMask & (1 << 3)) player.vx = speed;  // Right
         
-        // Fire (with rate limiting)
-        if ((input.inputMask & (1 << 4)) && player.fireTimer <= 0.0f) {
-            spawnPlayerMissile(player, input.chargeLevel);
-            player.fireTimer = 0.2f; // 0.2 second cooldown
+        // Fire logic: shoot ONLY on release
+        bool firePressed = (input.inputMask & (1 << 4)) != 0;
+        bool prevFire = playerPrevFire_[input.playerId];
+        
+        if (firePressed) {
+            // Track charge level while holding
+            playerLastCharge_[input.playerId] = input.chargeLevel;
+        } else if (prevFire && !firePressed) {
+            // Released fire button
+            uint8_t charge = playerLastCharge_[input.playerId];
+            if (player.fireTimer <= 0.0f) {
+                if (player.moduleType > 0) {
+                    // Fire with module pattern
+                    fireModuleMissile(player);
+                    player.fireTimer = 0.2f;
+                } else {
+                    // Normal/charged shot
+                    spawnPlayerMissile(player, charge);
+                    player.fireTimer = charge > 0 ? 0.3f : 0.15f;
+                }
+            }
+            playerLastCharge_[input.playerId] = 0;
         }
+        playerPrevFire_[input.playerId] = firePressed;
     }
 
     // ✅ NOUVEAU: Handler pour CLIENT_PING
@@ -333,18 +756,102 @@ private:
             entity.x += entity.vx * deltaTime;
             entity.y += entity.vy * deltaTime;
             
+            // Wave projectile motion (sinusoidal Y)
+            if (entity.type == EntityType::ENTITY_PLAYER_MISSILE && entity.projectileType == 5) {
+                entity.waveTime += deltaTime;
+                float angularFreq = entity.waveFrequency * 2.0f * 3.14159f;
+                entity.vy = entity.waveAmplitude * angularFreq * std::cos(angularFreq * entity.waveTime);
+            }
+            
+            // Homing projectile: track nearest enemy
+            if (entity.type == EntityType::ENTITY_PLAYER_MISSILE && entity.projectileType == 3) {
+                const ServerEntity* nearest = nullptr;
+                float nearestDist = 600.0f; // Detection radius
+                for (auto& [eid, e] : entities_) {
+                    if (e.type != EntityType::ENTITY_MONSTER) continue;
+                    float dx = e.x - entity.x;
+                    float dy = e.y - entity.y;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = &e;
+                    }
+                }
+                if (nearest) {
+                    float dx = nearest->x - entity.x;
+                    float dy = nearest->y - entity.y;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist > 0.001f) {
+                        float speed = entity.homingSpeed > 0.0f ? entity.homingSpeed : 500.0f;
+                        // Smooth turn towards target
+                        float targetVx = (dx / dist) * speed;
+                        float targetVy = (dy / dist) * speed;
+                        float turnRate = 5.0f * deltaTime; // Smooth turn
+                        entity.vx += (targetVx - entity.vx) * turnRate;
+                        entity.vy += (targetVy - entity.vy) * turnRate;
+                        // Maintain speed
+                        float currentSpeed = std::sqrt(entity.vx * entity.vx + entity.vy * entity.vy);
+                        if (currentSpeed > 0.001f) {
+                            entity.vx = (entity.vx / currentSpeed) * speed;
+                            entity.vy = (entity.vy / currentSpeed) * speed;
+                        }
+                    }
+                }
+            }
+            
             // Update fire timer
             if (entity.fireTimer > 0.0f) {
                 entity.fireTimer -= deltaTime;
             }
             
-            // Enemy shooting logic
+            // Enemy shooting logic (with fire patterns)
             if (entity.type == EntityType::ENTITY_MONSTER && entity.fireTimer <= 0.0f) {
-                // Enemies shoot periodically
-                if (entity.x < 1800.0f && entity.x > 100.0f) { // Only shoot when on screen
+                // Only shoot when on screen and has a valid fire pattern
+                if (entity.x < 1800.0f && entity.x > 100.0f && entity.firePattern != 255) {
                     spawnEnemyMissile(entity);
-                    entity.fireTimer = 2.0f + (dist_(rng_) % 200) / 100.0f; // Random fire rate 2-4 seconds
+                    entity.fireTimer = entity.fireRate + (dist_(rng_) % 100) / 100.0f;
                 }
+            }
+            
+            // Zigzag pattern (fighter, enemyType=1): reverse vy periodically
+            if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType == 1) {
+                entity.zigzagTimer += deltaTime;
+                if (entity.zigzagTimer >= 1.0f) {
+                    entity.vy = -entity.vy;
+                    entity.zigzagTimer = 0.0f;
+                }
+                // Bounce off top/bottom
+                if (entity.y < 50.0f) entity.vy = std::abs(entity.baseVy);
+                if (entity.y > 1000.0f) entity.vy = -std::abs(entity.baseVy);
+            }
+            
+            // Kamikaze pattern (enemyType=2): rush towards nearest player
+            if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType == 2) {
+                const ServerEntity* nearestPlayer = findNearestPlayer(entity);
+                if (nearestPlayer) {
+                    float dx = nearestPlayer->x - entity.x;
+                    float dy = nearestPlayer->y - entity.y;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist > 0.001f) {
+                        float speed = 500.0f;
+                        entity.vx = (dx / dist) * speed;
+                        entity.vy = (dy / dist) * speed;
+                    }
+                }
+            }
+            
+            // Boss movement pattern (enemyType >= 3): move to x=1500 then bob up/down
+            if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType >= 3) {
+                if (entity.x <= 1500.0f) {
+                    entity.vx = 0.0f; // Stop horizontal movement
+                    entity.x = 1500.0f;
+                    // Bob up and down slowly
+                    entity.zigzagTimer += deltaTime;
+                    entity.vy = std::sin(entity.zigzagTimer * 1.5f) * 100.0f;
+                }
+                // Keep boss on screen
+                if (entity.y < 50.0f) entity.y = 50.0f;
+                if (entity.y > 900.0f) entity.y = 900.0f;
             }
             
             // Boundary checking for players
@@ -353,6 +860,17 @@ private:
                 if (entity.y < 0) entity.y = 0;
                 if (entity.x > 1820) entity.x = 1820;
                 if (entity.y > 1030) entity.y = 1030;
+                
+                // Shield timer countdown
+                if (entity.shieldTimer > 0.0f) {
+                    entity.shieldTimer -= deltaTime;
+                    entity.chargeLevel = 99; // Keep signaling shield to client
+                    if (entity.shieldTimer <= 0.0f) {
+                        entity.shieldTimer = 0.0f;
+                        entity.chargeLevel = 0; // Shield expired
+                        std::cout << "[GameServer] 🛡️ Shield expired for player " << (int)entity.playerId << std::endl;
+                    }
+                }
             }
             
             // Boundary checking for others (remove if out of bounds)
@@ -368,11 +886,28 @@ private:
                 for (auto& [enemyId, enemy] : entities_) {
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
-                            std::cout << "[GameServer] Missile " << id << " hit enemy " << enemyId << "!" << std::endl;
-                            // Create explosion at enemy position
-                            spawnExplosion(enemy.x, enemy.y);
-                            toRemove.push_back(id);
-                            toRemove.push_back(enemyId);
+                            // Calculate damage based on missile charge level
+                            int damage = 10; // base damage
+                            if (entity.chargeLevel > 0) {
+                                damage = entity.chargeLevel * 10; // charged shots do more
+                            }
+                            
+                            enemy.hp -= damage;
+                            toRemove.push_back(id); // Always destroy missile
+                            
+                            if (enemy.hp <= 0) {
+                                // Enemy killed - award score
+                                uint8_t shooterId = entity.playerId;
+                                for (auto& [playerId, player] : entities_) {
+                                    if (player.type == EntityType::ENTITY_PLAYER && player.playerId == shooterId) {
+                                        uint32_t points = (enemy.enemyType >= 3) ? 500 : 100; // Boss = 500pts
+                                        player.score += points;
+                                        break;
+                                    }
+                                }
+                                spawnExplosion(enemy.x, enemy.y);
+                                toRemove.push_back(enemyId);
+                            }
                             break;
                         }
                     }
@@ -384,12 +919,13 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
-                            // Create small explosion at missile hit
-                            spawnExplosion(entity.x, entity.y);
+                            // No explosion when player is hit - just destroy missile
                             toRemove.push_back(id);
-                            player.hp -= 10; // Damage player
-                            if (player.hp <= 0) {
-                                toRemove.push_back(playerId);
+                            if (player.shieldTimer <= 0.0f) {
+                                player.hp -= 10; // Damage player
+                                if (player.hp <= 0) {
+                                    toRemove.push_back(playerId);
+                                }
                             }
                             break;
                         }
@@ -402,13 +938,61 @@ private:
                 for (auto& [playerId, player] : entities_) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
-                            // Create explosion at collision point
+                            // Create explosion at enemy position (enemy dies)
                             spawnExplosion(entity.x, entity.y);
                             toRemove.push_back(id); // Destroy enemy
-                            player.hp -= 20; // Heavy damage to player
-                            if (player.hp <= 0) {
-                                toRemove.push_back(playerId);
+                            if (player.shieldTimer <= 0.0f) {
+                                player.hp -= 20; // Heavy damage to player
+                                if (player.hp <= 0) {
+                                    toRemove.push_back(playerId);
+                                }
                             }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Check powerup collision with players
+            if (entity.type == EntityType::ENTITY_POWERUP) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            toRemove.push_back(id); // Remove powerup
+                            
+                            if (entity.enemyType == 0) {
+                                // ORANGE BOMB: destroy all visible enemies
+                                std::cout << "[GameServer] 💥 Player " << (int)player.playerId << " picked up BOMB!" << std::endl;
+                                for (auto& [eid, e] : entities_) {
+                                    if (e.type == EntityType::ENTITY_MONSTER) {
+                                        if (e.x >= -100.0f && e.x <= 2020.0f && e.y >= -100.0f && e.y <= 1180.0f) {
+                                            spawnExplosion(e.x, e.y);
+                                            toRemove.push_back(eid);
+                                        }
+                                    }
+                                }
+                            } else if (entity.enemyType == 1) {
+                                // BLUE SHIELD: make player invulnerable for 10 seconds
+                                std::cout << "[GameServer] 🛡️ Player " << (int)player.playerId << " picked up SHIELD!" << std::endl;
+                                player.shieldTimer = 10.0f; // 10 seconds of invulnerability
+                                player.chargeLevel = 99; // Signal to client that shield is active
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Check module collision with players (pickup)
+            if (entity.type == EntityType::ENTITY_MODULE) {
+                for (auto& [playerId, player] : entities_) {
+                    if (player.type == EntityType::ENTITY_PLAYER) {
+                        if (checkCollision(entity, player)) {
+                            toRemove.push_back(id); // Remove module from world
+                            player.moduleType = entity.enemyType; // 1=laser(homing), 3=spread, 4=wave
+                            const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
+                            std::cout << "[GameServer] 🔧 Player " << (int)player.playerId 
+                                      << " picked up module: " << names[entity.enemyType] << std::endl;
                             break;
                         }
                     }
@@ -433,55 +1017,7 @@ private:
                 a.y < b.y + size && a.y + size > b.y);
     }
 
-    void spawnEnemy() {
-        ServerEntity enemy;
-        enemy.id = nextEntityId_++;
-        enemy.type = EntityType::ENTITY_MONSTER;
-        enemy.x = 1920.0f;
-        enemy.y = 100.0f + (dist_(rng_) % 880);
-        
-        // Random enemy type (0-5 for different enemy types)
-        enemy.enemyType = dist_(rng_) % 6;
-        
-        // Adjust speed and HP based on enemy type
-        switch (enemy.enemyType) {
-            case 0: // Basic
-                enemy.vx = -200.0f;
-                enemy.hp = 10;
-                break;
-            case 1: // ZigZag (faster)
-                enemy.vx = -250.0f;
-                enemy.hp = 8;
-                break;
-            case 2: // Sine Wave
-                enemy.vx = -180.0f;
-                enemy.hp = 12;
-                break;
-            case 3: // Kamikaze (very fast, low HP)
-                enemy.vx = -400.0f;
-                enemy.hp = 5;
-                break;
-            case 4: // Turret (slow, high HP)
-                enemy.vx = -100.0f;
-                enemy.hp = 20;
-                break;
-            case 5: // Boss (rare, slow, very high HP)
-                enemy.vx = -150.0f;
-                enemy.hp = 50;
-                break;
-        }
-        
-        enemy.vy = 0.0f;
-        enemy.playerId = 0;
-        enemy.playerLine = 0; // Enemies don't use playerLine
-        enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f; // Initial fire delay 1-3s
-        
-        entities_[enemy.id] = enemy;
-        broadcastEntitySpawn(enemy);
-        
-        std::cout << "[GameServer] 👾 Spawned enemy " << enemy.id << " (type " << (int)enemy.enemyType 
-                  << ") at (" << enemy.x << ", " << enemy.y << ")" << std::endl;
-    }
+    // OLD spawnEnemy() replaced by level system's spawnEnemyOfType()
 
     void spawnPlayerMissile(const ServerEntity& player, uint8_t chargeLevel = 0) {
         ServerEntity missile;
@@ -504,22 +1040,191 @@ private:
                   << (chargeLevel > 0 ? " (CHARGED level " + std::to_string(chargeLevel) + ")" : "") << std::endl;
     }
     
+    void fireModuleMissile(const ServerEntity& player) {
+        float baseSpeed = 800.0f;
+        
+        switch (player.moduleType) {
+            case 1: { // LASER MODULE: fires homing missiles (tracks nearest enemy)
+                ServerEntity missile;
+                missile.id = nextEntityId_++;
+                missile.type = EntityType::ENTITY_PLAYER_MISSILE;
+                missile.x = player.x + 50.0f;
+                missile.y = player.y + 10.0f;
+                missile.vx = baseSpeed;
+                missile.vy = 0.0f;
+                missile.hp = 1;
+                missile.playerId = player.playerId;
+                missile.chargeLevel = 0;
+                missile.projectileType = 3; // Homing projectile
+                missile.homingSpeed = 500.0f;
+                entities_[missile.id] = missile;
+                broadcastEntitySpawn(missile);
+                break;
+            }
+            case 3: { // SPREAD: fires 3 projectiles in a fan (-15°, 0°, +15°)
+                const float angles[3] = {-0.2617f, 0.0f, 0.2617f};
+                for (int i = 0; i < 3; ++i) {
+                    ServerEntity missile;
+                    missile.id = nextEntityId_++;
+                    missile.type = EntityType::ENTITY_PLAYER_MISSILE;
+                    missile.x = player.x + 50.0f;
+                    missile.y = player.y + 10.0f;
+                    missile.vx = baseSpeed * std::cos(angles[i]);
+                    missile.vy = baseSpeed * std::sin(angles[i]);
+                    missile.hp = 1;
+                    missile.playerId = player.playerId;
+                    missile.chargeLevel = 0;
+                    missile.projectileType = 4; // Spread projectile
+                    entities_[missile.id] = missile;
+                    broadcastEntitySpawn(missile);
+                }
+                break;
+            }
+            case 4: { // WAVE: fires a projectile with sinusoidal motion
+                ServerEntity missile;
+                missile.id = nextEntityId_++;
+                missile.type = EntityType::ENTITY_PLAYER_MISSILE;
+                missile.x = player.x + 50.0f;
+                missile.y = player.y + 10.0f;
+                missile.vx = baseSpeed;
+                missile.vy = 0.0f;
+                missile.hp = 1;
+                missile.playerId = player.playerId;
+                missile.chargeLevel = 0;
+                missile.projectileType = 5; // Wave projectile
+                missile.waveTime = 0.0f;
+                missile.waveAmplitude = 60.0f;
+                missile.waveFrequency = 4.0f;
+                entities_[missile.id] = missile;
+                broadcastEntitySpawn(missile);
+                break;
+            }
+            default:
+                // Fallback: normal shot
+                spawnPlayerMissile(player, 0);
+                break;
+        }
+        
+        const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
+        std::cout << "[GameServer] 🔧 Player " << (int)player.playerId 
+                  << " fired with module: " << names[player.moduleType] << std::endl;
+    }
+    
+    void spawnPowerup() {
+        ServerEntity powerup;
+        powerup.id = nextEntityId_++;
+        powerup.type = EntityType::ENTITY_POWERUP;
+        powerup.x = 1920.0f;
+        powerup.y = 100.0f + (dist_(rng_) % 880);
+        powerup.vx = -150.0f;
+        powerup.vy = 0.0f;
+        powerup.hp = 1;
+        powerup.playerId = 0;
+        powerup.playerLine = 0;
+        
+        // 50/50 orange or blue
+        powerup.enemyType = (dist_(rng_) % 2 == 0) ? 0 : 1; // 0=orange, 1=blue
+        
+        entities_[powerup.id] = powerup;
+        broadcastEntitySpawn(powerup);
+        
+        std::cout << "[GameServer] ⭐ Spawned powerup " << powerup.id 
+                  << " (" << (powerup.enemyType == 0 ? "orange/bomb" : "blue/shield") 
+                  << ") at (" << powerup.x << ", " << powerup.y << ")" << std::endl;
+    }
+
+    // moduleType: 1=laser(homing), 3=spread, 4=wave
+    void spawnModule(uint8_t modType) {
+        ServerEntity mod;
+        mod.id = nextEntityId_++;
+        mod.type = EntityType::ENTITY_MODULE;
+        mod.x = 1920.0f;
+        mod.y = 100.0f + (dist_(rng_) % 880);
+        mod.vx = -100.0f;
+        mod.vy = 0.0f;
+        mod.hp = 1;
+        mod.playerId = 0;
+        mod.playerLine = 0;
+        mod.enemyType = modType; // Reuse enemyType to identify module type for client
+        
+        entities_[mod.id] = mod;
+        broadcastEntitySpawn(mod);
+        
+        const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
+        std::cout << "[GameServer] 🔧 Spawned module " << mod.id 
+                  << " (" << names[modType] 
+                  << ") at (" << mod.x << ", " << mod.y << ")" << std::endl;
+    }
+
     void spawnEnemyMissile(const ServerEntity& enemy) {
+        float projSpeed = std::abs(enemy.vx) * 1.5f; // Projectile toujours plus rapide que l'ennemi
+        if (projSpeed < 400.0f) projSpeed = 400.0f;
+        
+        if (enemy.firePattern == 0) {
+            // STRAIGHT: single shot to the left
+            spawnSingleMissile(enemy, -projSpeed, 0.0f);
+        } else if (enemy.firePattern == 1) {
+            // AIMED: shoot towards nearest player
+            const ServerEntity* target = findNearestPlayer(enemy);
+            if (target) {
+                float dx = target->x - enemy.x;
+                float dy = target->y - enemy.y;
+                float len = std::sqrt(dx * dx + dy * dy);
+                if (len > 0.001f) {
+                    spawnSingleMissile(enemy, (dx / len) * projSpeed, (dy / len) * projSpeed);
+                }
+            } else {
+                spawnSingleMissile(enemy, -projSpeed, 0.0f);
+            }
+        } else if (enemy.firePattern == 2) {
+            // CIRCLE: 8 projectiles in all directions
+            for (int i = 0; i < 8; ++i) {
+                float angle = (2.0f * 3.14159f * i) / 8.0f;
+                float circleSpeed = projSpeed * 0.8f;
+                spawnSingleMissile(enemy, std::cos(angle) * circleSpeed, std::sin(angle) * circleSpeed);
+            }
+        } else if (enemy.firePattern == 3) {
+            // SPREAD: 3 projectiles in a fan
+            for (int i = -1; i <= 1; ++i) {
+                float angle = i * 0.26f; // ~15 degrees
+                float dx = -projSpeed * std::cos(angle);
+                float dy = -projSpeed * std::sin(angle);
+                spawnSingleMissile(enemy, dx, dy);
+            }
+        }
+    }
+    
+    void spawnSingleMissile(const ServerEntity& enemy, float vx, float vy) {
         ServerEntity missile;
         missile.id = nextEntityId_++;
         missile.type = EntityType::ENTITY_MONSTER_MISSILE;
-        missile.x = enemy.x - 20.0f;
-        missile.y = enemy.y + 10.0f;
-        missile.vx = -400.0f; // Shoot left towards players
-        missile.vy = 0.0f;
+        missile.x = enemy.x - 40.0f;
+        missile.y = enemy.y;
+        missile.vx = vx;
+        missile.vy = vy;
         missile.hp = 1;
         missile.playerId = 0;
         missile.playerLine = 0;
         
         entities_[missile.id] = missile;
         broadcastEntitySpawn(missile);
-        
-        std::cout << "[GameServer] Enemy " << enemy.id << " fired missile " << missile.id << " at (" << missile.x << ", " << missile.y << ")" << std::endl;
+    }
+    
+    const ServerEntity* findNearestPlayer(const ServerEntity& from) {
+        float nearestDist = 999999.0f;
+        const ServerEntity* nearest = nullptr;
+        for (const auto& [id, e] : entities_) {
+            if (e.type == EntityType::ENTITY_PLAYER) {
+                float dx = e.x - from.x;
+                float dy = e.y - from.y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = &e;
+                }
+            }
+        }
+        return nearest;
     }
 
     void spawnExplosion(float x, float y) {
@@ -573,9 +1278,8 @@ private:
                     }
                 }
                 
-                // Ajouter les autres entités (ennemis, projectiles, etc.)
+                // Ajouter les autres entités (ennemis, projectiles, explosions, etc.)
                 for (const auto& [id, entity] : entities_) {
-                    if (entity.type == EntityType::ENTITY_EXPLOSION) continue;
                     if (entity.type == EntityType::ENTITY_PLAYER) continue;
                     snapshotEntities.push_back(&entity);
                 }
@@ -597,12 +1301,18 @@ private:
                     state.y = entity->y;
                     state.vx = entity->vx;
                     state.vy = entity->vy;
-                    state.hp = entity->hp;
+                    state.hp = static_cast<uint8_t>(std::min(entity->hp, (int32_t)255));
                     state.playerLine = entity->playerLine;
                     state.playerId = entity->playerId; // include server-side playerId mapping
                     state.chargeLevel = entity->chargeLevel;
                     state.enemyType = entity->enemyType;
-                    state.projectileType = entity->projectileType;
+                    state.score = entity->score; // Send player score
+                    // For players: send moduleType via projectileType field
+                    if (entity->type == EntityType::ENTITY_PLAYER) {
+                        state.projectileType = entity->moduleType;
+                    } else {
+                        state.projectileType = entity->projectileType;
+                    }
                     
                     auto stateData = state.serialize();
                     packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
@@ -634,12 +1344,13 @@ private:
                 state.y = entity->y;
                 state.vx = entity->vx;
                 state.vy = entity->vy;
-                state.hp = entity->hp;
+                state.hp = static_cast<uint8_t>(std::min(entity->hp, (int32_t)255));
                 state.playerLine = entity->playerLine;
                 state.playerId = entity->playerId;
                 state.chargeLevel = entity->chargeLevel;
                 state.enemyType = entity->enemyType;
                 state.projectileType = entity->projectileType;
+                state.score = entity->score; // Send player score
                 
                 auto stateData = state.serialize();
                 packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
@@ -657,7 +1368,7 @@ private:
         state.y = entity.y;
         state.vx = entity.vx;
         state.vy = entity.vy;
-        state.hp = entity.hp;
+        state.hp = static_cast<uint8_t>(std::min(entity.hp, (int32_t)255));
         state.playerLine = entity.playerLine;
         state.playerId = entity.playerId;
         state.chargeLevel = entity.chargeLevel;
@@ -1104,6 +1815,8 @@ private:
     std::unordered_map<uint8_t, uint32_t> playerEntities_; // playerId -> entityId
     std::unordered_map<asio::ip::udp::endpoint, uint8_t> endpointToPlayerId_; // endpoint -> playerId
     std::unordered_map<uint8_t, uint32_t> playerToRoom_;  // playerId -> roomId (NEW for rooming)
+    std::unordered_map<uint8_t, bool> playerPrevFire_;     // playerId -> was fire pressed last frame
+    std::unordered_map<uint8_t, uint8_t> playerLastCharge_; // playerId -> last charge level while holding
     uint32_t nextEntityId_;
     uint8_t nextPlayerId_ = 1;
     bool gameRunning_;
