@@ -46,6 +46,9 @@ namespace Network {
         // Player (no direct equivalent, using custom IDs)
         PLAYER_READY        = 0x50, // Player marks ready
         PLAYER_NOT_READY    = 0x51, // Player marks not ready
+        
+        // Level system
+        LEVEL_CHANGE        = 0x60, // Server signals level change
     };
 
     /**

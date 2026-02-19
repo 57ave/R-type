@@ -4,6 +4,7 @@
 
 #include "states/MultiplayerMenuState.hpp"
 #include "states/PlayState.hpp"
+#include "states/NetworkPlayState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
@@ -833,11 +834,11 @@ void MultiplayerMenuState::update(float deltaTime)
 {
     (void)deltaTime;
     
-    // Check if we should transition to PlayState (GAME_START received)
+    // Check if we should transition to NetworkPlayState (GAME_START received)
     if (shouldStartGame_) {
         shouldStartGame_ = false;
-        std::cout << "[MultiplayerMenuState] 🚀 Transitioning to PlayState..." << std::endl;
-        game_->getStateManager()->pushState(std::make_unique<PlayState>(game_));
+        std::cout << "[MultiplayerMenuState] 🚀 Transitioning to NetworkPlayState (multiplayer)..." << std::endl;
+        game_->getStateManager()->pushState(std::make_unique<NetworkPlayState>(game_));
         return;
     }
     
