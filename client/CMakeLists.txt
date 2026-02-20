@@ -77,4 +77,37 @@ if(WIN32)
             $<TARGET_FILE_DIR:r-type_client>
         COMMENT "Explicitly copying freetype.dll"
     )
+
+    # Copy lua.dll (built as shared library on Windows)
+    if(TARGET lua)
+        add_custom_command(TARGET r-type_client POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:lua>
+                $<TARGET_FILE_DIR:r-type_client>
+            COMMENT "Copying lua.dll to client output directory"
+        )
+    endif()
+
+    # Copy engine system DLLs (all built as SHARED on Windows)
+    foreach(_sys
+        MovementSystem
+        AnimationSystem
+        StateMachineAnimationSystem
+        UISystem
+        AudioSystem
+        InputSystem
+        LifetimeSystem
+        BoundarySystem
+        HealthSystem
+        ScrollingBackgroundSystem
+    )
+        if(TARGET ${_sys})
+            add_custom_command(TARGET r-type_client POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_sys}>
+                    $<TARGET_FILE_DIR:r-type_client>
+                COMMENT "Copying ${_sys}.dll to client output directory"
+            )
+        endif()
+    endforeach()
 endif()

@@ -101,6 +101,39 @@ if(WIN32)
                 $<TARGET_FILE_DIR:game>
         )
     endif()
+
+    # Copy lua.dll (built as shared library on Windows)
+    if(TARGET lua)
+        add_custom_command(TARGET game POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:lua>
+                $<TARGET_FILE_DIR:game>
+            COMMENT "Copying lua.dll to game output directory"
+        )
+    endif()
+
+    # Copy engine system DLLs (all built as SHARED on Windows)
+    foreach(_sys
+        MovementSystem
+        AnimationSystem
+        StateMachineAnimationSystem
+        UISystem
+        AudioSystem
+        InputSystem
+        LifetimeSystem
+        BoundarySystem
+        HealthSystem
+        ScrollingBackgroundSystem
+    )
+        if(TARGET ${_sys})
+            add_custom_command(TARGET game POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_sys}>
+                    $<TARGET_FILE_DIR:game>
+                COMMENT "Copying ${_sys}.dll to game output directory"
+            )
+        endif()
+    endforeach()
 endif()
 
 message(STATUS "✅ R-Type Game configured successfully")
