@@ -24,6 +24,9 @@ public:
     // Returns true if a packet was retrieved, false if queue is empty
     bool popPacket(NetworkPacket& outPacket);
 
+    // Close the socket (cancels all pending async operations)
+    void close();
+
     // Check if connected
     bool isConnected() const { return connected_; }
 
