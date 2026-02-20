@@ -9,6 +9,7 @@
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
 #include "engine/Clock.hpp"
+#include "ServerConfig.hpp"
 
 // Hash function for asio::ip::udp::endpoint to use in unordered_map
 namespace std {
@@ -61,6 +62,46 @@ struct ServerEntity {
     // Homing missile fields
     uint32_t homingTarget = 0;
     float homingSpeed = 0.0f;
+    
+    // Hitbox dimensions (pixel-accurate per entity type)
+    float width = 50.0f;
+    float height = 50.0f;
+    
+    // Collision cooldown (prevents taking damage every frame from boss overlap)
+    float collisionCooldown = 0.0f;
+};
+
+// Per-room game state: each room has its own independent game simulation
+struct RoomGameState {
+    uint32_t roomId = 0;
+    
+    // Entities for this room only
+    std::unordered_map<uint32_t, ServerEntity> entities;
+    std::unordered_map<uint8_t, uint32_t> playerEntities; // playerId -> entityId
+    std::unordered_map<uint8_t, bool> playerPrevFire;     // playerId -> was fire pressed last frame
+    std::unordered_map<uint8_t, uint8_t> playerLastCharge; // playerId -> last charge level
+
+    // Level system state
+    int currentLevel = 1;
+    float levelTimer = 0.0f;
+    float enemySpawnTimer = 0.0f;
+    float powerupSpawnTimer = 0.0f;
+    float moduleSpawnTimer = 0.0f;
+    int currentWaveIndex = 0;
+    bool bossSpawned = false;
+    uint32_t bossEntityId = 0;
+    bool bossAlive = false;
+    bool levelActive = false;
+    uint8_t moduleRotationIdx = 0;
+    
+    // Wave spawn state
+    struct WaveSpawnState {
+        int enemyIdx = 0;
+        int spawnedCount = 0;
+        float spawnTimer = 0.0f;
+        bool active = false;
+    };
+    WaveSpawnState waveSpawnState;
 };
 
 class GameServer {
@@ -68,21 +109,26 @@ public:
     GameServer(short port) : server_(port), nextEntityId_(1000), gameRunning_(false) {
         std::random_device rd;
         rng_.seed(rd());
+        
+        // Load configuration from Lua
+        if (!ServerConfig::loadFromLua(cfg_, "assets/scripts/config/server_config.lua")) {
+            std::cout << "[GameServer] ⚠️ Using default config values" << std::endl;
+        }
     }
 
     void start() {
         server_.start();
         gameRunning_ = true;
-        std::cout << "[GameServer] Started on port 12345" << std::endl;
+        std::cout << "[GameServer] Started on port " << cfg_.server.port << std::endl;
     }
 
     void run() {
         eng::engine::Clock updateClock;
         eng::engine::Clock snapshotClock;
         
-        const float fixedDeltaTime = 1.0f / 60.0f; // 60 FPS simulation
+        const float fixedDeltaTime = 1.0f / static_cast<float>(cfg_.server.tickRate);
         
-        const float snapshotRate = 1.0f / 30.0f; // 30 snapshots per second
+        const float snapshotRate = 1.0f / static_cast<float>(cfg_.server.snapshotRate);
         float accumulatedTime = 0.0f;
 
         while (gameRunning_) {
@@ -97,21 +143,13 @@ public:
                 server_.process();
                 processPackets();
                 
-                // Update game simulation with FIXED deltaTime
-                updateEntities(fixedDeltaTime);
-                
-                // Spawn enemies ONLY if there's an active game (room in PLAYING state)
-                bool hasActiveGame = false;
-                auto rooms = server_.getRoomManager().getRooms();
-                for (const auto& room : rooms) {
-                    if (room.state == RoomState::PLAYING) {
-                        hasActiveGame = true;
-                        break;
-                    }
-                }
-                
-                if (hasActiveGame) {
-                    updateLevelSystem(fixedDeltaTime);
+                // Update each room's game state independently
+                for (auto& [roomId, gs] : roomStates_) {
+                    auto room = server_.getRoomManager().getRoom(roomId);
+                    if (!room || room->state != RoomState::PLAYING) continue;
+                    
+                    updateEntities(fixedDeltaTime, gs);
+                    updateLevelSystem(fixedDeltaTime, gs);
                 }
                 
                 // Send world snapshot at reduced rate (30Hz)
@@ -168,38 +206,53 @@ private:
         bool stopSpawningAtBoss;
     };
     
-    // Level state
-    int currentLevel_ = 1;
-    float levelTimer_ = 0.0f;
-    float enemySpawnTimer_ = 0.0f;
-    float powerupSpawnTimer_ = 0.0f;
-    float moduleSpawnTimer_ = 0.0f;
-    int currentWaveIndex_ = 0;
-    bool bossSpawned_ = false;
-    uint32_t bossEntityId_ = 0;
-    bool bossAlive_ = false;
-    bool levelActive_ = false;
-    uint8_t moduleRotationIdx_ = 0;
-
-    // Wave spawn state
-    struct WaveSpawnState {
-        int enemyIdx = 0;       // Current enemy group index
-        int spawnedCount = 0;   // How many spawned in current group
-        float spawnTimer = 0.0f;
-        bool active = false;
-    };
-    WaveSpawnState waveSpawnState_;
+    // Level state is now per-room (in RoomGameState)
     
     LevelConfig getLevelConfig(int level) {
         LevelConfig config;
         config.stopSpawningAtBoss = true;
         
+        // Try to use Lua-loaded config
+        int idx = level - 1;
+        if (idx >= 0 && idx < (int)cfg_.levels.size()) {
+            const auto& ld = cfg_.levels[idx];
+            config.id = ld.id;
+            config.name = ld.name;
+            config.enemyTypes = ld.enemyTypes;
+            config.moduleTypes = ld.moduleTypes;
+            config.enemyInterval = ld.enemyInterval;
+            config.powerupInterval = ld.powerupInterval;
+            config.moduleInterval = ld.moduleInterval;
+            config.maxEnemies = ld.maxEnemies;
+            config.stopSpawningAtBoss = ld.stopSpawningAtBoss;
+            
+            for (const auto& wd : ld.waves) {
+                Wave w;
+                w.time = wd.time;
+                for (const auto& g : wd.groups) {
+                    w.enemies.push_back({g.type, g.count, g.interval});
+                }
+                config.waves.push_back(w);
+            }
+            
+            config.boss = {
+                ld.boss.enemyType,
+                ld.boss.health,
+                ld.boss.speed,
+                ld.boss.fireRate,
+                ld.boss.firePattern,
+                ld.boss.spawnTime
+            };
+            return config;
+        }
+        
+        // Fallback defaults if Lua config not loaded for this level
         switch (level) {
             case 1:
                 config.id = 1;
                 config.name = "First Contact";
-                config.enemyTypes = {0};           // Only bugs
-                config.moduleTypes = {3, 4};       // spread, wave (NO homing)
+                config.enemyTypes = {0};
+                config.moduleTypes = {3, 4};
                 config.enemyInterval = 2.5f;
                 config.powerupInterval = 15.0f;
                 config.moduleInterval = 25.0f;
@@ -211,13 +264,13 @@ private:
                     {50.0f, {{0, 8, 0.6f}}},
                     {70.0f, {{0, 10, 0.5f}}},
                 };
-                config.boss = {3, 1000, 80.0f, 2.0f, 0, 90.0f};  // FirstBoss
+                config.boss = {3, 1000, 80.0f, 2.0f, 0, 90.0f};
                 break;
             case 2:
                 config.id = 2;
                 config.name = "Rising Threat";
-                config.enemyTypes = {0, 1};        // Bugs + Bats
-                config.moduleTypes = {3, 4};       // spread, wave (NO homing)
+                config.enemyTypes = {0, 1};
+                config.moduleTypes = {3, 4};
                 config.enemyInterval = 2.0f;
                 config.powerupInterval = 12.0f;
                 config.moduleInterval = 22.0f;
@@ -229,14 +282,14 @@ private:
                     {55.0f, {{0, 6, 0.5f}, {1, 4, 0.6f}}},
                     {75.0f, {{0, 8, 0.4f}, {1, 5, 0.5f}}},
                 };
-                config.boss = {4, 2000, 60.0f, 1.5f, 2, 95.0f};  // SecondBoss
+                config.boss = {4, 2000, 60.0f, 1.5f, 2, 95.0f};
                 break;
             case 3:
             default:
                 config.id = 3;
                 config.name = "Final Assault";
-                config.enemyTypes = {0, 1, 2};    // ALL enemies
-                config.moduleTypes = {1, 3, 4};   // ALL modules including homing!
+                config.enemyTypes = {0, 1, 2};
+                config.moduleTypes = {1, 3, 4};
                 config.enemyInterval = 1.5f;
                 config.powerupInterval = 10.0f;
                 config.moduleInterval = 20.0f;
@@ -248,269 +301,318 @@ private:
                     {55.0f, {{0, 8, 0.3f}, {1, 5, 0.4f}, {2, 4, 0.5f}}},
                     {75.0f, {{0, 10, 0.3f}, {1, 6, 0.4f}, {2, 5, 0.4f}}},
                 };
-                config.boss = {5, 3000, 100.0f, 1.0f, 3, 95.0f}; // LastBoss
+                config.boss = {5, 3000, 100.0f, 1.0f, 3, 95.0f};
                 break;
         }
         return config;
     }
     
-    void startLevel(int level) {
-        currentLevel_ = level;
-        levelTimer_ = 0.0f;
-        enemySpawnTimer_ = 0.0f;
-        powerupSpawnTimer_ = 0.0f;
-        moduleSpawnTimer_ = 0.0f;
-        currentWaveIndex_ = 0;
-        bossSpawned_ = false;
-        bossEntityId_ = 0;
-        bossAlive_ = false;
-        levelActive_ = true;
-        moduleRotationIdx_ = 0;
-        waveSpawnState_ = WaveSpawnState{};
+    void startLevel(int level, RoomGameState& gs) {
+        gs.currentLevel = level;
+        gs.levelTimer = 0.0f;
+        gs.enemySpawnTimer = 0.0f;
+        gs.powerupSpawnTimer = 0.0f;
+        gs.moduleSpawnTimer = 0.0f;
+        gs.currentWaveIndex = 0;
+        gs.bossSpawned = false;
+        gs.bossEntityId = 0;
+        gs.bossAlive = false;
+        gs.levelActive = true;
+        gs.moduleRotationIdx = 0;
+        gs.waveSpawnState = RoomGameState::WaveSpawnState{};
         
         auto config = getLevelConfig(level);
-        std::cout << "[GameServer] 🎮 === LEVEL " << level << ": " << config.name << " ===" << std::endl;
+        std::cout << "[GameServer] 🎮 === LEVEL " << level << ": " << config.name << " === (room " << gs.roomId << ")" << std::endl;
         
-        // Broadcast level change to all clients
-        broadcastLevelChange(level);
+        // Broadcast level change to this room only
+        broadcastLevelChange(level, gs.roomId);
     }
     
-    void updateLevelSystem(float dt) {
-        if (!levelActive_) {
+    void updateLevelSystem(float dt, RoomGameState& gs) {
+        if (!gs.levelActive) {
             // Start level 1 if no level is active
-            startLevel(currentLevel_);
+            startLevel(gs.currentLevel, gs);
             return;
         }
         
-        levelTimer_ += dt;
-        auto config = getLevelConfig(currentLevel_);
+        gs.levelTimer += dt;
+        auto config = getLevelConfig(gs.currentLevel);
         
         // Count current enemies
         int enemyCount = 0;
-        for (const auto& [id, entity] : entities_) {
+        for (const auto& [id, entity] : gs.entities) {
             if (entity.type == EntityType::ENTITY_MONSTER) {
                 enemyCount++;
             }
         }
         
         // Check if boss was killed → advance to next level
-        if (bossSpawned_ && bossAlive_) {
-            if (entities_.find(bossEntityId_) == entities_.end()) {
-                bossAlive_ = false;
-                std::cout << "[GameServer] 🏆 Boss defeated! Level " << currentLevel_ << " complete!" << std::endl;
+        if (gs.bossSpawned && gs.bossAlive) {
+            if (gs.entities.find(gs.bossEntityId) == gs.entities.end()) {
+                gs.bossAlive = false;
+                std::cout << "[GameServer] 🏆 Boss defeated! Level " << gs.currentLevel << " complete! (room " << gs.roomId << ")" << std::endl;
                 
                 // Clear remaining enemies
                 std::vector<uint32_t> toRemove;
-                for (const auto& [id, entity] : entities_) {
+                for (const auto& [id, entity] : gs.entities) {
                     if (entity.type == EntityType::ENTITY_MONSTER || 
                         entity.type == EntityType::ENTITY_MONSTER_MISSILE) {
                         toRemove.push_back(id);
                     }
                 }
                 for (uint32_t id : toRemove) {
-                    entities_.erase(id);
-                    broadcastEntityDestroy(id);
+                    gs.entities.erase(id);
+                    broadcastEntityDestroy(id, gs.roomId);
                 }
                 
-                if (currentLevel_ < 3) {
+                if (gs.currentLevel < cfg_.maxLevel) {
                     // Advance to next level after a short delay
-                    currentLevel_++;
-                    levelActive_ = false; // Will restart on next tick
-                    std::cout << "[GameServer] ⏭️ Advancing to Level " << currentLevel_ << "..." << std::endl;
+                    gs.currentLevel++;
+                    gs.levelActive = false; // Will restart on next tick
+                    std::cout << "[GameServer] ⏭️ Advancing to Level " << gs.currentLevel << "... (room " << gs.roomId << ")" << std::endl;
                 } else {
-                    std::cout << "[GameServer] 🎉 ALL LEVELS COMPLETE! Game Won!" << std::endl;
-                    // Restart from level 1
-                    currentLevel_ = 1;
-                    levelActive_ = false;
+                    std::cout << "[GameServer] 🎉 ALL LEVELS COMPLETE! Game Won! (room " << gs.roomId << ")" << std::endl;
+                    // Calculate total score from all players
+                    uint32_t totalScore = 0;
+                    for (const auto& [eid, e] : gs.entities) {
+                        if (e.type == EntityType::ENTITY_PLAYER) {
+                            totalScore += e.score;
+                        }
+                    }
+                    broadcastGameVictory(totalScore, gs.roomId);
+                    gs.levelActive = false;
                 }
                 return;
             }
         }
         
         // Process wave spawning (ongoing wave)
-        if (waveSpawnState_.active) {
-            processWaveSpawning(dt, config);
+        if (gs.waveSpawnState.active) {
+            processWaveSpawning(dt, config, gs);
         }
         
         // Check for new waves to trigger
-        if (currentWaveIndex_ < (int)config.waves.size() && !waveSpawnState_.active) {
-            if (levelTimer_ >= config.waves[currentWaveIndex_].time) {
+        if (gs.currentWaveIndex < (int)config.waves.size() && !gs.waveSpawnState.active) {
+            if (gs.levelTimer >= config.waves[gs.currentWaveIndex].time) {
                 // Start this wave
-                waveSpawnState_.active = true;
-                waveSpawnState_.enemyIdx = 0;
-                waveSpawnState_.spawnedCount = 0;
-                waveSpawnState_.spawnTimer = 0.0f;
-                std::cout << "[GameServer] 🌊 Wave " << (currentWaveIndex_ + 1) 
-                          << " triggered at " << levelTimer_ << "s" << std::endl;
+                gs.waveSpawnState.active = true;
+                gs.waveSpawnState.enemyIdx = 0;
+                gs.waveSpawnState.spawnedCount = 0;
+                gs.waveSpawnState.spawnTimer = 0.0f;
+                std::cout << "[GameServer] 🌊 Wave " << (gs.currentWaveIndex + 1) 
+                          << " triggered at " << gs.levelTimer << "s (room " << gs.roomId << ")" << std::endl;
             }
         }
         
         // Spawn boss when time comes
-        if (!bossSpawned_ && levelTimer_ >= config.boss.spawnTime) {
-            spawnBoss(config.boss);
-            bossSpawned_ = true;
-            bossAlive_ = true;
-            std::cout << "[GameServer] 👹 BOSS SPAWNED! (Level " << currentLevel_ << ")" << std::endl;
+        if (!gs.bossSpawned && gs.levelTimer >= config.boss.spawnTime) {
+            spawnBoss(config.boss, gs);
+            gs.bossSpawned = true;
+            gs.bossAlive = true;
+            std::cout << "[GameServer] 👹 BOSS SPAWNED! (Level " << gs.currentLevel << ", room " << gs.roomId << ")" << std::endl;
         }
         
         // Regular spawning between waves (only if boss hasn't spawned or stopSpawningAtBoss is false)
-        bool canSpawnRegular = !(bossSpawned_ && config.stopSpawningAtBoss);
+        bool canSpawnRegular = !(gs.bossSpawned && config.stopSpawningAtBoss);
         
         if (canSpawnRegular && enemyCount < config.maxEnemies) {
-            enemySpawnTimer_ += dt;
-            if (enemySpawnTimer_ >= config.enemyInterval) {
-                enemySpawnTimer_ = 0.0f;
-                spawnLevelEnemy(config);
+            gs.enemySpawnTimer += dt;
+            if (gs.enemySpawnTimer >= config.enemyInterval) {
+                gs.enemySpawnTimer = 0.0f;
+                spawnLevelEnemy(config, gs);
             }
         }
         
         // Spawn powerups
-        powerupSpawnTimer_ += dt;
-        if (powerupSpawnTimer_ >= config.powerupInterval) {
-            powerupSpawnTimer_ = 0.0f;
-            spawnPowerup();
+        gs.powerupSpawnTimer += dt;
+        if (gs.powerupSpawnTimer >= config.powerupInterval) {
+            gs.powerupSpawnTimer = 0.0f;
+            spawnPowerup(gs);
         }
         
         // Spawn modules (only allowed types for this level)
-        moduleSpawnTimer_ += dt;
-        if (moduleSpawnTimer_ >= config.moduleInterval) {
-            moduleSpawnTimer_ = 0.0f;
-            uint8_t modType = config.moduleTypes[moduleRotationIdx_ % config.moduleTypes.size()];
-            spawnModule(modType);
-            moduleRotationIdx_++;
+        gs.moduleSpawnTimer += dt;
+        if (gs.moduleSpawnTimer >= config.moduleInterval) {
+            gs.moduleSpawnTimer = 0.0f;
+            uint8_t modType = config.moduleTypes[gs.moduleRotationIdx % config.moduleTypes.size()];
+            spawnModule(modType, gs);
+            gs.moduleRotationIdx++;
         }
     }
     
-    void processWaveSpawning(float dt, const LevelConfig& config) {
-        if (currentWaveIndex_ >= (int)config.waves.size()) {
-            waveSpawnState_.active = false;
+    void processWaveSpawning(float dt, const LevelConfig& config, RoomGameState& gs) {
+        if (gs.currentWaveIndex >= (int)config.waves.size()) {
+            gs.waveSpawnState.active = false;
             return;
         }
         
-        const Wave& wave = config.waves[currentWaveIndex_];
+        const Wave& wave = config.waves[gs.currentWaveIndex];
         
-        waveSpawnState_.spawnTimer += dt;
+        gs.waveSpawnState.spawnTimer += dt;
         
         // Find current enemy group
-        if (waveSpawnState_.enemyIdx >= (int)wave.enemies.size()) {
+        if (gs.waveSpawnState.enemyIdx >= (int)wave.enemies.size()) {
             // Wave complete
-            waveSpawnState_.active = false;
-            currentWaveIndex_++;
+            gs.waveSpawnState.active = false;
+            gs.currentWaveIndex++;
             return;
         }
         
-        const WaveEnemy& group = wave.enemies[waveSpawnState_.enemyIdx];
+        const WaveEnemy& group = wave.enemies[gs.waveSpawnState.enemyIdx];
         
-        if (waveSpawnState_.spawnTimer >= group.interval) {
-            waveSpawnState_.spawnTimer = 0.0f;
-            spawnEnemyOfType(group.type);
-            waveSpawnState_.spawnedCount++;
+        if (gs.waveSpawnState.spawnTimer >= group.interval) {
+            gs.waveSpawnState.spawnTimer = 0.0f;
+            spawnEnemyOfType(group.type, gs);
+            gs.waveSpawnState.spawnedCount++;
             
-            if (waveSpawnState_.spawnedCount >= group.count) {
+            if (gs.waveSpawnState.spawnedCount >= group.count) {
                 // Move to next enemy group
-                waveSpawnState_.enemyIdx++;
-                waveSpawnState_.spawnedCount = 0;
+                gs.waveSpawnState.enemyIdx++;
+                gs.waveSpawnState.spawnedCount = 0;
             }
         }
     }
     
-    void spawnLevelEnemy(const LevelConfig& config) {
+    void spawnLevelEnemy(const LevelConfig& config, RoomGameState& gs) {
         // Pick random allowed enemy type for this level
         uint8_t enemyType = config.enemyTypes[dist_(rng_) % config.enemyTypes.size()];
-        spawnEnemyOfType(enemyType);
+        spawnEnemyOfType(enemyType, gs);
     }
     
-    void spawnEnemyOfType(uint8_t enemyType) {
+    void spawnEnemyOfType(uint8_t enemyType, RoomGameState& gs) {
         ServerEntity enemy;
         enemy.id = nextEntityId_++;
         enemy.type = EntityType::ENTITY_MONSTER;
-        enemy.x = 1920.0f;
-        enemy.y = 100.0f + (dist_(rng_) % 880);
+        enemy.x = cfg_.enemySpawn.spawnX;
+        enemy.y = cfg_.enemySpawn.spawnYMin + (dist_(rng_) % cfg_.enemySpawn.spawnYRange);
         enemy.playerId = 0;
         enemy.playerLine = 0;
         
         switch (enemyType) {
             case 0: // Bug - straight, slow, straight fire
-                enemy.enemyType = 0;
-                enemy.vx = -400.0f;
-                enemy.vy = 0.0f;
-                enemy.hp = 10;
-                enemy.firePattern = 0; // straight
-                enemy.fireRate = 2.0f;
+                enemy.enemyType = cfg_.bug.typeId;
+                enemy.vx = cfg_.bug.vx;
+                enemy.vy = cfg_.bug.vy;
+                enemy.hp = cfg_.bug.health;
+                enemy.firePattern = cfg_.bug.firePattern;
+                enemy.fireRate = cfg_.bug.fireRate;
+                enemy.width = 66.0f;   // 33*2.0 scale
+                enemy.height = 58.0f;  // 29*2.0 scale
                 break;
             case 1: // Fighter/Bat - zigzag, circle fire
-                enemy.enemyType = 1;
-                enemy.vx = -350.0f;
-                enemy.vy = 80.0f;
-                enemy.baseVy = 80.0f;
-                enemy.hp = 30;
-                enemy.firePattern = 2; // circle
-                enemy.fireRate = 1.5f;
+                enemy.enemyType = cfg_.fighter.typeId;
+                enemy.vx = cfg_.fighter.vx;
+                enemy.vy = cfg_.fighter.vy;
+                enemy.baseVy = cfg_.fighter.vy;
+                enemy.hp = cfg_.fighter.health;
+                enemy.firePattern = cfg_.fighter.firePattern;
+                enemy.fireRate = cfg_.fighter.fireRate;
+                enemy.width = 32.0f;   // 16*2.0 scale
+                enemy.height = 26.0f;  // 13*2.0 scale
                 break;
             case 2: // Kamikaze - rushes player, no fire
-                enemy.enemyType = 2;
-                enemy.vx = -500.0f;
-                enemy.vy = 0.0f;
-                enemy.hp = 20;
-                enemy.firePattern = 255; // no fire
-                enemy.fireRate = 999.0f;
+                enemy.enemyType = cfg_.kamikaze.typeId;
+                enemy.vx = cfg_.kamikaze.vx;
+                enemy.vy = cfg_.kamikaze.vy;
+                enemy.hp = cfg_.kamikaze.health;
+                enemy.firePattern = cfg_.kamikaze.firePattern;
+                enemy.fireRate = cfg_.kamikaze.fireRate;
+                enemy.width = 34.0f;   // 17*2.0 scale
+                enemy.height = 36.0f;  // 18*2.0 scale
                 break;
             default:
-                enemy.enemyType = 0;
-                enemy.vx = -400.0f;
-                enemy.vy = 0.0f;
-                enemy.hp = 10;
-                enemy.firePattern = 0;
-                enemy.fireRate = 2.0f;
+                enemy.enemyType = cfg_.bug.typeId;
+                enemy.vx = cfg_.bug.vx;
+                enemy.vy = cfg_.bug.vy;
+                enemy.hp = cfg_.bug.health;
+                enemy.firePattern = cfg_.bug.firePattern;
+                enemy.fireRate = cfg_.bug.fireRate;
+                enemy.width = 66.0f;
+                enemy.height = 58.0f;
                 break;
         }
         
-        enemy.fireTimer = 1.0f + (dist_(rng_) % 200) / 100.0f;
+        enemy.fireTimer = cfg_.enemySpawn.fireTimerBase + (dist_(rng_) % cfg_.enemySpawn.fireTimerRandomRange) / 100.0f;
         
-        entities_[enemy.id] = enemy;
-        broadcastEntitySpawn(enemy);
+        gs.entities[enemy.id] = enemy;
+        broadcastEntitySpawn(enemy, gs.roomId);
     }
     
-    void spawnBoss(const BossConfig& bossConfig) {
+    void spawnBoss(const BossConfig& bossConfig, RoomGameState& gs) {
         ServerEntity boss;
         boss.id = nextEntityId_++;
         boss.type = EntityType::ENTITY_MONSTER;
-        boss.x = 1920.0f;
-        boss.y = 400.0f; // Spawn at center-ish height
+        boss.x = cfg_.bossMovement.spawnX;
+        boss.y = cfg_.bossMovement.spawnY;
         boss.vx = -bossConfig.speed;
         boss.vy = 0.0f;
-        boss.hp = bossConfig.health; // Full HP (internal int32_t)
+        boss.hp = bossConfig.health;
         boss.playerId = 0;
         boss.playerLine = 0;
-        boss.enemyType = bossConfig.type; // 3=FirstBoss, 4=SecondBoss, 5=LastBoss
+        boss.enemyType = bossConfig.type;
         boss.firePattern = bossConfig.firePattern;
         boss.fireRate = bossConfig.fireRate;
-        boss.fireTimer = 1.0f;
+        boss.fireTimer = cfg_.enemySpawn.fireTimerBase;
         
-        bossEntityId_ = boss.id;
+        // Set boss hitbox based on type (sprite size * scale)
+        switch (bossConfig.type) {
+            case 3: // FirstBoss: 259x143 at 1.5x
+                boss.width = 388.0f;
+                boss.height = 214.0f;
+                break;
+            case 4: // SecondBoss: 161x211 at 1.5x
+                boss.width = 241.0f;
+                boss.height = 316.0f;
+                break;
+            case 5: // LastBoss: 81x71 at 2.5x
+                boss.width = 202.0f;
+                boss.height = 177.0f;
+                break;
+            default:
+                boss.width = 200.0f;
+                boss.height = 200.0f;
+                break;
+        }
         
-        entities_[boss.id] = boss;
-        broadcastEntitySpawn(boss);
+        gs.bossEntityId = boss.id;
+        
+        gs.entities[boss.id] = boss;
+        broadcastEntitySpawn(boss, gs.roomId);
         
         std::cout << "[GameServer] 👹 Boss " << (int)bossConfig.type 
-                  << " spawned (HP=" << (int)boss.hp << ")" << std::endl;
+                  << " spawned (HP=" << (int)boss.hp << ") in room " << gs.roomId << std::endl;
     }
     
-    void broadcastLevelChange(int level) {
+    void broadcastLevelChange(int level, uint32_t roomId) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::LEVEL_CHANGE));
         uint8_t levelId = static_cast<uint8_t>(level);
         packet.payload.push_back(static_cast<char>(levelId));
         
-        // Broadcast to all rooms
-        auto& roomManager = server_.getRoomManager();
-        auto allRooms = roomManager.getAllRooms();
-        for (auto& [roomId, room] : allRooms) {
-            if (room->state == RoomState::PLAYING) {
-                broadcastToRoom(roomId, packet);
-            }
-        }
+        broadcastToRoom(roomId, packet);
         
-        std::cout << "[GameServer] 📡 Broadcast LEVEL_CHANGE: Level " << level << std::endl;
+        std::cout << "[GameServer] 📡 Broadcast LEVEL_CHANGE: Level " << level << " (room " << roomId << ")" << std::endl;
+    }
+
+    void broadcastGameOver(uint32_t totalScore, uint32_t roomId) {
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::GAME_OVER));
+        packet.header.timestamp = getCurrentTimestamp();
+        std::vector<char> payload(sizeof(uint32_t));
+        std::memcpy(payload.data(), &totalScore, sizeof(uint32_t));
+        packet.setPayload(payload);
+
+        broadcastToRoom(roomId, packet);
+        std::cout << "[GameServer] 💀 Broadcast GAME_OVER (score: " << totalScore << ") to room " << roomId << std::endl;
+    }
+
+    void broadcastGameVictory(uint32_t totalScore, uint32_t roomId) {
+        NetworkPacket packet(static_cast<uint16_t>(GamePacketType::GAME_VICTORY));
+        packet.header.timestamp = getCurrentTimestamp();
+        std::vector<char> payload(sizeof(uint32_t));
+        std::memcpy(payload.data(), &totalScore, sizeof(uint32_t));
+        packet.setPayload(payload);
+
+        broadcastToRoom(roomId, packet);
+        std::cout << "[GameServer] 🏆 Broadcast GAME_VICTORY (score: " << totalScore << ") to room " << roomId << std::endl;
     }
 
     void processPackets() {
@@ -520,9 +622,8 @@ private:
             auto type = static_cast<GamePacketType>(packet.header.type);
             
             switch (type) {
-                case GamePacketType::CLIENT_HELLO:
-                    handleClientHello(packet, sender);
-                    break;
+                // Note: CLIENT_HELLO, CREATE_ROOM, JOIN_ROOM, ROOM_LIST are handled
+                // by NetworkServer::process() at engine level and never reach here
                 case GamePacketType::CLIENT_TOGGLE_PAUSE:
                     handleClientTogglePause(packet, sender);
                     break;
@@ -534,17 +635,6 @@ private:
                     break;
                 case GamePacketType::CLIENT_DISCONNECT:
                     handleClientDisconnect(sender);
-                    break;
-                    
-                // Rooming system packets
-                case GamePacketType::ROOM_LIST:
-                    handleRoomListRequest(sender);
-                    break;
-                case GamePacketType::CREATE_ROOM:
-                    handleCreateRoom(packet, sender);
-                    break;
-                case GamePacketType::JOIN_ROOM:
-                    handleJoinRoom(packet, sender);
                     break;
                 case GamePacketType::ROOM_LEAVE:
                     handleLeaveRoom(packet, sender);
@@ -560,7 +650,7 @@ private:
                     break;
                     
                 default:
-                    std::cout << "[GameServer] Unknown packet type: " << packet.header.type << std::endl;
+                    // Silently ignore unknown types (many are handled at engine level)
                     break;
             }
         }
@@ -590,27 +680,42 @@ private:
 
     void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint&) {
         if (packet.payload.size() < sizeof(ClientInput)) {
+            std::cerr << "[GameServer] INPUT: payload too small" << std::endl;
             return;
         }
         
         ClientInput input = ClientInput::deserialize(packet.payload.data());
         
-        // Find player entity
-        auto it = playerEntities_.find(input.playerId);
-        if (it == playerEntities_.end()) {
+        // Find which room this player belongs to
+        auto roomIt = playerToRoom_.find(input.playerId);
+        if (roomIt == playerToRoom_.end()) {
+            std::cerr << "[GameServer] INPUT: player " << (int)input.playerId << " not in playerToRoom_ (map size: " << playerToRoom_.size() << ")" << std::endl;
+            return;
+        }
+        
+        auto gsIt = roomStates_.find(roomIt->second);
+        if (gsIt == roomStates_.end()) {
+            std::cerr << "[GameServer] INPUT: room " << roomIt->second << " not in roomStates_ (map size: " << roomStates_.size() << ")" << std::endl;
+            return;
+        }
+        RoomGameState& gs = gsIt->second;
+        
+        // Find player entity in this room
+        auto it = gs.playerEntities.find(input.playerId);
+        if (it == gs.playerEntities.end()) {
             return;
         }
         
         uint32_t entityId = it->second;
-        auto entityIt = entities_.find(entityId);
-        if (entityIt == entities_.end()) {
+        auto entityIt = gs.entities.find(entityId);
+        if (entityIt == gs.entities.end()) {
             return;
         }
         
         ServerEntity& player = entityIt->second;
         
         // Apply input
-        const float speed = 500.0f;
+        const float speed = cfg_.player.speed;
         player.vx = 0.0f;
         player.vy = 0.0f;
         
@@ -621,28 +726,28 @@ private:
         
         // Fire logic: shoot ONLY on release
         bool firePressed = (input.inputMask & (1 << 4)) != 0;
-        bool prevFire = playerPrevFire_[input.playerId];
+        bool prevFire = gs.playerPrevFire[input.playerId];
         
         if (firePressed) {
             // Track charge level while holding
-            playerLastCharge_[input.playerId] = input.chargeLevel;
+            gs.playerLastCharge[input.playerId] = input.chargeLevel;
         } else if (prevFire && !firePressed) {
             // Released fire button
-            uint8_t charge = playerLastCharge_[input.playerId];
+            uint8_t charge = gs.playerLastCharge[input.playerId];
             if (player.fireTimer <= 0.0f) {
                 if (player.moduleType > 0) {
                     // Fire with module pattern
-                    fireModuleMissile(player);
-                    player.fireTimer = 0.2f;
+                    fireModuleMissile(player, gs);
+                    player.fireTimer = cfg_.modules.fireCooldown;
                 } else {
                     // Normal/charged shot
-                    spawnPlayerMissile(player, charge);
-                    player.fireTimer = charge > 0 ? 0.3f : 0.15f;
+                    spawnPlayerMissile(player, charge, gs);
+                    player.fireTimer = charge > 0 ? cfg_.projectiles.player.fireCooldownCharged : cfg_.projectiles.player.fireCooldownNormal;
                 }
             }
-            playerLastCharge_[input.playerId] = 0;
+            gs.playerLastCharge[input.playerId] = 0;
         }
-        playerPrevFire_[input.playerId] = firePressed;
+        gs.playerPrevFire[input.playerId] = firePressed;
     }
 
     // ✅ NOUVEAU: Handler pour CLIENT_PING
@@ -684,26 +789,34 @@ private:
         }
         
         // ✅ NOUVEAU: Remove player entity with explosion
-        auto playerIt = playerEntities_.find(playerId);
-        if (playerIt != playerEntities_.end()) {
-            uint32_t entityId = playerIt->second;
-            
-            // Create explosion at player position before destroying
-            auto entityIt = entities_.find(entityId);
-            if (entityIt != entities_.end()) {
-                spawnExplosion(entityIt->second.x, entityIt->second.y);
-                std::cout << "[GameServer] Created explosion at player " << (int)playerId << " position (" 
-                          << entityIt->second.x << ", " << entityIt->second.y << ")" << std::endl;
+        auto roomIt = playerToRoom_.find(playerId);
+        if (roomIt != playerToRoom_.end()) {
+            auto gsIt = roomStates_.find(roomIt->second);
+            if (gsIt != roomStates_.end()) {
+                RoomGameState& gs = gsIt->second;
+                auto playerIt = gs.playerEntities.find(playerId);
+                if (playerIt != gs.playerEntities.end()) {
+                    uint32_t entityId = playerIt->second;
+                    
+                    // Create explosion at player position before destroying
+                    auto entityIt = gs.entities.find(entityId);
+                    if (entityIt != gs.entities.end()) {
+                        spawnExplosion(entityIt->second.x, entityIt->second.y, gs);
+                        std::cout << "[GameServer] Created explosion at player " << (int)playerId << " position (" 
+                                  << entityIt->second.x << ", " << entityIt->second.y << ")" << std::endl;
+                    }
+                    
+                    // Remove from entities map
+                    if (gs.entities.erase(entityId)) {
+                        broadcastEntityDestroy(entityId, gs.roomId);
+                        std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
+                    }
+                    
+                    gs.playerEntities.erase(playerIt);
+                    gs.playerPrevFire.erase(playerId);
+                    gs.playerLastCharge.erase(playerId);
+                }
             }
-            
-            // Remove from entities map
-            if (entities_.erase(entityId)) {
-                // Use the improved broadcastEntityDestroy method
-                broadcastEntityDestroy(entityId);
-                std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
-            }
-            
-            playerEntities_.erase(playerIt);
         }
         
         // ✅ NOUVEAU: Clean up room membership and transfer ownership if needed
@@ -723,6 +836,12 @@ private:
                 
                 // Broadcast updated player list
                 broadcastRoomPlayers(roomId);
+                
+                // If room is now empty, clean up room game state
+                if (room->playerIds.empty()) {
+                    roomStates_.erase(roomId);
+                    std::cout << "[GameServer] Cleaned up empty room state for room " << roomId << std::endl;
+                }
             }
         }
         
@@ -733,10 +852,10 @@ private:
         server_.removeClient(sender);
     }
 
-    void updateEntities(float deltaTime) {
+    void updateEntities(float deltaTime, RoomGameState& gs) {
         std::vector<uint32_t> toRemove;
         
-        for (auto& [id, entity] : entities_) {
+        for (auto& [id, entity] : gs.entities) {
             // ✅ Update lifetime for temporary entities (explosions, etc.)
             if (entity.lifetime > 0.0f) {
                 entity.lifetime -= deltaTime;
@@ -766,8 +885,8 @@ private:
             // Homing projectile: track nearest enemy
             if (entity.type == EntityType::ENTITY_PLAYER_MISSILE && entity.projectileType == 3) {
                 const ServerEntity* nearest = nullptr;
-                float nearestDist = 600.0f; // Detection radius
-                for (auto& [eid, e] : entities_) {
+                float nearestDist = cfg_.modules.homing.detectionRadius;
+                for (auto& [eid, e] : gs.entities) {
                     if (e.type != EntityType::ENTITY_MONSTER) continue;
                     float dx = e.x - entity.x;
                     float dy = e.y - entity.y;
@@ -782,11 +901,11 @@ private:
                     float dy = nearest->y - entity.y;
                     float dist = std::sqrt(dx * dx + dy * dy);
                     if (dist > 0.001f) {
-                        float speed = entity.homingSpeed > 0.0f ? entity.homingSpeed : 500.0f;
+                        float speed = entity.homingSpeed > 0.0f ? entity.homingSpeed : cfg_.modules.homing.speed;
                         // Smooth turn towards target
                         float targetVx = (dx / dist) * speed;
                         float targetVy = (dy / dist) * speed;
-                        float turnRate = 5.0f * deltaTime; // Smooth turn
+                        float turnRate = cfg_.modules.homing.turnRate * deltaTime; // Smooth turn
                         entity.vx += (targetVx - entity.vx) * turnRate;
                         entity.vy += (targetVy - entity.vy) * turnRate;
                         // Maintain speed
@@ -808,7 +927,7 @@ private:
             if (entity.type == EntityType::ENTITY_MONSTER && entity.fireTimer <= 0.0f) {
                 // Only shoot when on screen and has a valid fire pattern
                 if (entity.x < 1800.0f && entity.x > 100.0f && entity.firePattern != 255) {
-                    spawnEnemyMissile(entity);
+                    spawnEnemyMissile(entity, gs);
                     entity.fireTimer = entity.fireRate + (dist_(rng_) % 100) / 100.0f;
                 }
             }
@@ -816,50 +935,56 @@ private:
             // Zigzag pattern (fighter, enemyType=1): reverse vy periodically
             if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType == 1) {
                 entity.zigzagTimer += deltaTime;
-                if (entity.zigzagTimer >= 1.0f) {
+                if (entity.zigzagTimer >= cfg_.fighter.zigzagInterval) {
                     entity.vy = -entity.vy;
                     entity.zigzagTimer = 0.0f;
                 }
                 // Bounce off top/bottom
-                if (entity.y < 50.0f) entity.vy = std::abs(entity.baseVy);
-                if (entity.y > 1000.0f) entity.vy = -std::abs(entity.baseVy);
+                if (entity.y < cfg_.fighter.boundaryTop) entity.vy = std::abs(entity.baseVy);
+                if (entity.y > cfg_.fighter.boundaryBottom) entity.vy = -std::abs(entity.baseVy);
             }
             
             // Kamikaze pattern (enemyType=2): rush towards nearest player
             if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType == 2) {
-                const ServerEntity* nearestPlayer = findNearestPlayer(entity);
+                const ServerEntity* nearestPlayer = findNearestPlayer(entity, gs);
                 if (nearestPlayer) {
                     float dx = nearestPlayer->x - entity.x;
                     float dy = nearestPlayer->y - entity.y;
                     float dist = std::sqrt(dx * dx + dy * dy);
                     if (dist > 0.001f) {
-                        float speed = 500.0f;
+                        float speed = cfg_.kamikaze.trackingSpeed;
                         entity.vx = (dx / dist) * speed;
                         entity.vy = (dy / dist) * speed;
                     }
                 }
             }
             
-            // Boss movement pattern (enemyType >= 3): move to x=1500 then bob up/down
+            // Boss movement pattern (enemyType >= 3): move to stop_x then bob up/down
             if (entity.type == EntityType::ENTITY_MONSTER && entity.enemyType >= 3) {
-                if (entity.x <= 1500.0f) {
+                if (entity.x <= cfg_.bossMovement.stopX) {
                     entity.vx = 0.0f; // Stop horizontal movement
-                    entity.x = 1500.0f;
+                    entity.x = cfg_.bossMovement.stopX;
                     // Bob up and down slowly
                     entity.zigzagTimer += deltaTime;
-                    entity.vy = std::sin(entity.zigzagTimer * 1.5f) * 100.0f;
+                    entity.vy = std::sin(entity.zigzagTimer * cfg_.bossMovement.bobSpeed) * cfg_.bossMovement.bobAmplitude;
                 }
                 // Keep boss on screen
-                if (entity.y < 50.0f) entity.y = 50.0f;
-                if (entity.y > 900.0f) entity.y = 900.0f;
+                if (entity.y < cfg_.bossMovement.boundaryTop) entity.y = cfg_.bossMovement.boundaryTop;
+                if (entity.y > cfg_.bossMovement.boundaryBottom) entity.y = cfg_.bossMovement.boundaryBottom;
             }
             
             // Boundary checking for players
             if (entity.type == EntityType::ENTITY_PLAYER) {
-                if (entity.x < 0) entity.x = 0;
-                if (entity.y < 0) entity.y = 0;
-                if (entity.x > 1820) entity.x = 1820;
-                if (entity.y > 1030) entity.y = 1030;
+                if (entity.x < cfg_.player.boundaryMinX) entity.x = cfg_.player.boundaryMinX;
+                if (entity.y < cfg_.player.boundaryMinY) entity.y = cfg_.player.boundaryMinY;
+                if (entity.x > cfg_.player.boundaryMaxX) entity.x = cfg_.player.boundaryMaxX;
+                if (entity.y > cfg_.player.boundaryMaxY) entity.y = cfg_.player.boundaryMaxY;
+                
+                // Collision cooldown countdown
+                if (entity.collisionCooldown > 0.0f) {
+                    entity.collisionCooldown -= deltaTime;
+                    if (entity.collisionCooldown < 0.0f) entity.collisionCooldown = 0.0f;
+                }
                 
                 // Shield timer countdown
                 if (entity.shieldTimer > 0.0f) {
@@ -875,21 +1000,22 @@ private:
             
             // Boundary checking for others (remove if out of bounds)
             if (entity.type != EntityType::ENTITY_PLAYER) {
-                if (entity.x < -100.0f || entity.x > 2000.0f || 
-                    entity.y < -100.0f || entity.y > 1180.0f) {
+                float margin = cfg_.collisions.oobMargin;
+                if (entity.x < -margin || entity.x > cfg_.collisions.screenWidth + margin || 
+                    entity.y < -margin || entity.y > cfg_.collisions.screenHeight + margin) {
                     toRemove.push_back(id);
                 }
             }
             
             // Check collisions (simple)
             if (entity.type == EntityType::ENTITY_PLAYER_MISSILE) {
-                for (auto& [enemyId, enemy] : entities_) {
+                for (auto& [enemyId, enemy] : gs.entities) {
                     if (enemy.type == EntityType::ENTITY_MONSTER) {
                         if (checkCollision(entity, enemy)) {
                             // Calculate damage based on missile charge level
-                            int damage = 10; // base damage
+                            int damage = cfg_.projectiles.player.baseDamage;
                             if (entity.chargeLevel > 0) {
-                                damage = entity.chargeLevel * 10; // charged shots do more
+                                damage = entity.chargeLevel * cfg_.projectiles.player.chargeDamageMultiplier;
                             }
                             
                             enemy.hp -= damage;
@@ -898,14 +1024,14 @@ private:
                             if (enemy.hp <= 0) {
                                 // Enemy killed - award score
                                 uint8_t shooterId = entity.playerId;
-                                for (auto& [playerId, player] : entities_) {
+                                for (auto& [playerId, player] : gs.entities) {
                                     if (player.type == EntityType::ENTITY_PLAYER && player.playerId == shooterId) {
-                                        uint32_t points = (enemy.enemyType >= 3) ? 500 : 100; // Boss = 500pts
+                                        uint32_t points = (enemy.enemyType >= 3) ? cfg_.bossMovement.score : cfg_.bug.score; // Boss vs normal
                                         player.score += points;
                                         break;
                                     }
                                 }
-                                spawnExplosion(enemy.x, enemy.y);
+                                spawnExplosion(enemy.x, enemy.y, gs);
                                 toRemove.push_back(enemyId);
                             }
                             break;
@@ -916,13 +1042,13 @@ private:
             
             // Check enemy missile vs players
             if (entity.type == EntityType::ENTITY_MONSTER_MISSILE) {
-                for (auto& [playerId, player] : entities_) {
+                for (auto& [playerId, player] : gs.entities) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
                             // No explosion when player is hit - just destroy missile
                             toRemove.push_back(id);
                             if (player.shieldTimer <= 0.0f) {
-                                player.hp -= 10; // Damage player
+                                player.hp -= cfg_.projectiles.missileDamage; // Damage player
                                 if (player.hp <= 0) {
                                     toRemove.push_back(playerId);
                                 }
@@ -935,16 +1061,33 @@ private:
             
             // Check enemy collision with players (crash damage)
             if (entity.type == EntityType::ENTITY_MONSTER) {
-                for (auto& [playerId, player] : entities_) {
+                for (auto& [playerId, player] : gs.entities) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
-                            // Create explosion at enemy position (enemy dies)
-                            spawnExplosion(entity.x, entity.y);
-                            toRemove.push_back(id); // Destroy enemy
-                            if (player.shieldTimer <= 0.0f) {
-                                player.hp -= 20; // Heavy damage to player
-                                if (player.hp <= 0) {
-                                    toRemove.push_back(playerId);
+                            if (entity.enemyType >= 3) {
+                                // Boss: mutual damage, don't destroy boss
+                                // Use collision cooldown to prevent instant death from overlap
+                                if (player.collisionCooldown <= 0.0f && player.shieldTimer <= 0.0f) {
+                                    player.hp -= cfg_.bossMovement.collisionDamageToPlayer;
+                                    player.collisionCooldown = 0.5f; // 500ms between collision damage ticks
+                                    if (player.hp <= 0) {
+                                        toRemove.push_back(playerId);
+                                    }
+                                }
+                                entity.hp -= cfg_.bossMovement.collisionDamageFromPlayer;
+                                if (entity.hp <= 0) {
+                                    spawnExplosion(entity.x, entity.y, gs);
+                                    toRemove.push_back(id);
+                                }
+                            } else {
+                                // Normal enemy: destroy enemy, heavy damage to player
+                                spawnExplosion(entity.x, entity.y, gs);
+                                toRemove.push_back(id);
+                                if (player.shieldTimer <= 0.0f) {
+                                    player.hp -= cfg_.bug.collisionDamage;
+                                    if (player.hp <= 0) {
+                                        toRemove.push_back(playerId);
+                                    }
                                 }
                             }
                             break;
@@ -955,26 +1098,40 @@ private:
             
             // Check powerup collision with players
             if (entity.type == EntityType::ENTITY_POWERUP) {
-                for (auto& [playerId, player] : entities_) {
+                for (auto& [playerId, player] : gs.entities) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
                             toRemove.push_back(id); // Remove powerup
                             
                             if (entity.enemyType == 0) {
-                                // ORANGE BOMB: destroy all visible enemies
+                                // ORANGE BOMB: destroy all visible enemies, but only deal fraction HP to boss
                                 std::cout << "[GameServer] 💥 Player " << (int)player.playerId << " picked up BOMB!" << std::endl;
-                                for (auto& [eid, e] : entities_) {
+                                float margin = cfg_.collisions.oobMargin;
+                                for (auto& [eid, e] : gs.entities) {
                                     if (e.type == EntityType::ENTITY_MONSTER) {
-                                        if (e.x >= -100.0f && e.x <= 2020.0f && e.y >= -100.0f && e.y <= 1180.0f) {
-                                            spawnExplosion(e.x, e.y);
-                                            toRemove.push_back(eid);
+                                        if (e.x >= -margin && e.x <= cfg_.collisions.screenWidth + margin && 
+                                            e.y >= -margin && e.y <= cfg_.collisions.screenHeight + margin) {
+                                            if (e.enemyType >= 3) {
+                                                // Boss: deal fraction of boss config max HP
+                                                auto bossConfig = getLevelConfig(gs.currentLevel).boss;
+                                                int bossDamage = static_cast<int>(bossConfig.health * cfg_.powerups.orange.bossDamageFraction);
+                                                e.hp -= bossDamage;
+                                                std::cout << "[GameServer] 💥 Bomb dealt " << bossDamage << " to boss (HP: " << e.hp << ")" << std::endl;
+                                                if (e.hp <= 0) {
+                                                    spawnExplosion(e.x, e.y, gs);
+                                                    toRemove.push_back(eid);
+                                                }
+                                            } else {
+                                                spawnExplosion(e.x, e.y, gs);
+                                                toRemove.push_back(eid);
+                                            }
                                         }
                                     }
                                 }
                             } else if (entity.enemyType == 1) {
-                                // BLUE SHIELD: make player invulnerable for 10 seconds
+                                // BLUE SHIELD: make player invulnerable
                                 std::cout << "[GameServer] 🛡️ Player " << (int)player.playerId << " picked up SHIELD!" << std::endl;
-                                player.shieldTimer = 10.0f; // 10 seconds of invulnerability
+                                player.shieldTimer = cfg_.powerups.blue.duration;
                                 player.chargeLevel = 99; // Signal to client that shield is active
                             }
                             break;
@@ -985,7 +1142,7 @@ private:
             
             // Check module collision with players (pickup)
             if (entity.type == EntityType::ENTITY_MODULE) {
-                for (auto& [playerId, player] : entities_) {
+                for (auto& [playerId, player] : gs.entities) {
                     if (player.type == EntityType::ENTITY_PLAYER) {
                         if (checkCollision(entity, player)) {
                             toRemove.push_back(id); // Remove module from world
@@ -1000,83 +1157,122 @@ private:
             }
         }
         
+        // Compute total score BEFORE removing entities (dead players still have their score)
+        uint32_t preRemoveTotalScore = 0;
+        for (const auto& [eid, e] : gs.entities) {
+            if (e.type == EntityType::ENTITY_PLAYER) {
+                preRemoveTotalScore += e.score;
+            }
+        }
+
         // Remove entities
         for (uint32_t id : toRemove) {
-            auto it = entities_.find(id);
-            if (it != entities_.end()) {
-                std::cout << "[GameServer] 🗑️  Destroying entity " << id << " (type: " << (int)it->second.type << ")" << std::endl;
-                entities_.erase(it);
-                broadcastEntityDestroy(id);
+            auto it = gs.entities.find(id);
+            if (it != gs.entities.end()) {
+                std::cout << "[GameServer] 🗑️  Destroying entity " << id << " (type: " << (int)it->second.type << ") in room " << gs.roomId << std::endl;
+                gs.entities.erase(it);
+                broadcastEntityDestroy(id, gs.roomId);
+            }
+        }
+
+        // Check if all players are dead → GAME_OVER
+        if (gs.levelActive) {
+            bool anyPlayerAlive = false;
+            for (const auto& [eid, e] : gs.entities) {
+                if (e.type == EntityType::ENTITY_PLAYER) {
+                    anyPlayerAlive = true;
+                    break;
+                }
+            }
+            // Also check playerEntities to see if any mapped player still exists
+            if (!anyPlayerAlive && !gs.playerEntities.empty()) {
+                bool foundAny = false;
+                for (const auto& [pid, entityId] : gs.playerEntities) {
+                    if (gs.entities.find(entityId) != gs.entities.end()) {
+                        foundAny = true;
+                        break;
+                    }
+                }
+                if (!foundAny) {
+                    std::cout << "[GameServer] 💀 All players dead! Game Over! Score: " << preRemoveTotalScore << " (room " << gs.roomId << ")" << std::endl;
+                    broadcastGameOver(preRemoveTotalScore, gs.roomId);
+                    gs.levelActive = false;
+                }
             }
         }
     }
 
     bool checkCollision(const ServerEntity& a, const ServerEntity& b) {
-        const float size = 50.0f;
-        return (a.x < b.x + size && a.x + size > b.x &&
-                a.y < b.y + size && a.y + size > b.y);
+        return (a.x < b.x + b.width && a.x + a.width > b.x &&
+                a.y < b.y + b.height && a.y + a.height > b.y);
     }
 
     // OLD spawnEnemy() replaced by level system's spawnEnemyOfType()
 
-    void spawnPlayerMissile(const ServerEntity& player, uint8_t chargeLevel = 0) {
+    void spawnPlayerMissile(const ServerEntity& player, uint8_t chargeLevel, RoomGameState& gs) {
         ServerEntity missile;
         missile.id = nextEntityId_++;
         missile.type = EntityType::ENTITY_PLAYER_MISSILE;
-        missile.x = player.x + 50.0f;
-        missile.y = player.y + 10.0f;
-        missile.vx = chargeLevel > 0 ? 1500.0f : 800.0f; // Charged missiles are faster
+        missile.x = player.x + cfg_.projectiles.player.spawnOffsetX;
+        missile.y = player.y + cfg_.projectiles.player.spawnOffsetY;
+        missile.vx = chargeLevel > 0 ? cfg_.projectiles.player.chargedSpeed : cfg_.projectiles.player.normalSpeed;
         missile.vy = 0.0f;
-        missile.hp = chargeLevel > 0 ? chargeLevel : 1; // Charged missiles have more HP/damage
+        missile.hp = chargeLevel > 0 ? chargeLevel : 1;
         missile.playerId = player.playerId;
-        missile.playerLine = 0; // Missiles don't use playerLine
+        missile.playerLine = 0;
         missile.chargeLevel = chargeLevel;
-        missile.projectileType = chargeLevel > 0 ? 1 : 0; // 0 = normal, 1 = charged
+        missile.projectileType = chargeLevel > 0 ? 1 : 0;
+        missile.width = 60.0f;   // 20*3.0 scale
+        missile.height = 60.0f;  // 20*3.0 scale
         
-        entities_[missile.id] = missile;
-        broadcastEntitySpawn(missile);  // Broadcast to all clients
+        gs.entities[missile.id] = missile;
+        broadcastEntitySpawn(missile, gs.roomId);
         
         std::cout << "[GameServer] Player " << (int)player.playerId << " fired missile " << missile.id 
                   << (chargeLevel > 0 ? " (CHARGED level " + std::to_string(chargeLevel) + ")" : "") << std::endl;
     }
     
-    void fireModuleMissile(const ServerEntity& player) {
-        float baseSpeed = 800.0f;
+    void fireModuleMissile(const ServerEntity& player, RoomGameState& gs) {
+        float baseSpeed = cfg_.modules.baseSpeed;
         
         switch (player.moduleType) {
             case 1: { // LASER MODULE: fires homing missiles (tracks nearest enemy)
                 ServerEntity missile;
                 missile.id = nextEntityId_++;
                 missile.type = EntityType::ENTITY_PLAYER_MISSILE;
-                missile.x = player.x + 50.0f;
-                missile.y = player.y + 10.0f;
+                missile.x = player.x + cfg_.projectiles.player.spawnOffsetX;
+                missile.y = player.y + cfg_.projectiles.player.spawnOffsetY;
                 missile.vx = baseSpeed;
                 missile.vy = 0.0f;
                 missile.hp = 1;
                 missile.playerId = player.playerId;
                 missile.chargeLevel = 0;
-                missile.projectileType = 3; // Homing projectile
-                missile.homingSpeed = 500.0f;
-                entities_[missile.id] = missile;
-                broadcastEntitySpawn(missile);
+                missile.projectileType = cfg_.modules.homing.projectileType;
+                missile.homingSpeed = cfg_.modules.homing.speed;
+                missile.width = 60.0f;
+                missile.height = 60.0f;
+                gs.entities[missile.id] = missile;
+                broadcastEntitySpawn(missile, gs.roomId);
                 break;
             }
-            case 3: { // SPREAD: fires 3 projectiles in a fan (-15°, 0°, +15°)
-                const float angles[3] = {-0.2617f, 0.0f, 0.2617f};
-                for (int i = 0; i < 3; ++i) {
+            case 3: { // SPREAD: fires projectiles in a fan
+                for (size_t i = 0; i < cfg_.modules.spread.angles.size(); ++i) {
+                    float angle = cfg_.modules.spread.angles[i];
                     ServerEntity missile;
                     missile.id = nextEntityId_++;
                     missile.type = EntityType::ENTITY_PLAYER_MISSILE;
-                    missile.x = player.x + 50.0f;
-                    missile.y = player.y + 10.0f;
-                    missile.vx = baseSpeed * std::cos(angles[i]);
-                    missile.vy = baseSpeed * std::sin(angles[i]);
+                    missile.x = player.x + cfg_.projectiles.player.spawnOffsetX;
+                    missile.y = player.y + cfg_.projectiles.player.spawnOffsetY;
+                    missile.vx = baseSpeed * std::cos(angle);
+                    missile.vy = baseSpeed * std::sin(angle);
                     missile.hp = 1;
                     missile.playerId = player.playerId;
                     missile.chargeLevel = 0;
-                    missile.projectileType = 4; // Spread projectile
-                    entities_[missile.id] = missile;
-                    broadcastEntitySpawn(missile);
+                    missile.projectileType = cfg_.modules.spread.projectileType;
+                    missile.width = 60.0f;
+                    missile.height = 60.0f;
+                    gs.entities[missile.id] = missile;
+                    broadcastEntitySpawn(missile, gs.roomId);
                 }
                 break;
             }
@@ -1084,24 +1280,26 @@ private:
                 ServerEntity missile;
                 missile.id = nextEntityId_++;
                 missile.type = EntityType::ENTITY_PLAYER_MISSILE;
-                missile.x = player.x + 50.0f;
-                missile.y = player.y + 10.0f;
+                missile.x = player.x + cfg_.projectiles.player.spawnOffsetX;
+                missile.y = player.y + cfg_.projectiles.player.spawnOffsetY;
                 missile.vx = baseSpeed;
                 missile.vy = 0.0f;
                 missile.hp = 1;
                 missile.playerId = player.playerId;
                 missile.chargeLevel = 0;
-                missile.projectileType = 5; // Wave projectile
+                missile.projectileType = cfg_.modules.wave.projectileType;
                 missile.waveTime = 0.0f;
-                missile.waveAmplitude = 60.0f;
-                missile.waveFrequency = 4.0f;
-                entities_[missile.id] = missile;
-                broadcastEntitySpawn(missile);
+                missile.waveAmplitude = cfg_.modules.wave.amplitude;
+                missile.waveFrequency = cfg_.modules.wave.frequency;
+                missile.width = 60.0f;
+                missile.height = 60.0f;
+                gs.entities[missile.id] = missile;
+                broadcastEntitySpawn(missile, gs.roomId);
                 break;
             }
             default:
                 // Fallback: normal shot
-                spawnPlayerMissile(player, 0);
+                spawnPlayerMissile(player, 0, gs);
                 break;
         }
         
@@ -1110,13 +1308,13 @@ private:
                   << " fired with module: " << names[player.moduleType] << std::endl;
     }
     
-    void spawnPowerup() {
+    void spawnPowerup(RoomGameState& gs) {
         ServerEntity powerup;
         powerup.id = nextEntityId_++;
         powerup.type = EntityType::ENTITY_POWERUP;
-        powerup.x = 1920.0f;
-        powerup.y = 100.0f + (dist_(rng_) % 880);
-        powerup.vx = -150.0f;
+        powerup.x = cfg_.powerups.spawnX;
+        powerup.y = cfg_.powerups.spawnYMin + (dist_(rng_) % cfg_.powerups.spawnYRange);
+        powerup.vx = cfg_.powerups.spawnVx;
         powerup.vy = 0.0f;
         powerup.hp = 1;
         powerup.playerId = 0;
@@ -1124,96 +1322,103 @@ private:
         
         // 50/50 orange or blue
         powerup.enemyType = (dist_(rng_) % 2 == 0) ? 0 : 1; // 0=orange, 1=blue
+        powerup.width = 122.0f;   // 612*0.2 scale
+        powerup.height = 81.0f;   // 408*0.2 scale
         
-        entities_[powerup.id] = powerup;
-        broadcastEntitySpawn(powerup);
+        gs.entities[powerup.id] = powerup;
+        broadcastEntitySpawn(powerup, gs.roomId);
         
         std::cout << "[GameServer] ⭐ Spawned powerup " << powerup.id 
                   << " (" << (powerup.enemyType == 0 ? "orange/bomb" : "blue/shield") 
-                  << ") at (" << powerup.x << ", " << powerup.y << ")" << std::endl;
+                  << ") at (" << powerup.x << ", " << powerup.y << ") in room " << gs.roomId << std::endl;
     }
 
     // moduleType: 1=laser(homing), 3=spread, 4=wave
-    void spawnModule(uint8_t modType) {
+    void spawnModule(uint8_t modType, RoomGameState& gs) {
         ServerEntity mod;
         mod.id = nextEntityId_++;
         mod.type = EntityType::ENTITY_MODULE;
-        mod.x = 1920.0f;
-        mod.y = 100.0f + (dist_(rng_) % 880);
-        mod.vx = -100.0f;
+        mod.x = cfg_.enemySpawn.spawnX;
+        mod.y = cfg_.enemySpawn.spawnYMin + (dist_(rng_) % cfg_.enemySpawn.spawnYRange);
+        mod.vx = cfg_.modules.spawnVx;
         mod.vy = 0.0f;
         mod.hp = 1;
         mod.playerId = 0;
         mod.playerLine = 0;
         mod.enemyType = modType; // Reuse enemyType to identify module type for client
+        mod.width = 68.0f;   // ~34*2.0 scale
+        mod.height = 58.0f;  // ~29*2.0 scale
         
-        entities_[mod.id] = mod;
-        broadcastEntitySpawn(mod);
+        gs.entities[mod.id] = mod;
+        broadcastEntitySpawn(mod, gs.roomId);
         
         const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
         std::cout << "[GameServer] 🔧 Spawned module " << mod.id 
                   << " (" << names[modType] 
-                  << ") at (" << mod.x << ", " << mod.y << ")" << std::endl;
+                  << ") at (" << mod.x << ", " << mod.y << ") in room " << gs.roomId << std::endl;
     }
 
-    void spawnEnemyMissile(const ServerEntity& enemy) {
-        float projSpeed = std::abs(enemy.vx) * 1.5f; // Projectile toujours plus rapide que l'ennemi
-        if (projSpeed < 400.0f) projSpeed = 400.0f;
+    void spawnEnemyMissile(const ServerEntity& enemy, RoomGameState& gs) {
+        float projSpeed = std::abs(enemy.vx) * cfg_.projectiles.enemy.speedMultiplier;
+        if (projSpeed < cfg_.projectiles.enemy.minSpeed) projSpeed = cfg_.projectiles.enemy.minSpeed;
         
         if (enemy.firePattern == 0) {
             // STRAIGHT: single shot to the left
-            spawnSingleMissile(enemy, -projSpeed, 0.0f);
+            spawnSingleMissile(enemy, -projSpeed, 0.0f, gs);
         } else if (enemy.firePattern == 1) {
             // AIMED: shoot towards nearest player
-            const ServerEntity* target = findNearestPlayer(enemy);
+            const ServerEntity* target = findNearestPlayer(enemy, gs);
             if (target) {
                 float dx = target->x - enemy.x;
                 float dy = target->y - enemy.y;
                 float len = std::sqrt(dx * dx + dy * dy);
                 if (len > 0.001f) {
-                    spawnSingleMissile(enemy, (dx / len) * projSpeed, (dy / len) * projSpeed);
+                    spawnSingleMissile(enemy, (dx / len) * projSpeed, (dy / len) * projSpeed, gs);
                 }
             } else {
-                spawnSingleMissile(enemy, -projSpeed, 0.0f);
+                spawnSingleMissile(enemy, -projSpeed, 0.0f, gs);
             }
         } else if (enemy.firePattern == 2) {
-            // CIRCLE: 8 projectiles in all directions
-            for (int i = 0; i < 8; ++i) {
-                float angle = (2.0f * 3.14159f * i) / 8.0f;
-                float circleSpeed = projSpeed * 0.8f;
-                spawnSingleMissile(enemy, std::cos(angle) * circleSpeed, std::sin(angle) * circleSpeed);
+            // CIRCLE: projectiles in all directions
+            int count = cfg_.projectiles.enemy.circleCount;
+            for (int i = 0; i < count; ++i) {
+                float angle = (2.0f * 3.14159f * i) / static_cast<float>(count);
+                float circleSpeed = projSpeed * cfg_.projectiles.enemy.circleSpeedFactor;
+                spawnSingleMissile(enemy, std::cos(angle) * circleSpeed, std::sin(angle) * circleSpeed, gs);
             }
         } else if (enemy.firePattern == 3) {
             // SPREAD: 3 projectiles in a fan
             for (int i = -1; i <= 1; ++i) {
-                float angle = i * 0.26f; // ~15 degrees
+                float angle = i * cfg_.projectiles.enemy.spreadAngle;
                 float dx = -projSpeed * std::cos(angle);
                 float dy = -projSpeed * std::sin(angle);
-                spawnSingleMissile(enemy, dx, dy);
+                spawnSingleMissile(enemy, dx, dy, gs);
             }
         }
     }
     
-    void spawnSingleMissile(const ServerEntity& enemy, float vx, float vy) {
+    void spawnSingleMissile(const ServerEntity& enemy, float vx, float vy, RoomGameState& gs) {
         ServerEntity missile;
         missile.id = nextEntityId_++;
         missile.type = EntityType::ENTITY_MONSTER_MISSILE;
-        missile.x = enemy.x - 40.0f;
+        missile.x = enemy.x + cfg_.projectiles.enemy.spawnOffsetX;
         missile.y = enemy.y;
         missile.vx = vx;
         missile.vy = vy;
         missile.hp = 1;
         missile.playerId = 0;
         missile.playerLine = 0;
+        missile.width = 26.0f;   // 13*2.0 scale
+        missile.height = 16.0f;  // 8*2.0 scale
         
-        entities_[missile.id] = missile;
-        broadcastEntitySpawn(missile);
+        gs.entities[missile.id] = missile;
+        broadcastEntitySpawn(missile, gs.roomId);
     }
     
-    const ServerEntity* findNearestPlayer(const ServerEntity& from) {
+    const ServerEntity* findNearestPlayer(const ServerEntity& from, const RoomGameState& gs) {
         float nearestDist = 999999.0f;
         const ServerEntity* nearest = nullptr;
-        for (const auto& [id, e] : entities_) {
+        for (const auto& [id, e] : gs.entities) {
             if (e.type == EntityType::ENTITY_PLAYER) {
                 float dx = e.x - from.x;
                 float dy = e.y - from.y;
@@ -1227,7 +1432,7 @@ private:
         return nearest;
     }
 
-    void spawnExplosion(float x, float y) {
+    void spawnExplosion(float x, float y, RoomGameState& gs) {
         ServerEntity explosion;
         explosion.id = nextEntityId_++;
         explosion.type = EntityType::ENTITY_EXPLOSION;
@@ -1238,96 +1443,28 @@ private:
         explosion.hp = 1;
         explosion.playerId = 0;
         explosion.playerLine = 0;
-        explosion.lifetime = 0.5f; // Explosions disappear after 0.5 seconds
+        explosion.lifetime = cfg_.explosions.lifetime; // Explosions disappear after configured time
         
-        entities_[explosion.id] = explosion;
-        broadcastEntitySpawn(explosion);
+        gs.entities[explosion.id] = explosion;
+        broadcastEntitySpawn(explosion, gs.roomId);
         
         std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ") with lifetime " << explosion.lifetime << "s" << std::endl;
     }
 
     void sendWorldSnapshot() {
-        auto& roomManager = server_.getRoomManager();
-        auto allRooms = roomManager.getAllRooms();
-        
-        // Check if there are any rooms in PLAYING state
-        bool hasPlayingRooms = false;
-        for (auto& [roomId, room] : allRooms) {
-            if (room->state == RoomState::PLAYING) {
-                hasPlayingRooms = true;
-                break;
-            }
-        }
-        
-        // MODE ROOMS: Envoyer un snapshot par room
-        if (hasPlayingRooms) {
-            for (auto& [roomId, room] : allRooms) {
-                if (room->state != RoomState::PLAYING) continue;
-                
-                std::vector<const ServerEntity*> snapshotEntities;
-                
-                // Ajouter TOUS les joueurs de cette room
-                for (uint8_t playerId : room->playerIds) {
-                    auto it = playerEntities_.find(playerId);
-                    if (it != playerEntities_.end()) {
-                        uint32_t entityId = it->second;
-                        auto entityIt = entities_.find(entityId);
-                        if (entityIt != entities_.end()) {
-                            snapshotEntities.push_back(&entityIt->second);
-                        }
-                    }
-                }
-                
-                // Ajouter les autres entités (ennemis, projectiles, explosions, etc.)
-                for (const auto& [id, entity] : entities_) {
-                    if (entity.type == EntityType::ENTITY_PLAYER) continue;
-                    snapshotEntities.push_back(&entity);
-                }
-                
-                // Construire le packet
-                SnapshotHeader header;
-                header.entityCount = snapshotEntities.size();
-                NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
-                packet.header.timestamp = getCurrentTimestamp();
-                
-                auto headerData = header.serialize();
-                packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
-                
-                for (const auto* entity : snapshotEntities) {
-                    EntityState state;
-                    state.id = entity->id;
-                    state.type = entity->type;
-                    state.x = entity->x;
-                    state.y = entity->y;
-                    state.vx = entity->vx;
-                    state.vy = entity->vy;
-                    state.hp = static_cast<uint8_t>(std::min(entity->hp, (int32_t)255));
-                    state.playerLine = entity->playerLine;
-                    state.playerId = entity->playerId; // include server-side playerId mapping
-                    state.chargeLevel = entity->chargeLevel;
-                    state.enemyType = entity->enemyType;
-                    state.score = entity->score; // Send player score
-                    // For players: send moduleType via projectileType field
-                    if (entity->type == EntityType::ENTITY_PLAYER) {
-                        state.projectileType = entity->moduleType;
-                    } else {
-                        state.projectileType = entity->projectileType;
-                    }
-                    
-                    auto stateData = state.serialize();
-                    packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
-                }
-                
-                broadcastToRoom(roomId, packet);
-            }
-        } else {
-            // MODE LOCAL/CLASSIQUE: Broadcast à tous (pas de rooms actives)
+        // Send one snapshot per room, using each room's own entities
+        for (auto& [roomId, gs] : roomStates_) {
+            auto room = server_.getRoomManager().getRoom(roomId);
+            if (!room || room->state != RoomState::PLAYING) continue;
+            
             std::vector<const ServerEntity*> snapshotEntities;
-            for (const auto& [id, entity] : entities_) {
-                if (entity.type == EntityType::ENTITY_EXPLOSION) continue;
+            
+            // Add ALL entities from this room's game state
+            for (const auto& [id, entity] : gs.entities) {
                 snapshotEntities.push_back(&entity);
             }
             
+            // Build packet
             SnapshotHeader header;
             header.entityCount = snapshotEntities.size();
             NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
@@ -1344,23 +1481,28 @@ private:
                 state.y = entity->y;
                 state.vx = entity->vx;
                 state.vy = entity->vy;
-                state.hp = static_cast<uint8_t>(std::min(entity->hp, (int32_t)255));
+                state.hp = static_cast<uint16_t>(std::min(entity->hp, (int32_t)65535));
                 state.playerLine = entity->playerLine;
                 state.playerId = entity->playerId;
                 state.chargeLevel = entity->chargeLevel;
                 state.enemyType = entity->enemyType;
-                state.projectileType = entity->projectileType;
-                state.score = entity->score; // Send player score
+                state.score = entity->score;
+                // For players: send moduleType via projectileType field
+                if (entity->type == EntityType::ENTITY_PLAYER) {
+                    state.projectileType = entity->moduleType;
+                } else {
+                    state.projectileType = entity->projectileType;
+                }
                 
                 auto stateData = state.serialize();
                 packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
             }
             
-            server_.broadcast(packet);
+            broadcastToRoom(roomId, packet);
         }
     }
 
-    void broadcastEntitySpawn(const ServerEntity& entity) {
+    void broadcastEntitySpawn(const ServerEntity& entity, uint32_t roomId) {
         EntityState state;
         state.id = entity.id;
         state.type = entity.type;
@@ -1368,7 +1510,7 @@ private:
         state.y = entity.y;
         state.vx = entity.vx;
         state.vy = entity.vy;
-        state.hp = static_cast<uint8_t>(std::min(entity.hp, (int32_t)255));
+        state.hp = static_cast<uint16_t>(std::min(entity.hp, (int32_t)65535));
         state.playerLine = entity.playerLine;
         state.playerId = entity.playerId;
         state.chargeLevel = entity.chargeLevel;
@@ -1379,10 +1521,10 @@ private:
         packet.header.timestamp = getCurrentTimestamp();
         packet.setPayload(state.serialize());
         
-        server_.broadcast(packet);
+        broadcastToRoom(roomId, packet);
     }
 
-    void broadcastEntityDestroy(uint32_t entityId) {
+    void broadcastEntityDestroy(uint32_t entityId, uint32_t roomId) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::ENTITY_DESTROY));
         packet.header.timestamp = getCurrentTimestamp();
         
@@ -1390,7 +1532,7 @@ private:
         std::memcpy(payload.data(), &entityId, sizeof(uint32_t));
         packet.setPayload(payload);
         
-        server_.broadcast(packet);
+        broadcastToRoom(roomId, packet);
     }
 
     // ========== ROOMING SYSTEM HANDLERS ==========
@@ -1561,6 +1703,32 @@ private:
         // Remove player from room (void return, always succeeds)
         server_.getRoomManager().leaveRoom(roomId, playerId);
         
+        // Clean up player's game entities from room state
+        auto gsIt = roomStates_.find(roomId);
+        if (gsIt != roomStates_.end()) {
+            RoomGameState& gs = gsIt->second;
+            auto playerIt = gs.playerEntities.find(playerId);
+            if (playerIt != gs.playerEntities.end()) {
+                uint32_t entityId = playerIt->second;
+                auto entityIt = gs.entities.find(entityId);
+                if (entityIt != gs.entities.end()) {
+                    spawnExplosion(entityIt->second.x, entityIt->second.y, gs);
+                    gs.entities.erase(entityIt);
+                    broadcastEntityDestroy(entityId, roomId);
+                }
+                gs.playerEntities.erase(playerIt);
+                gs.playerPrevFire.erase(playerId);
+                gs.playerLastCharge.erase(playerId);
+            }
+            
+            // If room is now empty of players, clean up room state
+            auto room = server_.getRoomManager().getRoom(roomId);
+            if (!room || room->playerIds.empty()) {
+                roomStates_.erase(gsIt);
+                std::cout << "[GameServer] Cleaned up empty room state for room " << roomId << std::endl;
+            }
+        }
+        
         // Clear session room info
         session->roomId = 0;
         playerToRoom_.erase(playerId);
@@ -1630,10 +1798,10 @@ private:
             return;
         }
         
-        // Check minimum player count (need at least 2 players in the room)
-        if (room->playerIds.size() < 2) {
+        // Check minimum player count
+        if (room->playerIds.size() < static_cast<size_t>(cfg_.server.minPlayersToStart)) {
             std::cerr << "[GameServer] Cannot start game: only " << room->playerIds.size() 
-                      << " player(s) in room (need at least 2)" << std::endl;
+                      << " player(s) in room (need at least " << cfg_.server.minPlayersToStart << ")" << std::endl;
             return;
         }
         
@@ -1645,23 +1813,32 @@ private:
         std::cout << "[GameServer] Creating player entities for " << room->playerIds.size() 
                   << " players..." << std::endl;
         
+        // Create a new RoomGameState for this room
+        RoomGameState& gs = roomStates_[session->roomId];
+        gs.roomId = session->roomId;
+        
         // Create player entities for all players in the room
         int playerIndex = 0;
         for (uint8_t playerId : room->playerIds) {
+            // Map player to room for input routing
+            playerToRoom_[playerId] = session->roomId;
+            
             // Create player entity
             ServerEntity player;
             player.id = nextEntityId_++;
             player.type = EntityType::ENTITY_PLAYER;
-            player.x = 100.0f;
-            player.y = 200.0f + (playerIndex * 200.0f); // Offset players vertically
+            player.x = cfg_.player.spawnX;
+            player.y = cfg_.player.spawnYStart + (playerIndex * cfg_.player.spawnYOffset);
             player.vx = 0.0f;
             player.vy = 0.0f;
-            player.hp = 100;
+            player.hp = cfg_.player.maxHealth;
             player.playerId = playerId;
-            player.playerLine = playerIndex % 5; // Cycle through 5 different ship colors
+            player.playerLine = playerIndex % cfg_.server.maxPlayerShips;
+            player.width = 99.0f;   // 33*3.0 scale
+            player.height = 51.0f;  // 17*3.0 scale
             
-            entities_[player.id] = player;
-            playerEntities_[playerId] = player.id;
+            gs.entities[player.id] = player;
+            gs.playerEntities[playerId] = player.id;
             
             std::cout << "[GameServer]   Created player entity " << player.id 
                       << " for player " << (int)playerId 
@@ -1811,13 +1988,11 @@ private:
 
 private:
     NetworkServer server_;
-    std::unordered_map<uint32_t, ServerEntity> entities_;
-    std::unordered_map<uint8_t, uint32_t> playerEntities_; // playerId -> entityId
+    ServerConfig::Config cfg_;
+    std::unordered_map<uint32_t, RoomGameState> roomStates_; // roomId -> per-room game state
     std::unordered_map<asio::ip::udp::endpoint, uint8_t> endpointToPlayerId_; // endpoint -> playerId
-    std::unordered_map<uint8_t, uint32_t> playerToRoom_;  // playerId -> roomId (NEW for rooming)
-    std::unordered_map<uint8_t, bool> playerPrevFire_;     // playerId -> was fire pressed last frame
-    std::unordered_map<uint8_t, uint8_t> playerLastCharge_; // playerId -> last charge level while holding
-    uint32_t nextEntityId_;
+    std::unordered_map<uint8_t, uint32_t> playerToRoom_;  // playerId -> roomId (for routing input)
+    uint32_t nextEntityId_;  // Global counter to ensure unique entity IDs across all rooms
     uint8_t nextPlayerId_ = 1;
     bool gameRunning_;
     std::mt19937 rng_;
@@ -1828,7 +2003,11 @@ int main() {
     std::cout << "R-Type Server Starting..." << std::endl;
 
     try {
-        GameServer server(12345);
+        // Load config first to get port
+        ServerConfig::Config tempCfg;
+        ServerConfig::loadFromLua(tempCfg, "assets/scripts/config/server_config.lua");
+        
+        GameServer server(static_cast<short>(tempCfg.server.port));
         server.start();
         server.run();
     } catch (const std::exception& e) {

@@ -73,6 +73,7 @@ struct RoomInfo {
     std::string name;
     uint8_t currentPlayers;
     uint8_t maxPlayers;
+    bool inGame = false;
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -80,6 +81,7 @@ struct RoomInfo {
         serializer.writeString(name);
         serializer.write(currentPlayers);
         serializer.write(maxPlayers);
+        serializer.write(static_cast<uint8_t>(inGame ? 1 : 0));
         return serializer.getBuffer();
     }
    
@@ -89,6 +91,7 @@ struct RoomInfo {
        info.name = deserializer.readString();
        info.currentPlayers = deserializer.read<uint8_t>();
        info.maxPlayers = deserializer.read<uint8_t>();
+       info.inGame = deserializer.read<uint8_t>() != 0;
        return info;
    }
 };
@@ -245,7 +248,9 @@ enum class GamePacketType : uint16_t {
     SERVER_SET_PAUSE = 0x35,     // Server informs clients that the room is paused or resumed
     CHAT_MESSAGE = 0x40,         // Nouveau: messages de chat
     PLAYER_READY = 0x50,         // Player marks ready in room
-    LEVEL_CHANGE = 0x60          // Server informs clients of level change (payload: uint8_t levelId)
+    LEVEL_CHANGE = 0x60,         // Server informs clients of level change (payload: uint8_t levelId)
+    GAME_OVER = 0x70,            // Server informs clients all players are dead (payload: uint32_t totalScore)
+    GAME_VICTORY = 0x71          // Server informs clients boss L3 killed (payload: uint32_t totalScore)
 };
 
 // Enum for EntityType
@@ -308,7 +313,7 @@ struct EntityState {
     int16_t y;
     int16_t vx; // Quantized velocity
     int16_t vy;
-    uint8_t hp;
+    uint16_t hp;
     uint8_t playerLine; // Pour la couleur du vaisseau (ligne dans la spritesheet)
     uint8_t playerId; // Player ID for player-associated entities (0 = none)
     
