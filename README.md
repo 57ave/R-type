@@ -1,215 +1,99 @@
-# 🚀 R-Type Multiplayer Shooter
+# R-Type
 
-Welcome to **R-Type**, a modern multiplayer shooter game built with a sophisticated Entity-Component-System architecture and real-time network synchronization. This project brings classic arcade shooter gameplay to a multiplayer experience with advanced engine capabilities.
+A multiplayer arcade shooter built in C++17, using a custom ECS engine, UDP networking, and Lua scripting for game configuration.
 
----
-
-## 📋 Table of Contents
-
-- [About](#-about)
-- [Architecture Overview](#️-architecture-overview)
-- [Project Structure](#-project-structure)
-- [Key Features](#-key-features)
-- [Getting Started](#-getting-started)
-- [Build Instructions](#-build-instructions)
-- [Running the Game](#-running-the-game)
-- [Architecture Documentation](#-architecture-documentation)
-- [Development](#️-development)
-- [License](#-license)
-- [Credits](#-credits)
+The project is split into four modules: **engine**, **game**, **server**, and **client**. The server runs all game logic authoritatively; clients handle input and rendering only.
 
 ---
 
-## 🎯 About
+## Requirements
 
-R-Type is a modern reimagining of the classic arcade shooter, featuring:
-
-- 🔥 **Real-time multiplayer gameplay** with client-server architecture
-- 🏗️ **Advanced Entity-Component-System (ECS)** for flexible game design
-- 🎮 **Smooth rendering** with SFML for graphics and audio
-- 🌐 **Network synchronization** with ASIO-based UDP communication
-- 📜 **Lua scripting** for dynamic gameplay customization
-- 🎯 **Gameplay mechanics** including power-ups, enemy waves, and boss battles
-
----
-
-## 🏗️ Architecture Overview
-
-```
-┌────────────────────────────────────────┐
-│     Game Module (game-specific)        │
-│  • Gameplay mechanics                  │
-│  • Player controls & Enemy AI          │
-│  • Power-ups & Progression             │
-└────────────────┬───────────────────────┘
-                 │
-                 ▼
-┌────────────────────────────────────────┐
-│    Engine Module (game-agnostic)       │
-│  • ECS Core System                     │
-│  • Rendering, Audio, Input             │
-│  • Networking & Lua scripting          │
-└────────────────┬───────────────────────┘
-                 │
-        ┌────────┴────────┐
-        │                 │
-   ┌────▼─────┐     ┌────▼──────┐
-   │  Client  │     │  Server   │
-   │  Module  │     │  Module   │
-   │ • Input  │     │ • Auth    │
-   │ • Render │     │ • Logic   │
-   │ • Broadcast│     │ • State   │
-   └──────────┘     └───────────┘
-```
-
----
-
-## 📁 Project Structure
-
-The project consists of four main components:
-
-| Component | Language | Description |
-|-----------|----------|-------------|
-| **Engine** (`engine/`) | C++17 | Core game engine with ECS, rendering, audio, and networking |
-| **Game** (`game/`) | C++17 | Game-specific logic, enemy AI, power-ups, and progression |
-| **Server** (`server/`) | C++17 | Authoritative game server with client management and state synchronization |
-| **Client** (`client/`) | C++17 | Player client with input handling, rendering, and network communication |
-| **Tests** (`tests/`) | C++17 | Unit and integration tests using GoogleTest |
-
----
-
-## ⭐ Key Features
-
-### 🎮 Gameplay Features
-
-- **Multiplayer Shooting**: Real-time competitive/cooperative gameplay
-- **Power-up System**: Collectible upgrades for weapons and abilities
-- **Enemy Waves**: Progressive difficulty with varied enemy types
-- **Boss Battles**: Challenging multi-phase boss encounters
-- **Scrolling Background**: Dynamic parallax scrolling environments
-
-### 🔧 Technical Features
-
-- **ECS Architecture**: Flexible, data-oriented design for rapid iteration
-- **Network Synchronization**: Smooth multiplayer with client prediction
-- **Lua Scripting**: Dynamic game behavior customization
-- **Asset Management**: Efficient loading of textures, sounds, and fonts
-- **Input System**: Configurable controls with gamepad support
-- **Audio System**: Spatial audio with SFML integration
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- C++17 Compiler (GCC 9+, Clang 10+, MSVC 2019+)
 - CMake 3.15+
-- SFML 2.6+ (Managed automatically via CPM)
-- Lua 5.3+ (Optional, managed via CPM)
+- C++17 compiler (GCC 9+, Clang 10+, or MSVC 2019+)
+- Dependencies (SFML, Lua, Sol3, ASIO) are fetched automatically via CPM at build time
 
-### System Dependencies (Linux/macOS)
-
-#### Ubuntu/Debian
+**Linux/macOS additional packages:**
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y \
-    libxrandr-dev \
-    libxcursor-dev \
-    libxi-dev \
-    libudev-dev \
-    libopenal-dev \
-    libflac-dev \
-    libvorbis-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    build-essential \
-    cmake \
-    git
-```
-
-#### macOS
-
-```bash
-brew install cmake
+# Ubuntu/Debian
+sudo apt-get install -y libxrandr-dev libxcursor-dev libxi-dev libudev-dev \
+    libopenal-dev libflac-dev libvorbis-dev libgl1-mesa-dev build-essential cmake git
 ```
 
 ---
 
-## 🔨 Build Instructions
+## Build
 
-### Windows (Automated)
-
-We provide a batch script to automate the build process on Windows.
-
-1.  Open a terminal (PowerShell or Command Prompt).
-2.  Run the build script:
-    ```powershell
-    .\build_windows.bat
-    ```
-    This script will check for CMake, configure the project (downloading dependencies via CPM), and build both Client and Server.
-
-### Manual Build (All Platforms)
+### Linux / macOS
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd R-type
-
-# Create build directory
-mkdir build && cd build
-
-# Configure with CMake (Download dependencies)
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-# Build the project
-cmake --build . --config Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cmake --install build --prefix ./install
 ```
 
-### Build Options
+Binaries are placed in `install/bin/`.
 
-| CMake Option | Default | Description |
-|--------------|---------|-------------|
-| `BUILD_CLIENT` | ON | Build the client executable |
-| `BUILD_SERVER` | ON | Build the server executable |
-| `BUILD_GAME` | ON | Build the game module |
-| `BUILD_TESTS` | OFF | Build unit tests |
+### Windows (native)
+
+```powershell
+.\build_windows.bat
+```
+
+### Windows (cross-compile from Linux)
+
+```bash
+chmod +x scripts/build_windows.sh
+./scripts/build_windows.sh
+```
+
+Output is placed in `release_windows/bin/`.
 
 ---
 
-## 🎮 Running the Game
+## Run
 
-### Start the Server
+Start the server first, then launch the client:
+
 ```bash
+# Linux/macOS
+./install/bin/r-type_server
+./install/bin/r-type_game
+
 # Windows
-.\build\server\Release\RType_server.exe
-# Linux/Mac
-./build/server/RType_server
+.\release_windows\bin\r-type_server.exe
+.\release_windows\bin\r-type_game.exe
 ```
 
-### Start the Client
-```bash
-# Windows
-.\build\client\Release\RType_client.exe
-# Linux/Mac
-./build/client/RType_client
+The server listens on UDP port **4242** by default.
+
+---
+
+## Project Structure
+
+```
+engine/     Core ECS, rendering (SFML), audio, networking, Lua scripting
+game/       R-Type game logic, states, enemy AI, Lua configs
+server/     Authoritative game server, room management, state broadcasting
+client/     Thin client: input capture, rendering, network sync
+docs/       Technical documentation
 ```
 
 ---
 
-## 📄 License
+## Documentation
 
-This project is developed as part of an educational curriculum.
+| File | Description |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Engine modules, ECS design, data flow |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | UDP packet format and protocol reference |
+| [docs/LUA_SCRIPTING.md](docs/LUA_SCRIPTING.md) | Lua configuration system and API |
+| [docs/BUILD.md](docs/BUILD.md) | Detailed build instructions for all platforms |
+| [docs/RELEASE.md](docs/RELEASE.md) | Release workflow via GitHub Actions |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Contribution guidelines |
 
 ---
 
-## 👥 Credits
+## License
 
-Developed with modern C++ practices, leveraging:
-- **SFML** for multimedia
-- **ASIO** for networking
-- **Lua** for scripting
-- **GoogleTest** for testing
-- **CMake** for build system
-
+Educational project. See team credits in commit history.
