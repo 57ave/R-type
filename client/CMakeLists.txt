@@ -70,12 +70,13 @@ if(WIN32)
         )
     endif()
 
-    # Explicitly copy freetype.dll if it exists next to sfml-graphics
+    # Copy freetype.dll only if present (not produced in MinGW cross-compilation)
     add_custom_command(TARGET r-type_client POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE_DIR:sfml-graphics>/freetype.dll"
-            $<TARGET_FILE_DIR:r-type_client>
-        COMMENT "Explicitly copying freetype.dll"
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC_FILE=$<TARGET_FILE_DIR:sfml-graphics>/freetype.dll
+            -DDST_DIR=$<TARGET_FILE_DIR:r-type_client>
+            -P ${CMAKE_SOURCE_DIR}/scripts/CopyIfExists.cmake
+        COMMENT "Copying freetype.dll if present"
     )
 
     # Copy lua.dll (built as shared library on Windows)
