@@ -3,8 +3,8 @@
 #include <filesystem>
 
 #if SERVER_SCRIPTING_ENABLED
-// Suppress GCC 15 template-body warning from sol2
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wtemplate-body"
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
