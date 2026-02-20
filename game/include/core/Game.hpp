@@ -53,6 +53,12 @@ public:
     UISystem* getUISystem() { return uiSystem_.get(); }
     GameConfig& getConfig() { return config_; }
 
+    /**
+     * Reset ECS coordinator — destroys all entities/systems and re-registers
+     * everything from scratch. Call from PlayState::onExit() to allow replaying.
+     */
+    void resetCoordinator();
+
 private:
     void loadConfigurations();
     void setupECS();

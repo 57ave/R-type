@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 // Forward declarations
 namespace ECS {
@@ -58,7 +59,7 @@ private:
     void loadEnemiesConfig();   // Load enemies configuration from Lua
     void loadVFXConfig();       // Load VFX configuration from Lua
     void spawnPlayer();
-    void spawnBackground();
+    void spawnBackground(int level = 1);
     void spawnChargeIndicator();
     void updateChargeIndicator(float chargeTime);
     void handleShooting();
@@ -137,11 +138,13 @@ private:
     // Enemy tracking for optimized iteration
     std::vector<ECS::Entity> activeEnemies_;  // Track all spawned enemies for efficient updates
     std::vector<ECS::Entity> activeCollectables_; // Track powerups/modules for efficient pickup checks
+    std::unordered_set<ECS::Entity> kamikazeEntities_; // Enemies with homing_player movement pattern
 
     // Game config from Lua
     int windowWidth_;
     int windowHeight_;
     float inputSystemSpeed_;  // Speed used by InputSystem (for rescaling)
+    ECS::Entity backgroundEntity_ = 0;  // Track current background entity
     std::string backgroundPath_;
     float backgroundScrollSpeed_;
     int backgroundOriginalWidth_;
@@ -174,9 +177,15 @@ private:
     std::unique_ptr<eng::engine::rendering::sfml::SFMLFont> scoreFont_;
     std::unique_ptr<eng::engine::rendering::sfml::SFMLText> scoreText_;
     std::unique_ptr<eng::engine::rendering::sfml::SFMLText> levelText_;
+
+    // Boss health bar UI
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> bossNameText_;
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> bossHpText_;
+    int bossMaxHealth_ = 0;
     
     // Level system state
     int currentLevel_ = 1;
+    bool gameOverTriggered_ = false;
     float levelTimer_ = 0.0f;
     float enemySpawnTimer_ = 0.0f;
     float powerupSpawnTimer_ = 0.0f;

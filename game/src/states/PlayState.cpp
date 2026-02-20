@@ -1,4 +1,6 @@
 #include "states/PlayState.hpp"
+#include "states/GameOverState.hpp"
+#include "states/VictoryState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include <ecs/Coordinator.hpp>
@@ -120,7 +122,22 @@ void PlayState::onEnter()
         levelText_->setFillColor(0xFFFF00FF); // Yellow
         levelText_->setString("Level 1: First Contact");
         levelText_->setPosition(windowWidth_ / 2.0f - 280.0f, windowHeight_ / 2.0f - 50.0f);
-        
+
+        // Boss health bar texts
+        bossNameText_ = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
+        bossNameText_->setFont(scoreFont_.get());
+        bossNameText_->setCharacterSize(28);
+        bossNameText_->setFillColor(0xFF4444FF); // Red-ish
+        bossNameText_->setString("GUARDIAN BOSS");
+        bossNameText_->setPosition(windowWidth_ / 2.0f - 220.0f, windowHeight_ - 70.0f);
+
+        bossHpText_ = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
+        bossHpText_->setFont(scoreFont_.get());
+        bossHpText_->setCharacterSize(22);
+        bossHpText_->setFillColor(0xFFFFFFFF); // White
+        bossHpText_->setString("");
+        bossHpText_->setPosition(windowWidth_ / 2.0f - 220.0f, windowHeight_ - 38.0f);
+
         // std::cout << "[PlayState] Score & Level display initialized" << std::endl;
     } else {
         std::cerr << "[PlayState] Failed to load font for score display" << std::endl;
@@ -170,11 +187,19 @@ void PlayState::onExit()
             saveHighScore(score.current);
         }
     }
-    
-    // Destroy all gameplay entities
-    if (coordinator && playerEntity_ != 0) {
-        coordinator->DestroyEntity(playerEntity_);
-    }
+
+    // Nullify system pointers before the reset (they will become dangling)
+    inputSystem_    = nullptr;
+    movementSystem_ = nullptr;
+    renderSystem_   = nullptr;
+    animationSystem_= nullptr;
+    collisionSystem_= nullptr;
+    scrollingSystem_= nullptr;
+    lifetimeSystem_ = nullptr;
+    boundarySystem_ = nullptr;
+
+    // Reset the ECS coordinator so systems can be re-registered on next play
+    game_->resetCoordinator();
 
     // std::cout << "[PlayState] Gameplay cleanup complete" << std::endl;
 }
@@ -426,8 +451,9 @@ void PlayState::setupSystems()
                                 std::remove(activeEnemies_.begin(), activeEnemies_.end(), target),
                                 activeEnemies_.end()
                             );
-                            // Also remove from fire patterns map
+                            // Also remove from fire patterns map and kamikaze set
                             enemyFirePatterns_.erase(target);
+                            kamikazeEntities_.erase(target);
                         }
                         
                         coordinator->DestroyEntity(target);
@@ -441,7 +467,7 @@ void PlayState::setupSystems()
                 // Check if shield is active
                 if (shieldActive_) {
                     // std::cout << "[Collision] 🛡️ Shield blocked attack from " << tagB << "!" << std::endl;
-                    coordinator->DestroyEntity(b); // Destroy the projectile/enemy
+                    if (b != bossEntity_) coordinator->DestroyEntity(b); // Don't destroy the boss
                     return;
                 }
                 
@@ -450,16 +476,22 @@ void PlayState::setupSystems()
                     dmg = coordinator->GetComponent<Damage>(b).amount;
                 }
                 // std::cout << "[Collision] 🎯 Player hit by " << tagB << " (entity " << b << "), damage=" << dmg << std::endl;
-                applyDamage(a, dmg, b, true); // Player: enable invulnerability
-                // Destroy enemy projectiles AND enemies on contact with player
-                coordinator->DestroyEntity(b);
+                // Boss body contact: deal heavy damage to both sides, don't destroy boss
+                if (b == bossEntity_) {
+                    applyDamage(a, 30, b, true); // Player loses 30 HP
+                    applyDamage(b, 20, a, false); // Boss loses 20 HP
+                } else {
+                    applyDamage(a, dmg, b, true); // Player: enable invulnerability
+                    // Destroy enemy projectiles AND enemies on contact with player
+                    coordinator->DestroyEntity(b);
+                }
                 return;
             }
             if (isPlayer(tagB) && (isEnemy(tagA) || isEnemyProj(tagA))) {
                 // Check if shield is active
                 if (shieldActive_) {
                     // std::cout << "[Collision] 🛡️ Shield blocked attack from " << tagA << "!" << std::endl;
-                    coordinator->DestroyEntity(a); // Destroy the projectile/enemy
+                    if (a != bossEntity_) coordinator->DestroyEntity(a);
                     return;
                 }
                 
@@ -468,9 +500,15 @@ void PlayState::setupSystems()
                     dmg = coordinator->GetComponent<Damage>(a).amount;
                 }
                 // std::cout << "[Collision] 🎯 Player hit by " << tagA << " (entity " << a << "), damage=" << dmg << std::endl;
-                applyDamage(b, dmg, a, true); // Player: enable invulnerability
-                // Destroy enemy projectiles AND enemies on contact with player
-                coordinator->DestroyEntity(a);
+                // Boss body contact: deal heavy damage to both sides, don't destroy boss
+                if (a == bossEntity_) {
+                    applyDamage(b, 30, a, true); // Player loses 30 HP
+                    applyDamage(a, 20, b, false); // Boss loses 20 HP
+                } else {
+                    applyDamage(b, dmg, a, true); // Player: enable invulnerability
+                    // Destroy enemy projectiles AND enemies on contact with player
+                    coordinator->DestroyEntity(a);
+                }
                 return;
             }
 
@@ -507,11 +545,9 @@ void PlayState::setupSystems()
                 return; // Don't process collision
             }
             
-            // Projectile vs projectile collision (player projectile vs enemy projectile: destroy both)
+            // Projectile vs projectile collision: player missiles pass through enemy missiles
             if ((isPlayerProj(tagA) && isEnemyProj(tagB)) || (isPlayerProj(tagB) && isEnemyProj(tagA))) {
-                coordinator->DestroyEntity(a);
-                coordinator->DestroyEntity(b);
-                return;
+                return; // No interaction between projectiles
             }
         });
         // std::cout << "[PlayState] Collision callback registered" << std::endl;
@@ -740,44 +776,59 @@ eng::engine::rendering::ISprite* PlayState::loadSprite(const std::string& textur
 }
 
 
-void PlayState::spawnBackground()
+void PlayState::spawnBackground(int level)
 {
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
 
-    // Create scrolling background entity
+    // Destroy previous background entity if it exists
+    if (backgroundEntity_ != 0) {
+        if (coordinator->HasComponent<Sprite>(backgroundEntity_))
+            coordinator->DestroyEntity(backgroundEntity_);
+        backgroundEntity_ = 0;
+    }
+
     ECS::Entity bg = coordinator->CreateEntity();
-    
-    // Add Position
+    backgroundEntity_ = bg;
+
     coordinator->AddComponent<Position>(bg, Position{0.0f, 0.0f});
-    
-    // Calculate scaling based on Lua config
-    // Strategy: Scale to fit window height, let it scroll horizontally
-    float scaleY = backgroundScaleToWindow_ ? (float)windowHeight_ / (float)backgroundOriginalHeight_ : 1.0f;
-    float scaleX = scaleY;  // Keep aspect ratio
-    float scaledWidth = (float)backgroundOriginalWidth_ * scaleX;  // Width after scaling
-    
-    // Add Sprite (background texture)
-    Sprite bgSprite;
-    bgSprite.texturePath = backgroundPath_;
-    bgSprite.layer = -10;  // Behind everything
-    bgSprite.scaleX = scaleX;
-    bgSprite.scaleY = scaleY;
-    bgSprite.sprite = loadSprite(backgroundPath_);
-    coordinator->AddComponent<Sprite>(bg, bgSprite);
 
-    // Add ScrollingBackground component for infinite scrolling
-    ScrollingBackground scrollBg;
-    scrollBg.scrollSpeed = backgroundScrollSpeed_;  // From Lua config
-    scrollBg.horizontal = true;
-    scrollBg.loop = true;
-    scrollBg.spriteWidth = scaledWidth;  // Actual width after scaling
-    coordinator->AddComponent<ScrollingBackground>(bg, scrollBg);
+    if (level == 1) {
+        // ── Level 1: parallax scrolling background ──────────────────────────
+        float scaleY = backgroundScaleToWindow_
+            ? (float)windowHeight_ / (float)backgroundOriginalHeight_ : 1.0f;
+        float scaleX = scaleY;
+        float scaledWidth = (float)backgroundOriginalWidth_ * scaleX;
 
-    // std::cout << "[PlayState] Background spawned: " << backgroundPath_ 
-              // << " (" << backgroundOriginalWidth_ << "x" << backgroundOriginalHeight_ 
-              // << " @ scale " << scaleX << "x" << scaleY << " = " << scaledWidth << " wide, speed=" 
-              // << backgroundScrollSpeed_ << "px/s)" << std::endl;
+        Sprite bgSprite;
+        bgSprite.texturePath = backgroundPath_;
+        bgSprite.layer = -10;
+        bgSprite.scaleX = scaleX;
+        bgSprite.scaleY = scaleY;
+        bgSprite.sprite = loadSprite(backgroundPath_);
+        coordinator->AddComponent<Sprite>(bg, bgSprite);
+
+        ScrollingBackground scrollBg;
+        scrollBg.scrollSpeed = backgroundScrollSpeed_;
+        scrollBg.horizontal = true;
+        scrollBg.loop = true;
+        scrollBg.spriteWidth = scaledWidth;
+        coordinator->AddComponent<ScrollingBackground>(bg, scrollBg);
+
+    } else {
+        // ── Level 2/3: image fixe ─────────────────────────────────────────
+        std::string bgPath = (level == 2)
+            ? "assets/backgrounds/bg_level2.png"
+            : "assets/backgrounds/bg_level3.png";
+
+        Sprite bgSprite;
+        bgSprite.texturePath = bgPath;
+        bgSprite.layer = -10;
+        bgSprite.scaleX = 1.0f;
+        bgSprite.scaleY = 1.0f;
+        bgSprite.sprite = loadSprite(bgPath);
+        coordinator->AddComponent<Sprite>(bg, bgSprite);
+    }
 }
 
 void PlayState::spawnPlayer()
@@ -1146,11 +1197,19 @@ void PlayState::handleShooting()
     // Create projectile entity
     ECS::Entity projectile = coordinator->CreateEntity();
 
-    // Position (spawn in front of player, same height as modules)
-    coordinator->AddComponent<Position>(projectile, Position{
-        playerPos.x + 50.0f,  // Offset to the right of player
-        playerPos.y + 5.0f    // Same Y offset as modules
-    });
+    // Hauteur visuelle du sprite du missile (pour centrage vertical)
+    float missileVisualH = static_cast<float>(textureRect.height) * spriteScale;
+    // Hauteur visuelle du joueur (pour calculer son centre Y)
+    float playerVisualH = 34.0f * 2.0f; // frame 33px * scale ~2 (valeur approx)
+    if (coordinator->HasComponent<Sprite>(playerEntity_)) {
+        auto& playerSprite = coordinator->GetComponent<Sprite>(playerEntity_);
+        playerVisualH = playerSprite.textureRect.height * playerSprite.scaleY;
+    }
+
+    // Position : en avant du joueur, missile centré sur le centre vertical du joueur
+    float spawnX = playerPos.x + 50.0f;
+    float spawnY = playerPos.y + (playerVisualH / 2.0f) - (missileVisualH / 2.0f);
+    coordinator->AddComponent<Position>(projectile, Position{spawnX, spawnY});
 
     // Velocity (move right) - FROM LUA CONFIG
     coordinator->AddComponent<Velocity>(projectile, Velocity{speed, 0.0f});
@@ -1202,8 +1261,26 @@ void PlayState::handleShooting()
     bulletSprite.sprite = loadSprite(texturePath, &bulletSprite.textureRect);
     coordinator->AddComponent<Sprite>(projectile, bulletSprite);
 
-    // Collider - FROM LUA CONFIG
-    coordinator->AddComponent<Collider>(projectile, Collider{colliderRadius, false});
+    // Collider :
+    // - Pour basic_shot : on utilise colliderRadius (défini dans Lua, ~7px → 14x14)
+    //   car le textureRect 20x20 contient beaucoup d'espace vide autour du missile
+    // - Pour les charges : on utilise textureRect*scale car le sprite remplit le rect
+    {
+        Collider col;
+        if (chargeLevel == 0) {
+            // basic_shot : hitbox en dur, étendue pour couvrir le sprite réel
+            col.width   = 67.0f;
+            col.height  = 35.0f;
+            col.offsetY = 14.0f;  // décalée vers le bas
+        } else {
+            // charges : hitbox basée sur le sprite réel
+            col.width   = static_cast<float>(bulletSprite.textureRect.width)  * spriteScale;
+            col.height  = static_cast<float>(bulletSprite.textureRect.height) * spriteScale;
+        }
+        col.offsetX = 0.0f;
+        col.offsetY = 0.0f;
+        coordinator->AddComponent<Collider>(projectile, col);
+    }
 
     // Damage - FROM LUA CONFIG
     coordinator->AddComponent<Damage>(projectile, Damage{damage});
@@ -1244,31 +1321,39 @@ void PlayState::update(float deltaTime)
     // Check if Space is held (using engine's real-time input API)
     bool spaceCurrentlyPressed = eng::engine::Keyboard::isKeyPressed(eng::engine::Key::Space);
     
-    // ALL MODULES and NO MODULE: Standard charging system
-    {
-        // Space just pressed → start charging
-        if (spaceCurrentlyPressed && !isCharging_) {
-            isCharging_ = true;
-            chargeTime_ = 0.0f;
-            // std::cout << "[PlayState] ⚡ Started charging..." << std::endl;
+    // Module equipped → tir automatique en continu (pas de charge)
+    if (equippedModuleEntity_ != 0 && equippedModuleType_ != "none") {
+        if (spaceCurrentlyPressed) {
+            handleShooting(); // tirera dès que le cooldown est passé
         }
-        // Space held → increment charge time
-        else if (spaceCurrentlyPressed && isCharging_) {
-            chargeTime_ += deltaTime;
-            // Update charge indicator animation
-            updateChargeIndicator(chargeTime_);
-        }
-        // Space just released → fire!
-        else if (!spaceCurrentlyPressed && isCharging_) {
-            handleShooting();
-            isCharging_ = false;
-            chargeTime_ = 0.0f;
-            // Hide charge indicator
-            updateChargeIndicator(0.0f);
-        }
-        // Not charging → hide indicator
-        else if (!isCharging_) {
-            updateChargeIndicator(0.0f);
+        // Cacher l'indicateur de charge avec les modules
+        updateChargeIndicator(0.0f);
+        isCharging_ = false;
+        chargeTime_ = 0.0f;
+    } else {
+        // Pas de module → système de charge standard
+        {
+            // Space just pressed → start charging
+            if (spaceCurrentlyPressed && !isCharging_) {
+                isCharging_ = true;
+                chargeTime_ = 0.0f;
+            }
+            // Space held → increment charge time
+            else if (spaceCurrentlyPressed && isCharging_) {
+                chargeTime_ += deltaTime;
+                updateChargeIndicator(chargeTime_);
+            }
+            // Space just released → fire!
+            else if (!spaceCurrentlyPressed && isCharging_) {
+                handleShooting();
+                isCharging_ = false;
+                chargeTime_ = 0.0f;
+                updateChargeIndicator(0.0f);
+            }
+            // Not charging → hide indicator
+            else if (!isCharging_) {
+                updateChargeIndicator(0.0f);
+            }
         }
     }
 
@@ -1501,6 +1586,20 @@ void PlayState::update(float deltaTime)
             showLevelText_ = false;
         }
     }
+
+    // Check player death → Game Over
+    if (!gameOverTriggered_ && playerEntity_ != 0 &&
+        coordinator && coordinator->HasComponent<Health>(playerEntity_)) {
+        auto& ph = coordinator->GetComponent<Health>(playerEntity_);
+        if (ph.current <= 0) {
+            gameOverTriggered_ = true;
+            int finalScore = coordinator->HasComponent<Score>(playerEntity_)
+                ? coordinator->GetComponent<Score>(playerEntity_).current : 0;
+            game_->getStateManager()->pushState(
+                std::make_unique<GameOverState>(game_, finalScore));
+            return;
+        }
+    }
 }
 
 void PlayState::render()
@@ -1553,100 +1652,98 @@ void PlayState::render()
         if (showLevelText_ && levelText_) {
             renderer->drawText(*levelText_);
         }
-    }
-    
-    // DEBUG: Draw hitboxes for enemies
-    if (coordinator && renderer) {
-        // Draw shield around player if active
-        if (shieldActive_ && playerEntity_ != 0 && coordinator->HasComponent<Position>(playerEntity_)) {
-            auto& playerPos = coordinator->GetComponent<Position>(playerEntity_);
-            
-            // Get player size for centering the shield
-            float playerWidth = 66.0f;  // Default
-            float playerHeight = 34.0f;
-            if (coordinator->HasComponent<Sprite>(playerEntity_)) {
-                auto& sprite = coordinator->GetComponent<Sprite>(playerEntity_);
-                playerWidth = sprite.textureRect.width * sprite.scaleX;
-                playerHeight = sprite.textureRect.height * sprite.scaleY;
+
+        // Draw boss health bar at the bottom center of the screen
+        if (bossSpawned_ && bossAlive_ && bossEntity_ != 0 &&
+            coordinator->HasComponent<Health>(bossEntity_))
+        {
+            auto& bossHp = coordinator->GetComponent<Health>(bossEntity_);
+            int maxHp = (bossMaxHealth_ > 0) ? bossMaxHealth_ : bossHp.max;
+            float bossPercent = (maxHp > 0)
+                ? static_cast<float>(bossHp.current) / static_cast<float>(maxHp)
+                : 0.0f;
+            if (bossPercent < 0.0f) bossPercent = 0.0f;
+
+            const float barWidth  = 500.0f;
+            const float barHeight = 22.0f;
+            const float barLeft   = windowWidth_ / 2.0f - barWidth / 2.0f;
+            const float barTop    = windowHeight_ - 60.0f;
+
+            // Background (dark red)
+            eng::engine::rendering::FloatRect bossBg;
+            bossBg.left   = barLeft;
+            bossBg.top    = barTop;
+            bossBg.width  = barWidth;
+            bossBg.height = barHeight;
+            renderer->drawRect(bossBg, 0x550000FF, 0xFF0000FF, 2.0f);
+
+            // Foreground (health fill — red → orange → yellow)
+            eng::engine::rendering::FloatRect bossFg;
+            bossFg.left   = barLeft + 2.0f;
+            bossFg.top    = barTop + 2.0f;
+            bossFg.width  = (barWidth - 4.0f) * bossPercent;
+            bossFg.height = barHeight - 4.0f;
+
+            uint32_t bossColor = 0xFF2222FF; // Red
+            if (bossPercent > 0.5f) bossColor = 0xFF8800FF; // Orange when high HP
+            if (bossPercent > 0.75f) bossColor = 0xFFCC00FF; // Yellow when full
+
+            renderer->drawRect(bossFg, bossColor, bossColor, 0.0f);
+
+            // Boss name text
+            if (bossNameText_) {
+                std::string name;
+                if      (currentLevel_ == 1) name = "GUARDIAN BOSS";
+                else if (currentLevel_ == 2) name = "RISING THREAT";
+                else                          name = "FINAL BOSS";
+                bossNameText_->setString(name);
+                bossNameText_->setPosition(barLeft, barTop - 32.0f);
+                renderer->drawText(*bossNameText_);
             }
-            
-            // Shield radius (bigger than player)
-            float shieldRadius = std::max(playerWidth, playerHeight) * 0.8f;
-            
-            // Draw multiple rectangles to approximate a circle (8 sides)
-            const int segments = 8;
-            const float pi = 3.14159f;
-            
-            for (int i = 0; i < segments; ++i) {
-                float angle1 = (2.0f * pi * i) / segments;
-                float angle2 = (2.0f * pi * (i + 1)) / segments;
-                
-                float x1 = playerPos.x + playerWidth / 2.0f + shieldRadius * std::cos(angle1);
-                float y1 = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle1);
-                float x2 = playerPos.x + playerWidth / 2.0f + shieldRadius * std::cos(angle2);
-                float y2 = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle2);
-                
-                // Draw line as thin rectangle
-                eng::engine::rendering::FloatRect lineRect;
-                lineRect.left = x1;
-                lineRect.top = y1;
-                lineRect.width = x2 - x1;
-                lineRect.height = y2 - y1;
-                
-                // Blue shield (semi-transparent)
-                renderer->drawRect(lineRect, 0x0000FF80, 0x0088FFFF, 3.0f);
-            }
-            
-            // Draw a circular outline using multiple small rectangles
-            for (int i = 0; i < segments * 4; ++i) {
-                float angle = (2.0f * pi * i) / (segments * 4);
-                float x = playerPos.x + playerWidth / 2.0f + shieldRadius * std::cos(angle);
-                float y = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle);
-                
-                eng::engine::rendering::FloatRect dot;
-                dot.left = x - 2.0f;
-                dot.top = y - 2.0f;
-                dot.width = 4.0f;
-                dot.height = 4.0f;
-                
-                // Bright blue dots
-                renderer->drawRect(dot, 0x0088FFFF, 0x0088FFFF, 0.0f);
+
+            // HP numbers
+            if (bossHpText_) {
+                bossHpText_->setString(
+                    std::to_string(bossHp.current) + " / " + std::to_string(maxHp));
+                bossHpText_->setPosition(barLeft + barWidth + 10.0f, barTop);
+                renderer->drawText(*bossHpText_);
             }
         }
+    }
+    
+    // Draw shield around player if active
+    if (coordinator && renderer && shieldActive_ && playerEntity_ != 0 &&
+        coordinator->HasComponent<Position>(playerEntity_)) {
+        auto& playerPos = coordinator->GetComponent<Position>(playerEntity_);
         
-        for (ECS::Entity entity = 0; entity < 5000; ++entity) {
-            // Draw hitboxes for enemies and player
-            if (coordinator->HasComponent<Tag>(entity) && 
-                coordinator->HasComponent<Position>(entity) && 
-                coordinator->HasComponent<Collider>(entity)) {
-                
-                auto& tag = coordinator->GetComponent<Tag>(entity);
-                auto& pos = coordinator->GetComponent<Position>(entity);
-                auto& col = coordinator->GetComponent<Collider>(entity);
-                
-                // Draw red rectangle for enemies
-                if (tag.name == "Enemy") {
-                    eng::engine::rendering::FloatRect hitboxRect;
-                    hitboxRect.left = pos.x;
-                    hitboxRect.top = pos.y;
-                    hitboxRect.width = col.width;
-                    hitboxRect.height = col.height;
-                    
-                    // Red outline, transparent fill
-                    renderer->drawRect(hitboxRect, 0x00000000, 0xFF0000FF, 2.0f);
-                }
-                // Draw green rectangle for player
-                else if (tag.name == "player") {
-                    eng::engine::rendering::FloatRect hitboxRect;
-                    hitboxRect.left = pos.x;
-                    hitboxRect.top = pos.y;
-                    hitboxRect.width = col.width;
-                    hitboxRect.height = col.height;
-                    
-                    // Green outline, transparent fill
-                    renderer->drawRect(hitboxRect, 0x00000000, 0x00FF00FF, 2.0f);
-                }
-            }
+        float playerWidth = 66.0f;
+        float playerHeight = 34.0f;
+        if (coordinator->HasComponent<Sprite>(playerEntity_)) {
+            auto& sprite = coordinator->GetComponent<Sprite>(playerEntity_);
+            playerWidth  = sprite.textureRect.width  * sprite.scaleX;
+            playerHeight = sprite.textureRect.height * sprite.scaleY;
+        }
+        
+        float shieldRadius = std::max(playerWidth, playerHeight) * 0.8f;
+        const int segments = 8;
+        const float pi = 3.14159f;
+        
+        for (int i = 0; i < segments; ++i) {
+            float angle1 = (2.0f * pi * i) / segments;
+            float angle2 = (2.0f * pi * (i + 1)) / segments;
+            float x1 = playerPos.x + playerWidth  / 2.0f + shieldRadius * std::cos(angle1);
+            float y1 = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle1);
+            float x2 = playerPos.x + playerWidth  / 2.0f + shieldRadius * std::cos(angle2);
+            float y2 = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle2);
+            eng::engine::rendering::FloatRect lineRect{x1, y1, x2 - x1, y2 - y1};
+            renderer->drawRect(lineRect, 0x0000FF80, 0x0088FFFF, 3.0f);
+        }
+        for (int i = 0; i < segments * 4; ++i) {
+            float angle = (2.0f * pi * i) / (segments * 4);
+            float x = playerPos.x + playerWidth  / 2.0f + shieldRadius * std::cos(angle);
+            float y = playerPos.y + playerHeight / 2.0f + shieldRadius * std::sin(angle);
+            eng::engine::rendering::FloatRect dot{x - 2.0f, y - 2.0f, 4.0f, 4.0f};
+            renderer->drawRect(dot, 0x0088FFFF, 0x0088FFFF, 0.0f);
         }
     }
     
@@ -1947,9 +2044,17 @@ void PlayState::pickupPowerup(ECS::Entity powerupEntity, const std::string& type
                 continue; // Skip enemies that are off-screen
             }
             
+            // Boss: deal heavy damage instead of instant kill
+            if (enemy == bossEntity_) {
+                if (coordinator->HasComponent<Health>(enemy)) {
+                    auto& bossHealth = coordinator->GetComponent<Health>(enemy);
+                    int damage = bossHealth.max / 4; // deal 25% of max HP
+                    bossHealth.current = std::max(1, bossHealth.current - damage);
+                }
+                continue;
+            }
+
             destroyedCount++;
-            
-            // Spawn explosion at enemy position
             
             // Spawn explosion at enemy position
             try {
@@ -2029,8 +2134,9 @@ void PlayState::pickupPowerup(ECS::Entity powerupEntity, const std::string& type
                 activeEnemies_.erase(it);
             }
             
-            // Remove from fire patterns map
+            // Remove from fire patterns map and kamikaze set
             enemyFirePatterns_.erase(enemy);
+            kamikazeEntities_.erase(enemy);
         }
         
         // std::cout << "[PlayState] 💥 Destroyed " << destroyedCount << " visible enemies (out of " 
@@ -2281,6 +2387,19 @@ void PlayState::fireSpreadModule()
     sol::table colliderConfig = basicShot["collider"];
     float colliderRadius = colliderConfig["radius"].get_or(7.0f);
     
+    // Calcul du spawn Y centré sur le joueur (comme le missile normal)
+    float missileVisualH_s = static_cast<float>(textureRect.height) * spriteScale;
+    float playerVisualH_s  = 34.0f * 2.0f;
+    if (coordinator->HasComponent<Sprite>(playerEntity_)) {
+        auto& ps = coordinator->GetComponent<Sprite>(playerEntity_);
+        playerVisualH_s = ps.textureRect.height * ps.scaleY;
+    }
+    float playerPosY_s = modulePos.y;
+    if (coordinator->HasComponent<Position>(playerEntity_)) {
+        playerPosY_s = coordinator->GetComponent<Position>(playerEntity_).y;
+    }
+    float spawnY_s = playerPosY_s + (playerVisualH_s / 2.0f) - (missileVisualH_s / 2.0f);
+
     // Create 3 projectiles with different angles
     for (int i = 0; i < 3; ++i) {
         ECS::Entity projectile = coordinator->CreateEntity();
@@ -2289,10 +2408,10 @@ void PlayState::fireSpreadModule()
         float velocityX = speed * std::cos(angle);
         float velocityY = speed * std::sin(angle);
         
-        // Position (spawn from module position)
+        // Position (spawn from module position, Y centré sur le joueur)
         coordinator->AddComponent<Position>(projectile, Position{
-            modulePos.x + 10.0f,  // Slightly in front of module
-            modulePos.y
+            modulePos.x + 10.0f,
+            spawnY_s
         });
         
         // Velocity (angled)
@@ -2308,8 +2427,15 @@ void PlayState::fireSpreadModule()
         bulletSprite.sprite = loadSprite(texturePath, &textureRect);
         coordinator->AddComponent<Sprite>(projectile, bulletSprite);
         
-        // Collider
-        coordinator->AddComponent<Collider>(projectile, Collider{colliderRadius, false});
+        // Collider - AABB serré autour du visuel (spread projectile)
+        {
+            Collider col;
+            col.width   = 65.0f;
+            col.height  = 22.0f;
+            col.offsetX = 0.0f;
+            col.offsetY = 14.0f;
+            coordinator->AddComponent<Collider>(projectile, col);
+        }
         
         // Damage
         coordinator->AddComponent<Damage>(projectile, Damage{damage});
@@ -2370,13 +2496,26 @@ void PlayState::fireWaveModule()
     sol::table colliderConfig = basicShot["collider"];
     float colliderRadius = colliderConfig["radius"].get_or(7.0f);
     
+    // Calcul du spawn Y centré sur le joueur (comme le missile normal)
+    float missileVisualH_w = static_cast<float>(textureRect.height) * spriteScale;
+    float playerVisualH_w  = 34.0f * 2.0f;
+    if (coordinator->HasComponent<Sprite>(playerEntity_)) {
+        auto& ps = coordinator->GetComponent<Sprite>(playerEntity_);
+        playerVisualH_w = ps.textureRect.height * ps.scaleY;
+    }
+    float playerPosY_w = modulePos.y;
+    if (coordinator->HasComponent<Position>(playerEntity_)) {
+        playerPosY_w = coordinator->GetComponent<Position>(playerEntity_).y;
+    }
+    float spawnY_w = playerPosY_w + (playerVisualH_w / 2.0f) - (missileVisualH_w / 2.0f);
+
     // Create wave projectile
     ECS::Entity projectile = coordinator->CreateEntity();
     
-    // Position (spawn from module position)
+    // Position (spawn from module position, Y centré sur le joueur)
     coordinator->AddComponent<Position>(projectile, Position{
-        modulePos.x + 10.0f,  // Slightly in front of module
-        modulePos.y
+        modulePos.x + 10.0f,
+        spawnY_w
     });
     
     // Velocity (straight horizontal initially)
@@ -2384,10 +2523,11 @@ void PlayState::fireWaveModule()
     
     // Wave motion component
     WaveMotion waveMotion;
-    waveMotion.frequency = 4.0f;     // Oscillates 4 times per second
+    waveMotion.frequency = 2.0f;     // Oscillates 2 times per second
     waveMotion.amplitude = 60.0f;    // +/- 60 pixels up/down
     waveMotion.time = 0.0f;
     waveMotion.baseVelocityY = 0.0f;
+    waveMotion.baseY = spawnY_w;     // Store spawn Y for position-based wave
     coordinator->AddComponent<WaveMotion>(projectile, waveMotion);
     
     // Sprite
@@ -2400,8 +2540,15 @@ void PlayState::fireWaveModule()
     bulletSprite.sprite = loadSprite(texturePath, &textureRect);
     coordinator->AddComponent<Sprite>(projectile, bulletSprite);
     
-    // Collider
-    coordinator->AddComponent<Collider>(projectile, Collider{colliderRadius, false});
+    // Collider - AABB serré autour du visuel (wave projectile)
+    {
+        Collider col;
+        col.width   = 65.0f;
+        col.height  = 22.0f;
+        col.offsetX = 0.0f;
+        col.offsetY = 14.0f;
+        coordinator->AddComponent<Collider>(projectile, col);
+    }
     
     // Damage
     coordinator->AddComponent<Damage>(projectile, Damage{damage});
@@ -2430,21 +2577,27 @@ void PlayState::updateWaveProjectiles(float deltaTime)
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
     
-    // Update all entities with WaveMotion component
-    for (ECS::Entity entity = 0; entity < 1000; ++entity) {
-        if (!coordinator->HasComponent<WaveMotion>(entity)) continue;
-        if (!coordinator->HasComponent<Velocity>(entity)) continue;
-        
+    // Collect wave entities first to avoid iterator invalidation
+    std::vector<ECS::Entity> waveEntities;
+    for (ECS::Entity entity = 1; entity < 5000; ++entity) {
+        if (coordinator->HasComponent<WaveMotion>(entity) &&
+            coordinator->HasComponent<Position>(entity) &&
+            coordinator->HasComponent<Velocity>(entity)) {
+            waveEntities.push_back(entity);
+        }
+    }
+    
+    for (auto entity : waveEntities) {
         auto& waveMotion = coordinator->GetComponent<WaveMotion>(entity);
-        auto& velocity = coordinator->GetComponent<Velocity>(entity);
+        auto& position   = coordinator->GetComponent<Position>(entity);
         
         // Update time
         waveMotion.time += deltaTime;
         
-        // Calculate sinusoidal Y velocity
-        // velocity_y = amplitude * frequency * cos(frequency * time * 2π)
+        // Position-based wave: Y = baseY + amplitude * sin(2π * frequency * time)
+        // This avoids the enormous velocity.dy derived approach
         float angularFrequency = waveMotion.frequency * 2.0f * 3.14159f;
-        velocity.dy = waveMotion.amplitude * angularFrequency * std::cos(angularFrequency * waveMotion.time);
+        position.y = waveMotion.baseY + waveMotion.amplitude * std::sin(angularFrequency * waveMotion.time);
     }
 }
 
@@ -2483,13 +2636,26 @@ void PlayState::fireHomingModule()
     sol::table colliderConfig = basicShot["collider"];
     float colliderRadius = colliderConfig["radius"].get_or(7.0f);
     
+    // Calcul du spawn Y centré sur le joueur (comme le missile normal)
+    float missileVisualH_h = static_cast<float>(textureRect.height) * spriteScale;
+    float playerVisualH_h  = 34.0f * 2.0f;
+    if (coordinator->HasComponent<Sprite>(playerEntity_)) {
+        auto& ps = coordinator->GetComponent<Sprite>(playerEntity_);
+        playerVisualH_h = ps.textureRect.height * ps.scaleY;
+    }
+    float playerPosY_h = modulePos.y;
+    if (coordinator->HasComponent<Position>(playerEntity_)) {
+        playerPosY_h = coordinator->GetComponent<Position>(playerEntity_).y;
+    }
+    float spawnY_h = playerPosY_h + (playerVisualH_h / 2.0f) - (missileVisualH_h / 2.0f);
+
     // Create homing projectile
     ECS::Entity projectile = coordinator->CreateEntity();
     
-    // Position (spawn from module position)
+    // Position (spawn from module position, Y centré sur le joueur)
     coordinator->AddComponent<Position>(projectile, Position{
-        modulePos.x + 10.0f,  // Slightly in front of module
-        modulePos.y
+        modulePos.x + 10.0f,
+        spawnY_h
     });
     
     // Velocity (start straight horizontal)
@@ -2513,8 +2679,15 @@ void PlayState::fireHomingModule()
     bulletSprite.sprite = loadSprite(texturePath, &textureRect);
     coordinator->AddComponent<Sprite>(projectile, bulletSprite);
     
-    // Collider
-    coordinator->AddComponent<Collider>(projectile, Collider{colliderRadius, false});
+    // Collider - AABB serré autour du visuel (homing projectile)
+    {
+        Collider col;
+        col.width   = 65.0f;
+        col.height  = 22.0f;
+        col.offsetX = 0.0f;
+        col.offsetY = 14.0f;
+        coordinator->AddComponent<Collider>(projectile, col);
+    }
     
     // Damage
     coordinator->AddComponent<Damage>(projectile, Damage{damage});
@@ -2543,33 +2716,29 @@ void PlayState::updateHomingProjectiles(float deltaTime)
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
     
-    // Update all entities with Homing component
-    for (ECS::Entity entity = 0; entity < 1000; ++entity) {
-        if (!coordinator->HasComponent<Homing>(entity)) continue;
-        if (!coordinator->HasComponent<Position>(entity)) continue;
-        if (!coordinator->HasComponent<Velocity>(entity)) continue;
-        
-        auto& homing = coordinator->GetComponent<Homing>(entity);
+    // Collect all homing projectiles
+    std::vector<ECS::Entity> homingEntities;
+    for (ECS::Entity entity = 1; entity < 5000; ++entity) {
+        if (coordinator->HasComponent<Homing>(entity) &&
+            coordinator->HasComponent<Position>(entity) &&
+            coordinator->HasComponent<Velocity>(entity)) {
+            homingEntities.push_back(entity);
+        }
+    }
+    
+    for (auto entity : homingEntities) {
+        auto& homing   = coordinator->GetComponent<Homing>(entity);
         auto& position = coordinator->GetComponent<Position>(entity);
         auto& velocity = coordinator->GetComponent<Velocity>(entity);
         
-        // Find nearest enemy (TODO: For now, we don't have enemies, so homing just goes straight)
-        // In the future, we'll search for entities with Tag "enemy" and find the closest one
-        
+        // Find nearest enemy using activeEnemies_ list
         ECS::Entity nearestEnemy = 0;
         float nearestDistance = homing.detectionRadius;
         
-        // Search for enemies (entities with Tag "Enemy")
-        for (ECS::Entity targetEntity = 0; targetEntity < 1000; ++targetEntity) {
-            if (!coordinator->HasComponent<Tag>(targetEntity)) continue;
+        for (ECS::Entity targetEntity : activeEnemies_) {
             if (!coordinator->HasComponent<Position>(targetEntity)) continue;
             
-            auto& tag = coordinator->GetComponent<Tag>(targetEntity);
-            if (tag.name != "Enemy") continue;  // Capital E to match RenderSystem
-            
             auto& targetPos = coordinator->GetComponent<Position>(targetEntity);
-            
-            // Calculate distance
             float dx = targetPos.x - position.x;
             float dy = targetPos.y - position.y;
             float distance = std::sqrt(dx * dx + dy * dy);
@@ -2580,37 +2749,39 @@ void PlayState::updateHomingProjectiles(float deltaTime)
             }
         }
         
-        // If we found an enemy, steer towards it
+        // Also check boss
+        if (bossEntity_ != 0 && coordinator->HasComponent<Position>(bossEntity_)) {
+            auto& bossPos = coordinator->GetComponent<Position>(bossEntity_);
+            float dx = bossPos.x - position.x;
+            float dy = bossPos.y - position.y;
+            float distance = std::sqrt(dx * dx + dy * dy);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestEnemy = bossEntity_;
+            }
+        }
+        
         if (nearestEnemy != 0 && coordinator->HasComponent<Position>(nearestEnemy)) {
             homing.targetEntity = nearestEnemy;
             auto& targetPos = coordinator->GetComponent<Position>(nearestEnemy);
             
-            // Calculate direction to target
             float dx = targetPos.x - position.x;
             float dy = targetPos.y - position.y;
             float targetAngle = std::atan2(dy, dx);
-            
-            // Calculate current velocity angle
             float currentAngle = std::atan2(velocity.dy, velocity.dx);
             
-            // Calculate angle difference
             float angleDiff = targetAngle - currentAngle;
-            
-            // Normalize angle difference to [-π, π]
             while (angleDiff > 3.14159f) angleDiff -= 6.28318f;
             while (angleDiff < -3.14159f) angleDiff += 6.28318f;
             
-            // Turn towards target (limited by turn speed)
             float maxTurnRadians = (homing.turnSpeed * 3.14159f / 180.0f) * deltaTime;
             float turnAmount = std::max(-maxTurnRadians, std::min(maxTurnRadians, angleDiff));
             
             float newAngle = currentAngle + turnAmount;
-            
-            // Update velocity to point in new direction
             velocity.dx = homing.maxSpeed * std::cos(newAngle);
             velocity.dy = homing.maxSpeed * std::sin(newAngle);
         } else {
-            // No target found, continue straight
+            // No target: continue straight
             homing.targetEntity = 0;
         }
     }
@@ -2768,6 +2939,12 @@ void PlayState::spawnEnemy(const std::string& enemyType, float x, float y)
         // Add to active enemies list for optimized iteration
         activeEnemies_.push_back(enemy);
         
+        // Mark kamikaze enemies for homing movement
+        std::string movType = movementData["type"].get_or<std::string>("straight");
+        if (movType == "kamikaze") {
+            kamikazeEntities_.insert(enemy);
+        }
+        
     } catch (const std::exception& e) {
         std::cerr << "[PlayState] Error spawning enemy: " << e.what() << std::endl;
     }
@@ -2817,7 +2994,8 @@ void PlayState::updateEnemyMovement(float deltaTime)
         }
         
         // ZIGZAG pattern: enemies with vertical velocity oscillate
-        if (std::abs(vel.dy) > 10.0f) {
+        // (skip kamikazes — they handle their own movement)
+        if (std::abs(vel.dy) > 10.0f && kamikazeEntities_.find(entity) == kamikazeEntities_.end()) {
             zigzagTimers[entity] += deltaTime;
             
             // Reverse vertical direction every 1 second
@@ -2827,9 +3005,8 @@ void PlayState::updateEnemyMovement(float deltaTime)
             }
         }
         
-        // KAMIKAZE pattern: enemies with very high speed rush towards player
-        // Only kamikaze enemies (speed >= 450) should track the player
-        if (std::abs(vel.dx) >= 450.0f && playerEntity_ != 0) {
+        // KAMIKAZE pattern: always track the player using the dedicated set
+        if (kamikazeEntities_.find(entity) != kamikazeEntities_.end() && playerEntity_ != 0) {
             if (coordinator->HasComponent<Position>(playerEntity_)) {
                 auto& playerPos = coordinator->GetComponent<Position>(playerEntity_);
                 
@@ -2839,8 +3016,9 @@ void PlayState::updateEnemyMovement(float deltaTime)
                 float distance = std::sqrt(dirX * dirX + dirY * dirY);
                 
                 if (distance > 0.0f) {
-                    // Normalize and apply speed
+                    // Keep constant speed, always aim at player
                     float speed = std::sqrt(vel.dx * vel.dx + vel.dy * vel.dy);
+                    if (speed < 1.0f) speed = 500.0f; // Fallback if velocity got zeroed
                     vel.dx = (dirX / distance) * speed;
                     vel.dy = (dirY / distance) * speed;
                 }
@@ -3210,6 +3388,9 @@ void PlayState::startLevel(int level) {
     
     // Clean up enemy fire patterns map
     enemyFirePatterns_.clear();
+
+    // Swap background for the new level
+    spawnBackground(level);
     
     auto config = getSoloLevelConfig(level);
     
@@ -3232,7 +3413,14 @@ void PlayState::updateLevelSystem(float deltaTime) {
         // Clean dead enemies from activeEnemies_ list
         activeEnemies_.erase(
             std::remove_if(activeEnemies_.begin(), activeEnemies_.end(),
-                [&](ECS::Entity e) { return !coordinator->HasComponent<Tag>(e); }),
+                [&](ECS::Entity e) {
+                    bool dead = !coordinator->HasComponent<Tag>(e);
+                    if (dead) {
+                        kamikazeEntities_.erase(e);
+                        enemyFirePatterns_.erase(e);
+                    }
+                    return dead;
+                }),
             activeEnemies_.end());
         enemyCount = static_cast<int>(activeEnemies_.size());
     }
@@ -3249,12 +3437,10 @@ void PlayState::updateLevelSystem(float deltaTime) {
                 // Small delay before next level starts
                 startLevel(currentLevel_);
             } else {
-                showLevelText_ = true;
-                levelTransitionTimer_ = 5.0f;
-                if (levelText_) {
-                    levelText_->setString("YOU WIN!");
-                    levelText_->setPosition(windowWidth_ / 2.0f - 150.0f, windowHeight_ / 2.0f - 50.0f);
-                }
+                int finalScore = (coordinator && coordinator->HasComponent<Score>(playerEntity_))
+                    ? coordinator->GetComponent<Score>(playerEntity_).current : 0;
+                game_->getStateManager()->pushState(
+                    std::make_unique<VictoryState>(game_, finalScore));
                 levelActive_ = false;
             }
             return;
@@ -3263,23 +3449,21 @@ void PlayState::updateLevelSystem(float deltaTime) {
             if (bossHealth.current <= 0) {
                 bossAlive_ = false;
                 coordinator->DestroyEntity(bossEntity_);
-                // Remove from activeEnemies_
+                // Remove from activeEnemies_ and kamikaze set
                 activeEnemies_.erase(
                     std::remove(activeEnemies_.begin(), activeEnemies_.end(), bossEntity_),
                     activeEnemies_.end());
+                kamikazeEntities_.erase(bossEntity_);
                 addScore(500); // Boss kill score
                 
                 if (currentLevel_ < 3) {
                     currentLevel_++;
                     startLevel(currentLevel_);
                 } else {
-                    // std::cout << "[PlayState] 🎉 ALL LEVELS COMPLETE!" << std::endl;
-                    showLevelText_ = true;
-                    levelTransitionTimer_ = 5.0f;
-                    if (levelText_) {
-                        levelText_->setString("YOU WIN!");
-                        levelText_->setPosition(windowWidth_ / 2.0f - 150.0f, windowHeight_ / 2.0f - 50.0f);
-                    }
+                    int finalScore = (coordinator && coordinator->HasComponent<Score>(playerEntity_))
+                        ? coordinator->GetComponent<Score>(playerEntity_).current : 0;
+                    game_->getStateManager()->pushState(
+                        std::make_unique<VictoryState>(game_, finalScore));
                     levelActive_ = false;
                 }
                 return;
@@ -3441,6 +3625,7 @@ void PlayState::spawnBoss() {
     health.current = config.bossHealth;
     health.max = config.bossHealth;
     coordinator->AddComponent<Health>(boss, health);
+    bossMaxHealth_ = config.bossHealth;
     
     // Damage
     Damage damage;

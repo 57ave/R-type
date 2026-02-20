@@ -584,3 +584,22 @@ void Game::loadConfigurations()
     std::cout << "[GAME] Configurations loaded from Lua" << std::endl;
 }
 
+void Game::resetCoordinator()
+{
+    // Destroy old coordinator (all entities + systems freed)
+    uiSystem_.reset();
+    coordinator_.reset();
+
+    // Recreate from scratch
+    coordinator_ = std::make_unique<ECS::Coordinator>();
+    coordinator_->Init();
+
+    // Re-register components and base systems (UISystem)
+    setupECS();
+
+    // Re-bind Lua (sol2 usertype bindings reference coordinator pointers)
+    setupLuaBindings();
+
+    std::cout << "[GAME] ECS coordinator reset" << std::endl;
+}
+
