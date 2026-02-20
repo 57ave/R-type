@@ -295,6 +295,7 @@ void MultiplayerMenuState::createJoinMenu(bool isRefresh)
                 std::cout << "[MultiplayerMenuState] Requesting room list (non-blocking)..." << std::endl;
                 networkMgr->requestRoomList();
                 waitingForRoomList_ = true;
+                lastRoomListVersion_ = networkMgr->getRoomListVersion();  // Track current version before response arrives
             } else {
                 std::cout << "[MultiplayerMenuState] Refresh mode - using cached room list" << std::endl;
             }
@@ -376,6 +377,20 @@ void MultiplayerMenuState::createJoinMenu(bool isRefresh)
 
 void MultiplayerMenuState::createLobbyMenu()
 {
+    // Preserve chat input text across lobby refreshes
+    {
+        auto coordinator = game_->getCoordinator();
+        for (auto entity : menuEntities_) {
+            if (coordinator->HasComponent<Components::UIInputField>(entity)) {
+                auto& field = coordinator->GetComponent<Components::UIInputField>(entity);
+                if (field.placeholder == "Type a message...") {
+                    pendingChatText_ = field.text;
+                    break;
+                }
+            }
+        }
+    }
+    
     clearMenu();
     currentMode_ = MenuMode::LOBBY;
     // Note: isReady_ is preserved across refreshes to maintain state
@@ -415,20 +430,31 @@ void MultiplayerMenuState::createLobbyMenu()
         // Get room name from NetworkManager
         auto networkMgr = game_->getNetworkManager();
         std::string roomName = "Unknown Room";
+        uint8_t maxPlayers = 4;
         if (networkMgr && networkMgr->getCurrentRoomId() > 0) {
-            const auto& rooms = networkMgr->getRoomList();
-            for (const auto& room : rooms) {
-                if (room.roomId == networkMgr->getCurrentRoomId()) {
-                    roomName = std::string(room.roomName);
-                    break;
+            // Use stored room name (set when creating or joining)
+            if (!networkMgr->getCurrentRoomName().empty()) {
+                roomName = networkMgr->getCurrentRoomName();
+                maxPlayers = networkMgr->getCurrentMaxPlayers();
+            } else {
+                // Fallback: search in room list
+                const auto& rooms = networkMgr->getRoomList();
+                for (const auto& room : rooms) {
+                    if (room.roomId == networkMgr->getCurrentRoomId()) {
+                        roomName = std::string(room.roomName);
+                        maxPlayers = room.maxPlayers;
+                        break;
+                    }
                 }
             }
         }
         
+        std::string roomDisplayText = roomName + " (max " + std::to_string(maxPlayers) + " players)";
+        
         lua["ECS"]["AddUIText"](roomInfoEntity,
                                  roomInfoConfig["x"].get<float>(),
                                  roomInfoConfig["y"].get<float>(),
-                                 roomName,
+                                 roomDisplayText,
                                  roomInfoConfig["fontSize"].get<int>());
         menuEntities_.push_back(roomInfoEntity);
         
@@ -493,6 +519,71 @@ void MultiplayerMenuState::createLobbyMenu()
             menuEntities_.push_back(playerEntity);
         }
         
+        // === Chat area ===
+        if (menuConfig["chat"].valid()) {
+            auto chatConfig = menuConfig["chat"];
+            float chatX = chatConfig["x"].get<float>();
+            float chatY = chatConfig["y"].get<float>();
+            float lineHeight = chatConfig["line_height"].get<float>();
+            int msgFontSize = chatConfig["message_fontSize"].get<int>();
+            int maxVisible = chatConfig["max_visible"].get<int>();
+            
+            // Chat title
+            ECS::Entity chatTitleEntity = coordinator->CreateEntity();
+            lua["ECS"]["AddUIText"](chatTitleEntity,
+                                     chatX,
+                                     chatY,
+                                     chatConfig["title"].get<std::string>(),
+                                     chatConfig["title_fontSize"].get<int>());
+            menuEntities_.push_back(chatTitleEntity);
+            
+            // Display chat messages
+            if (networkMgr) {
+                const auto& messages = networkMgr->getChatMessages();
+                size_t startIdx = 0;
+                if (messages.size() > static_cast<size_t>(maxVisible)) {
+                    startIdx = messages.size() - maxVisible;
+                }
+                
+                float msgY = chatY + 30.0f;
+                for (size_t i = startIdx; i < messages.size(); ++i) {
+                    std::string line = messages[i].senderName + ": " + messages[i].message;
+                    
+                    ECS::Entity msgEntity = coordinator->CreateEntity();
+                    lua["ECS"]["AddUIText"](msgEntity,
+                                             chatX + 10.0f,
+                                             msgY,
+                                             line,
+                                             msgFontSize);
+                    menuEntities_.push_back(msgEntity);
+                    msgY += lineHeight;
+                }
+            }
+            
+            // Chat input field
+            float inputY = chatConfig["input_y"].get<float>();
+            float inputWidth = chatConfig["input_width"].get<float>();
+            float inputHeight = chatConfig["input_height"].get<float>();
+            
+            ECS::Entity chatInputEntity = coordinator->CreateEntity();
+            lua["ECS"]["AddUIInputField"](chatInputEntity,
+                                           chatX,
+                                           inputY,
+                                           inputWidth,
+                                           inputHeight,
+                                           "Type a message...",
+                                           128);
+            // Restore pending chat text from before refresh
+            if (!pendingChatText_.empty()) {
+                auto& chatField = coordinator->GetComponent<Components::UIInputField>(chatInputEntity);
+                chatField.text = pendingChatText_;
+                chatField.cursorPosition = pendingChatText_.size();
+                chatField.isFocused = true;
+                pendingChatText_.clear();
+            }
+            menuEntities_.push_back(chatInputEntity);
+        }
+        
         // Create buttons
         sol::table buttons = menuConfig["buttons"];
         bool isHost = (networkMgr && networkMgr->isHosting());
@@ -528,6 +619,9 @@ void MultiplayerMenuState::createLobbyMenu()
         lastReadyStates_.clear();
         for (bool ready : readyStates) {
             lastReadyStates_.push_back(ready);
+        }
+        if (networkMgr) {
+            lastChatVersion_ = networkMgr->getChatVersion();
         }
         
         std::cout << "[MultiplayerMenuState] ✅ Lobby menu created with " << players.size() << " players" << std::endl;
@@ -663,9 +757,34 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                     {
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr) {
-                            networkMgr->startServer(serverPort_, 4);
-                            networkMgr->createRoom(playerName_ + "'s Room", 4);
-                            std::cout << "[MultiplayerMenuState] ✅ Server started!" << std::endl;
+                            // Read values from input fields
+                            std::string roomName = playerName_ + "'s Room";
+                            uint8_t maxPlayers = 4; // Default
+                            uint16_t port = serverPort_;
+                            
+                            for (auto inputEntity : menuEntities_) {
+                                if (!coordinator->HasComponent<Components::UIInputField>(inputEntity)) continue;
+                                auto& field = coordinator->GetComponent<Components::UIInputField>(inputEntity);
+                                
+                                if (field.placeholder == "Enter room name..." && !field.text.empty()) {
+                                    roomName = field.text;
+                                } else if (field.placeholder == "4" && !field.text.empty()) {
+                                    try {
+                                        int val = std::stoi(field.text);
+                                        if (val >= 2 && val <= 4) maxPlayers = static_cast<uint8_t>(val);
+                                    } catch (...) {}
+                                } else if (field.placeholder == "12345" && !field.text.empty()) {
+                                    try {
+                                        int val = std::stoi(field.text);
+                                        if (val > 0 && val <= 65535) port = static_cast<uint16_t>(val);
+                                    } catch (...) {}
+                                }
+                            }
+                            
+                            networkMgr->startServer(port, maxPlayers);
+                            networkMgr->createRoom(roomName, maxPlayers);
+                            std::cout << "[MultiplayerMenuState] ✅ Server started! Room: '" << roomName 
+                                      << "', Max players: " << (int)maxPlayers << ", Port: " << port << std::endl;
                             createLobbyMenu();
                         }
                     }
@@ -681,6 +800,8 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                         if (networkMgr) {
                             std::cout << "[MultiplayerMenuState] Refreshing room list..." << std::endl;
                             networkMgr->requestRoomList();
+                            waitingForRoomList_ = true;
+                            lastRoomListVersion_ = networkMgr->getRoomListVersion();  // Track current version
                             std::cout << "[MultiplayerMenuState] Room list request sent. Room list will update automatically." << std::endl;
                             // Don't recreate the menu - the list will update on next frame when response arrives
                         }
@@ -794,8 +915,20 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
             {
                 char c = static_cast<char>(event.text.unicode);
                 
+                // Handle Enter key - send chat message if in lobby
+                if (c == 13 && currentMode_ == MenuMode::LOBBY && inputField.placeholder == "Type a message...")
+                {
+                    if (!inputField.text.empty()) {
+                        auto networkMgr = game_->getNetworkManager();
+                        if (networkMgr) {
+                            networkMgr->sendChatMessage(inputField.text);
+                        }
+                        inputField.text.clear();
+                        inputField.cursorPosition = 0;
+                    }
+                }
                 // Handle backspace
-                if (c == 8 && !inputField.text.empty() && inputField.cursorPosition > 0)
+                else if (c == 8 && !inputField.text.empty() && inputField.cursorPosition > 0)
                 {
                     inputField.text.erase(inputField.cursorPosition - 1, 1);
                     inputField.cursorPosition--;
@@ -862,11 +995,13 @@ void MultiplayerMenuState::update(float deltaTime)
     if (currentMode_ == MenuMode::JOIN && waitingForRoomList_) {
         auto networkMgr = game_->getNetworkManager();
         if (networkMgr) {
-            const auto& rooms = networkMgr->getRoomList();
-            if (rooms.size() != lastRoomCount_) {
-                std::cout << "[MultiplayerMenuState] Room list updated (" << lastRoomCount_ 
-                          << " -> " << rooms.size() << "), will refresh next frame..." << std::endl;
-                lastRoomCount_ = rooms.size();  // Update immediately to prevent repeated triggers
+            uint32_t currentVersion = networkMgr->getRoomListVersion();
+            if (currentVersion != lastRoomListVersion_) {
+                const auto& rooms = networkMgr->getRoomList();
+                std::cout << "[MultiplayerMenuState] Room list updated (version " << lastRoomListVersion_ 
+                          << " -> " << currentVersion << ", " << rooms.size() << " rooms), will refresh next frame..." << std::endl;
+                lastRoomListVersion_ = currentVersion;
+                lastRoomCount_ = rooms.size();
                 waitingForRoomList_ = false;
                 needsMenuRefresh_ = true;  // Defer refresh to next frame for safety
             }
@@ -904,6 +1039,13 @@ void MultiplayerMenuState::update(float deltaTime)
                 for (const auto& p : players) {
                     lastReadyStates_.push_back(p.isReady);
                 }
+                needsMenuRefresh_ = true;
+            }
+            
+            // Auto-refresh when new chat messages arrive
+            uint32_t currentChatVer = networkMgr->getChatVersion();
+            if (currentChatVer != lastChatVersion_) {
+                lastChatVersion_ = currentChatVer;
                 needsMenuRefresh_ = true;
             }
         }

@@ -36,7 +36,7 @@ LobbyMenu = {
             id = "btn_ready",
             text = "Ready",
             x = 560,
-            y = 720,
+            y = 820,
             width = 280,
             height = 60,
             callback = "on_toggle_ready"
@@ -45,7 +45,7 @@ LobbyMenu = {
             id = "btn_start",
             text = "Start Game",
             x = 860,
-            y = 720,
+            y = 820,
             width = 280,
             height = 60,
             callback = "on_start_game"
@@ -54,11 +54,27 @@ LobbyMenu = {
             id = "btn_leave",
             text = "Leave Room",
             x = 1160,
-            y = 720,
+            y = 820,
             width = 280,
             height = 60,
             callback = "on_leave_room"
         }
+    },
+    
+    -- Chat area
+    chat = {
+        x = 500,
+        y = 520,
+        width = 920,
+        height = 230,
+        title = "Chat:",
+        title_fontSize = 22,
+        message_fontSize = 18,
+        line_height = 22,
+        max_visible = 8,
+        input_y = 760,
+        input_width = 920,
+        input_height = 40
     },
     
     background = {
@@ -66,7 +82,7 @@ LobbyMenu = {
             x = 460,
             y = 250,
             width = 1000,
-            height = 550
+            height = 650
         }
     }
 }

@@ -42,12 +42,15 @@ private:
     bool isReady_ = false;  // Local player ready state
     bool waitingForRoomList_ = false;  // True when we requested room list
     size_t lastRoomCount_ = 0;  // Track if room list changed
+    uint32_t lastRoomListVersion_ = 0;  // Track room list version for detecting any change
     bool isConnecting_ = false;  // True during connection process
     bool needsMenuRefresh_ = false;  // True when menu needs to be refreshed (deferred to next frame)
     bool isHandlingEvent_ = false;  // True during event handling (prevents menu refresh)
     size_t lastPlayerCount_ = 0;  // Track player count in lobby for auto-refresh
     std::vector<bool> lastReadyStates_;  // Track ready states for auto-refresh
     bool shouldStartGame_ = false;  // True when GAME_START is received, triggers PlayState transition
+    uint32_t lastChatVersion_ = 0;  // Track chat version for auto-refresh
+    std::string pendingChatText_;  // Preserve chat input text across lobby refreshes
     
     void createMainMenu();
     void createHostMenu();
