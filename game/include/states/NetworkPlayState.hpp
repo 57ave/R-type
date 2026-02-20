@@ -129,7 +129,7 @@ private:
     static constexpr float HIT_BLINK_DURATION = 1.5f;  // 1.5s d'invincibilité visuelle
 
     // Store HP for all players (key = server entity ID)
-    std::unordered_map<uint32_t, uint8_t> playerHealthMap_;
+    std::unordered_map<uint32_t, uint16_t> playerHealthMap_;
 
     // Shield effect
     bool shieldActive_ = false;
@@ -149,4 +149,27 @@ private:
     float levelTransitionTimer_ = 0.0f;
     bool showLevelText_ = false;
     void onLevelChange(uint8_t level);
+
+    // Game end states (deferred from network callbacks)
+    bool gameEndTriggered_ = false;
+    bool pendingGameOver_ = false;
+    bool pendingVictory_ = false;
+    uint32_t pendingScore_ = 0;
+
+    // Boss HP bar tracking
+    uint32_t bossServerId_ = 0;    // Server entity ID of current boss (0 = no boss)
+    uint16_t bossHp_ = 0;           // Current boss HP (from snapshot)
+    uint16_t bossMaxHp_ = 1000;    // Max boss HP (from first snapshot)
+    uint8_t bossEnemyType_ = 0;    // Boss type (3, 4, 5)
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> bossNameText_;
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> bossHpText_;
+
+    // Spectator mode (local player died but game continues)
+    bool isSpectating_ = false;
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> spectatorText_;
+    std::unique_ptr<eng::engine::rendering::sfml::SFMLText> spectatorSubText_;
+    float spectatorBlinkTimer_ = 0.0f;
+
+    // Background entity tracking for level changes
+    ECS::Entity backgroundEntity_ = 0;
 };

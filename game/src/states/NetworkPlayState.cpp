@@ -5,6 +5,9 @@
  */
 
 #include "states/NetworkPlayState.hpp"
+#include "states/GameOverState.hpp"
+#include "states/VictoryState.hpp"
+#include "states/MainMenuState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
@@ -93,6 +96,20 @@ void NetworkPlayState::onEnter()
         networkManager->setLevelChangeCallback([this](uint8_t level) {
             this->onLevelChange(level);
         });
+        networkManager->setGameOverCallback([this](uint32_t totalScore) {
+            if (!gameEndTriggered_) {
+                gameEndTriggered_ = true;
+                pendingGameOver_ = true;
+                pendingScore_ = totalScore;
+            }
+        });
+        networkManager->setVictoryCallback([this](uint32_t totalScore) {
+            if (!gameEndTriggered_) {
+                gameEndTriggered_ = true;
+                pendingVictory_ = true;
+                pendingScore_ = totalScore;
+            }
+        });
     }
 
     std::cout << "[NetworkPlayState] ✅ Multiplayer gameplay initialized" << std::endl;
@@ -108,6 +125,8 @@ void NetworkPlayState::onExit()
     if (networkManager) {
         networkManager->setWorldSnapshotCallback(nullptr);
         networkManager->setLevelChangeCallback(nullptr);
+        networkManager->setGameOverCallback(nullptr);
+        networkManager->setVictoryCallback(nullptr);
     }
 
     // Destroy charge indicator entity
@@ -131,6 +150,11 @@ void NetworkPlayState::onExit()
         }
     }
     networkEntities_.clear();
+
+    // Clean up spectator overlay
+    spectatorText_.reset();
+    spectatorSubText_.reset();
+    isSpectating_ = false;
 
     std::cout << "[NetworkPlayState] Multiplayer cleanup complete" << std::endl;
 }
@@ -258,30 +282,56 @@ void NetworkPlayState::spawnBackground()
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
 
+    // Destroy previous background entity if exists
+    if (backgroundEntity_ != 0) {
+        coordinator->DestroyEntity(backgroundEntity_);
+        backgroundEntity_ = 0;
+    }
+
     ECS::Entity bg = coordinator->CreateEntity();
+    backgroundEntity_ = bg;
     
     coordinator->AddComponent<Position>(bg, Position{0.0f, 0.0f});
-    
-    float scaleY = backgroundScaleToWindow_ ? (float)windowHeight_ / (float)backgroundOriginalHeight_ : 1.0f;
-    float scaleX = scaleY;
-    float scaledWidth = (float)backgroundOriginalWidth_ * scaleX;
-    
-    Sprite bgSprite;
-    bgSprite.texturePath = backgroundPath_;
-    bgSprite.layer = -10;
-    bgSprite.scaleX = scaleX;
-    bgSprite.scaleY = scaleY;
-    bgSprite.sprite = loadSprite(backgroundPath_);
-    coordinator->AddComponent<Sprite>(bg, bgSprite);
 
-    ScrollingBackground scrollBg;
-    scrollBg.scrollSpeed = backgroundScrollSpeed_;
-    scrollBg.horizontal = true;
-    scrollBg.loop = true;
-    scrollBg.spriteWidth = scaledWidth;
-    coordinator->AddComponent<ScrollingBackground>(bg, scrollBg);
+    if (currentLevel_ == 1) {
+        // Level 1: scrolling parallax background (from Lua config)
+        float scaleY = backgroundScaleToWindow_ ? (float)windowHeight_ / (float)backgroundOriginalHeight_ : 1.0f;
+        float scaleX = scaleY;
+        float scaledWidth = (float)backgroundOriginalWidth_ * scaleX;
+        
+        Sprite bgSprite;
+        bgSprite.texturePath = backgroundPath_;
+        bgSprite.layer = -10;
+        bgSprite.scaleX = scaleX;
+        bgSprite.scaleY = scaleY;
+        bgSprite.sprite = loadSprite(backgroundPath_);
+        coordinator->AddComponent<Sprite>(bg, bgSprite);
 
-    std::cout << "[NetworkPlayState] Background spawned" << std::endl;
+        ScrollingBackground scrollBg;
+        scrollBg.scrollSpeed = backgroundScrollSpeed_;
+        scrollBg.horizontal = true;
+        scrollBg.loop = true;
+        scrollBg.spriteWidth = scaledWidth;
+        coordinator->AddComponent<ScrollingBackground>(bg, scrollBg);
+    } else {
+        // Level 2/3: static background image
+        std::string bgPath = (currentLevel_ == 2) 
+            ? "assets/backgrounds/bg_level2.png" 
+            : "assets/backgrounds/bg_level3.png";
+        
+        float scaleX = (float)windowWidth_ / 1920.0f;
+        float scaleY = (float)windowHeight_ / 1080.0f;
+        
+        Sprite bgSprite;
+        bgSprite.texturePath = bgPath;
+        bgSprite.layer = -10;
+        bgSprite.scaleX = scaleX;
+        bgSprite.scaleY = scaleY;
+        bgSprite.sprite = loadSprite(bgPath);
+        coordinator->AddComponent<Sprite>(bg, bgSprite);
+    }
+
+    std::cout << "[NetworkPlayState] Background spawned for level " << (int)currentLevel_ << std::endl;
 }
 
 NetworkPlayState::SpriteInfo NetworkPlayState::getSpriteInfo(const RType::EntityState& state)
@@ -653,6 +703,21 @@ void NetworkPlayState::syncEntityFromState(const RType::EntityState& state)
             }
         }
     }
+
+    // Track boss HP for boss health bar
+    if (state.type == RType::EntityType::ENTITY_MONSTER && state.enemyType >= 3) {
+        if (bossServerId_ == 0) {
+            // First time seeing this boss - set max HP
+            bossServerId_ = state.id;
+            bossMaxHp_ = state.hp;
+            bossEnemyType_ = state.enemyType;
+            std::cout << "[NetworkPlayState] 👹 Boss detected (type " << (int)state.enemyType
+                      << ", HP: " << (int)state.hp << ")" << std::endl;
+        }
+        if (state.id == bossServerId_) {
+            bossHp_ = state.hp;
+        }
+    }
 }
 
 void NetworkPlayState::removeStaleEntities(const std::vector<RType::EntityState>& entities)
@@ -681,7 +746,31 @@ void NetworkPlayState::removeStaleEntities(const std::vector<RType::EntityState>
         
         if (entity == localPlayerEntity_) {
             localPlayerEntity_ = 0;
-            std::cout << "[NetworkPlayState] Local player destroyed!" << std::endl;
+            if (!gameEndTriggered_) {
+                isSpectating_ = true;
+                // Create spectator overlay text
+                if (scoreFont_) {
+                    spectatorText_ = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
+                    spectatorText_->setFont(scoreFont_.get());
+                    spectatorText_->setCharacterSize(72);
+                    spectatorText_->setFillColor(0xFF4444FF); // Red
+                    spectatorText_->setString("VOUS ETES MORT");
+                    spectatorText_->setPosition(windowWidth_ / 2.0f - 350.0f, windowHeight_ / 2.0f - 120.0f);
+
+                    spectatorSubText_ = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
+                    spectatorSubText_->setFont(scoreFont_.get());
+                    spectatorSubText_->setCharacterSize(36);
+                    spectatorSubText_->setFillColor(0xCCCCCCFF); // Light gray
+                    spectatorSubText_->setString("Mode spectateur...");
+                    spectatorSubText_->setPosition(windowWidth_ / 2.0f - 180.0f, windowHeight_ / 2.0f - 20.0f);
+                }
+            }
+            std::cout << "[NetworkPlayState] Local player destroyed! Entering spectator mode." << std::endl;
+        }
+        if (id == bossServerId_) {
+            bossServerId_ = 0;
+            bossHp_ = 0;
+            std::cout << "[NetworkPlayState] 👹 Boss destroyed!" << std::endl;
         }
     }
 }
@@ -870,7 +959,8 @@ void NetworkPlayState::handleEvent(const eng::engine::InputEvent& event)
             if (networkManager) {
                 networkManager->leaveRoom();
             }
-            game_->getStateManager()->popState();
+            game_->resetCoordinator();
+            game_->getStateManager()->changeState(std::make_unique<MainMenuState>(game_));
             return;
         }
 
@@ -922,12 +1012,36 @@ void NetworkPlayState::handleEvent(const eng::engine::InputEvent& event)
 
 void NetworkPlayState::update(float deltaTime)
 {
+    // Handle pending game end transitions (deferred from callbacks)
+    if (pendingGameOver_) {
+        pendingGameOver_ = false;
+        // Use server score, fallback to locally tracked score if server sent 0
+        uint32_t finalScore = (pendingScore_ > 0) ? pendingScore_ : currentScore_;
+        game_->resetCoordinator();
+        game_->getStateManager()->changeState(
+            std::make_unique<GameOverState>(game_, static_cast<int>(finalScore)));
+        return;
+    }
+    if (pendingVictory_) {
+        pendingVictory_ = false;
+        uint32_t finalScore = (pendingScore_ > 0) ? pendingScore_ : currentScore_;
+        game_->resetCoordinator();
+        game_->getStateManager()->changeState(
+            std::make_unique<VictoryState>(game_, static_cast<int>(finalScore)));
+        return;
+    }
+
     // Update level transition text timer
     if (showLevelText_ && levelTransitionTimer_ > 0.0f) {
         levelTransitionTimer_ -= deltaTime;
         if (levelTransitionTimer_ <= 0.0f) {
             showLevelText_ = false;
         }
+    }
+
+    // Update spectator blink timer
+    if (isSpectating_) {
+        spectatorBlinkTimer_ += deltaTime;
     }
 
     // Update charge time
@@ -1001,8 +1115,8 @@ void NetworkPlayState::render()
             if (tag.name != "local_player" && tag.name != "remote_player") continue;
             
             // Get player HP from stored map
-            uint8_t hp = 100; // Default
-            uint8_t maxHp = 100;
+            uint16_t hp = 100; // Default
+            uint16_t maxHp = 100;
             
             auto hpIt = playerHealthMap_.find(serverId);
             if (hpIt != playerHealthMap_.end()) {
@@ -1045,10 +1159,76 @@ void NetworkPlayState::render()
             scoreText_->setString("Score: " + std::to_string(currentScore_));
             renderer->drawText(*scoreText_);
         }
+
+        // Draw boss HP bar (centered at top, only when boss is alive)
+        if (bossServerId_ != 0 && bossHp_ > 0 && bossMaxHp_ > 0) {
+            float bossBarWidth = 600.0f;
+            float bossBarHeight = 25.0f;
+            float bossBarX = (windowWidth_ - bossBarWidth) / 2.0f;
+            float bossBarY = 20.0f;
+            float bossPercent = static_cast<float>(bossHp_) / static_cast<float>(bossMaxHp_);
+
+            // Background
+            eng::engine::rendering::FloatRect bossBg;
+            bossBg.left = bossBarX;
+            bossBg.top = bossBarY;
+            bossBg.width = bossBarWidth;
+            bossBg.height = bossBarHeight;
+            renderer->drawRect(bossBg, 0x400000FF, 0xFF4444FF, 2.0f);
+
+            // Foreground
+            eng::engine::rendering::FloatRect bossFg;
+            bossFg.left = bossBarX + 2.0f;
+            bossFg.top = bossBarY + 2.0f;
+            bossFg.width = (bossBarWidth - 4.0f) * bossPercent;
+            bossFg.height = bossBarHeight - 4.0f;
+
+            uint32_t bossColor = 0xFF0000FF; // Red
+            if (bossPercent > 0.5f) bossColor = 0xFF6600FF; // Orange
+            if (bossPercent > 0.75f) bossColor = 0xFFAA00FF; // Yellow-orange
+            renderer->drawRect(bossFg, bossColor, bossColor, 0.0f);
+
+            // Boss name text
+            if (!bossNameText_ && scoreFont_) {
+                bossNameText_ = std::make_unique<eng::engine::rendering::sfml::SFMLText>();
+                bossNameText_->setFont(scoreFont_.get());
+                bossNameText_->setCharacterSize(28);
+                bossNameText_->setFillColor(0xFF4444FF);
+            }
+            if (bossNameText_) {
+                const char* bossNames[] = {"", "", "", "GUARDIAN BOSS", "RISING THREAT", "FINAL BOSS"};
+                std::string name = (bossEnemyType_ < 6) ? bossNames[bossEnemyType_] : "BOSS";
+                bossNameText_->setString(name);
+                bossNameText_->setPosition(bossBarX + bossBarWidth / 2.0f - 100.0f, bossBarY + bossBarHeight + 5.0f);
+                renderer->drawText(*bossNameText_);
+            }
+        }
         
         // Draw level text (center, during transitions)
         if (showLevelText_ && levelText_) {
             renderer->drawText(*levelText_);
+        }
+
+        // Draw spectator overlay (player died, watching others)
+        if (isSpectating_ && !gameEndTriggered_) {
+            // Semi-transparent dark overlay at top
+            eng::engine::rendering::FloatRect specBg;
+            specBg.left = 0.0f;
+            specBg.top = windowHeight_ / 2.0f - 150.0f;
+            specBg.width = static_cast<float>(windowWidth_);
+            specBg.height = 200.0f;
+            renderer->drawRect(specBg, 0x00000099, 0x00000099, 0.0f);
+
+            if (spectatorText_) {
+                // Blink effect
+                float alpha = (std::sin(spectatorBlinkTimer_ * 2.5f) * 0.3f + 0.7f) * 255.0f;
+                uint32_t a = static_cast<uint32_t>(alpha);
+                spectatorText_->setFillColor(0xFF444400 | a);
+                renderer->drawText(*spectatorText_);
+            }
+            if (spectatorSubText_) {
+                renderer->drawText(*spectatorSubText_);
+            }
         }
     }
 
@@ -1120,6 +1300,12 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
     showLevelText_ = true;
     levelTransitionTimer_ = 3.0f;
     
+    // Reset boss tracking for new level
+    bossServerId_ = 0;
+    bossHp_ = 0;
+    bossMaxHp_ = 1000;
+    bossEnemyType_ = 0;
+
     const char* levelNames[] = {"", "First Contact", "Rising Threat", "Final Assault"};
     std::string name = (level >= 1 && level <= 3) ? levelNames[level] : "Unknown";
     
@@ -1128,6 +1314,9 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
         // Re-center text
         levelText_->setPosition(windowWidth_ / 2.0f - 200.0f, windowHeight_ / 2.0f - 50.0f);
     }
+
+    // Change background based on level
+    spawnBackground();
     
     std::cout << "[NetworkPlayState] 🎮 Level changed to " << (int)level << ": " << name << std::endl;
 }

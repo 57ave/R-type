@@ -49,6 +49,13 @@ namespace Network {
         
         // Level system
         LEVEL_CHANGE        = 0x60, // Server signals level change
+        
+        // Game end conditions
+        GAME_OVER           = 0x70, // Server signals all players dead (payload: uint32_t totalScore)
+        GAME_VICTORY        = 0x71, // Server signals boss L3 killed (payload: uint32_t totalScore)
+        
+        // Chat
+        CHAT_MESSAGE        = 0x40, // Chat message (inter-room)
     };
 
     /**

@@ -42,7 +42,9 @@ enum class GamePacketType : uint16_t {
     SERVER_SET_PAUSE = 0x35,
     CHAT_MESSAGE = 0x40,
     PLAYER_READY = 0x50,
-    LEVEL_CHANGE = 0x60          // Server informs clients of level change (payload: uint8_t levelId)
+    LEVEL_CHANGE = 0x60,         // Server informs clients of level change (payload: uint8_t levelId)
+    GAME_OVER = 0x70,            // Server informs clients all players are dead (payload: uint32_t totalScore)
+    GAME_VICTORY = 0x71          // Server informs clients boss L3 killed (payload: uint32_t totalScore)
 };
 
 // Type d'entité - identique au serveur
@@ -117,7 +119,7 @@ struct EntityState {
     int16_t y;
     int16_t vx;
     int16_t vy;
-    uint8_t hp;
+    uint16_t hp;
     uint8_t playerLine;     // Ligne de la spritesheet pour la couleur du vaisseau
     uint8_t playerId;       // ID du joueur propriétaire (0 = aucun)
     uint8_t chargeLevel;    // Pour missiles chargés
