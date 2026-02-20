@@ -62,8 +62,15 @@ void AnimationSystem::Update(float dt)
             }
 
             // Update sprite texture rect
-            sprite.textureRect.left = anim.startX + (anim.currentFrame * (anim.frameWidth + anim.spacing));
-            sprite.textureRect.top = anim.startY;
+            if (anim.vertical) {
+                // Vertical spritesheet: frames stacked top-to-bottom
+                sprite.textureRect.left = anim.startX;
+                sprite.textureRect.top = anim.startY + (anim.currentFrame * (anim.frameHeight + anim.spacing));
+            } else {
+                // Horizontal spritesheet: frames left-to-right (default)
+                sprite.textureRect.left = anim.startX + (anim.currentFrame * (anim.frameWidth + anim.spacing));
+                sprite.textureRect.top = anim.startY;
+            }
             sprite.textureRect.width = anim.frameWidth;
             sprite.textureRect.height = anim.frameHeight;
 

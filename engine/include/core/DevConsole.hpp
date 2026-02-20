@@ -20,16 +20,21 @@
 namespace rtype {
 namespace core {
 
-/**
- * @brief Log level for console messages
- */
+#ifdef _WIN32
+    #undef INFO
+    #undef ERROR
+    #undef WARNING
+    #undef SUCCESS
+    #undef SYSTEM
+    #undef COMMAND
+#endif
 enum class ConsoleMessageType {
-    INFO,       // White - normal info
-    SUCCESS,    // Green - command success
-    WARNING,    // Yellow - warnings
-    ERROR,      // Red - errors
-    COMMAND,    // Cyan - user commands
-    SYSTEM      // Magenta - system messages
+    INFO,
+    SUCCESS,
+    WARNING,
+    ERROR,
+    COMMAND,
+    SYSTEM
 };
 
 /**

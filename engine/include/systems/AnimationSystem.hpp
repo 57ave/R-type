@@ -1,13 +1,14 @@
 #ifndef ENG_ENGINE_SYSTEMS_ANIMATIONSYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_ANIMATIONSYSTEM_HPP
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 
 namespace ECS {
     class Coordinator;
 }
 
-class AnimationSystem : public ECS::System {
+class RTYPE_API AnimationSystem : public ECS::System {
     public:
         AnimationSystem();
         ~AnimationSystem() override = default;

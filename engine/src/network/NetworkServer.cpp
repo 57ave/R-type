@@ -139,7 +139,10 @@ void NetworkServer::process() {
                 info.name = room.name;
                 info.currentPlayers = (uint8_t)room.playerIds.size();
                 info.maxPlayers = room.maxPlayers;
+                info.inGame = (room.state == RoomState::PLAYING);
                 listPayload.rooms.push_back(info);
+                std::cout << "[NetworkServer]   Room '" << room.name << "' state=" 
+                          << (int)room.state << " inGame=" << info.inGame << std::endl;
             }
             std::cout << "[NetworkServer] Sending ROOM_LIST_REPLY with " << listPayload.rooms.size() << " rooms to " << sender << std::endl;
             NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));

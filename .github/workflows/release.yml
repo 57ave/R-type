@@ -1,0 +1,199 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.new_version }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read and Increment Version
+        id: version
+        run: |
+          if [ -f VERSION ]; then
+            CURRENT_VERSION=$(cat VERSION)
+          else
+            CURRENT_VERSION="0.0.0"
+          fi
+          
+          echo "Current version: $CURRENT_VERSION"
+          
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          
+          BUMP_TYPE="${{ github.event.inputs.version_bump }}"
+          if [ -z "$BUMP_TYPE" ]; then
+            BUMP_TYPE="patch"
+          fi
+          
+          case $BUMP_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+          echo "$NEW_VERSION" > VERSION
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit Version Update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}"
+          git tag "v${{ steps.version.outputs.new_version }}"
+
+      - name: Push Changes
+        run: |
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "v${{ steps.version.outputs.new_version }}"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          release_name: R-Type v${{ steps.version.outputs.new_version }}
+          body: |
+            ## R-Type v${{ steps.version.outputs.new_version }}
+            
+            ### Downloads
+            - **Windows**: `r-type-windows-v${{ steps.version.outputs.new_version }}.zip`
+            - **Linux**: `r-type-linux-v${{ steps.version.outputs.new_version }}.tar.gz`
+            
+            ### Installation
+            1. Download the appropriate package for your platform
+            2. Extract the archive
+            3. Run the executable from the extracted folder
+            
+            ### What's Changed
+            See commits since last release for details.
+          draft: false
+          prerelease: false
+
+  build-and-upload-linux:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.create-release.outputs.version }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev \
+            libfreetype6-dev \
+            python3
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Install
+        run: cmake --install build --prefix release_linux
+
+      - name: Package Linux
+        run: |
+          cd release_linux
+          tar -czf ../r-type-linux-v${{ needs.create-release.outputs.version }}.tar.gz bin/
+          cd ..
+
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./r-type-linux-v${{ needs.create-release.outputs.version }}.tar.gz
+          asset_name: r-type-linux-v${{ needs.create-release.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+
+  build-and-upload-windows:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.create-release.outputs.version }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-mingw-w64 python3 zip
+
+      - name: Build Windows
+        run: |
+          chmod +x scripts/build_windows.sh
+          ./scripts/build_windows.sh
+
+      - name: Package Windows
+        run: |
+          cd release_windows
+          zip -r ../r-type-windows-v${{ needs.create-release.outputs.version }}.zip bin/
+          cd ..
+
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./r-type-windows-v${{ needs.create-release.outputs.version }}.zip
+          asset_name: r-type-windows-v${{ needs.create-release.outputs.version }}.zip
+          asset_content_type: application/zip

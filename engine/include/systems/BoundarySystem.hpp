@@ -1,13 +1,14 @@
 #ifndef ENG_ENGINE_SYSTEMS_BOUNDARYSYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_BOUNDARYSYSTEM_HPP
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 
 namespace ECS {
     class Coordinator;
 }
 
-class BoundarySystem : public ECS::System {
+class RTYPE_API BoundarySystem : public ECS::System {
     public:
         BoundarySystem();
         ~BoundarySystem() override = default;

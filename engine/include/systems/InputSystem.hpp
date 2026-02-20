@@ -1,5 +1,6 @@
 #pragma once
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
 #include <ecs/Components.hpp>
@@ -17,7 +18,7 @@
  * 
  * This makes the engine reusable for ANY game genre.
  */
-class InputSystem : public ECS::System {
+class RTYPE_API InputSystem : public ECS::System {
     public:
         using InputHandler = std::function<void(ECS::Entity, const std::string&, float)>;
 
