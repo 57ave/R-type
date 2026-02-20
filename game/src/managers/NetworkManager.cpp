@@ -123,6 +123,10 @@ void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers)
         return;
     }
 
+    // Store locally for lobby display
+    currentRoomName_ = roomName;
+    currentMaxPlayers_ = maxPlayers;
+
     // Send ROOM_CREATE packet (0x20 = CREATE_ROOM)
     std::cout << "[NetworkManager] Sending CREATE_ROOM (0x20): " << roomName << ", max " << (int)maxPlayers << std::endl;
     NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::ROOM_CREATE));
@@ -190,6 +194,10 @@ void NetworkManager::leaveRoom() {
     currentRoomId_ = 0;
     hosting_ = false;
     roomPlayers_.clear();
+    currentRoomName_.clear();
+    currentMaxPlayers_ = 4;
+    chatMessages_.clear();
+    chatVersion_++;
 }
 
 void NetworkManager::setReady(bool ready) {
@@ -258,6 +266,27 @@ void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool f
     // Create and send packet
     NetworkPacket packet = RType::Protocol::createInputPacket(input);
     client_->sendPacket(packet);
+}
+
+void NetworkManager::sendChatMessage(const std::string& message) {
+    if (!connected_ || !client_ || currentRoomId_ == 0) {
+        std::cerr << "[NetworkManager] Cannot send chat: not connected or not in a room" << std::endl;
+        return;
+    }
+
+    if (message.empty()) return;
+
+    // Build chat packet: senderId (uint32), senderName (string), message (string), roomId (uint32)
+    NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::CHAT_MESSAGE));
+    Network::Serializer serializer;
+    serializer.write(clientId_);
+    serializer.writeString(playerName_);
+    serializer.writeString(message);
+    serializer.write(currentRoomId_);
+    packet.payload = serializer.getBuffer();
+
+    client_->sendPacket(packet);
+    std::cout << "[NetworkManager] 💬 Chat sent: " << message << std::endl;
 }
 
 void NetworkManager::update() {
@@ -341,7 +370,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                     
                     room.currentPlayers = deserializer.read<uint8_t>();
                     room.maxPlayers = deserializer.read<uint8_t>();
-                    room.inGame = false; // Default
+                    room.inGame = deserializer.read<uint8_t>() != 0;
                     
                     rooms.push_back(room);
                 }
@@ -352,7 +381,13 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             }
 
             roomList_ = rooms;
-            std::cout << "[NetworkManager] Received " << rooms.size() << " rooms" << std::endl;
+            roomListVersion_++;
+            std::cout << "[NetworkManager] Received " << rooms.size() << " rooms (version " << roomListVersion_ << ")" << std::endl;
+            for (const auto& r : rooms) {
+                std::cout << "[NetworkManager]   Room '" << r.roomName << "' (" 
+                          << (int)r.currentPlayers << "/" << (int)r.maxPlayers 
+                          << ") inGame=" << r.inGame << std::endl;
+            }
             
             if (onRoomList_) {
                 onRoomList_(rooms);
@@ -396,6 +431,8 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 uint32_t hostPlayerId = deserializer.read<uint32_t>();
                 
                 currentRoomId_ = roomId;
+                currentRoomName_ = roomName;
+                currentMaxPlayers_ = maxPlayers;
 
                 std::cout << "[NetworkManager] ✅ Joined room " << roomId << " (" << roomName 
                           << ", " << (int)maxPlayers << " max players, host: " << hostPlayerId << ")" << std::endl;
@@ -440,6 +477,8 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
         case Network::PacketType::ROOM_LEAVE: {
             // Confirmation of leaving room
             currentRoomId_ = 0;
+            currentRoomName_.clear();
+            currentMaxPlayers_ = 4;
             hosting_ = false;
             inGame_ = false;
 
@@ -489,6 +528,56 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 if (onLevelChange_) {
                     onLevelChange_(newLevel);
                 }
+            }
+            break;
+        }
+
+        case Network::PacketType::GAME_OVER: {
+            uint32_t totalScore = 0;
+            if (payloadSize >= sizeof(uint32_t)) {
+                std::memcpy(&totalScore, payload, sizeof(uint32_t));
+            }
+            std::cout << "[NetworkManager] 💀 GAME_OVER received! Score: " << totalScore << std::endl;
+            if (onGameOver_) {
+                onGameOver_(totalScore);
+            }
+            break;
+        }
+
+        case Network::PacketType::GAME_VICTORY: {
+            uint32_t totalScore = 0;
+            if (payloadSize >= sizeof(uint32_t)) {
+                std::memcpy(&totalScore, payload, sizeof(uint32_t));
+            }
+            std::cout << "[NetworkManager] 🏆 GAME_VICTORY received! Score: " << totalScore << std::endl;
+            if (onVictory_) {
+                onVictory_(totalScore);
+            }
+            break;
+        }
+
+        case Network::PacketType::CHAT_MESSAGE: {
+            try {
+                Network::Deserializer deserializer(payload, payloadSize);
+                uint32_t senderId = deserializer.read<uint32_t>();
+                std::string senderName = deserializer.readString();
+                std::string message = deserializer.readString();
+                uint32_t roomId = deserializer.read<uint32_t>();
+
+                ChatMessage chatMsg;
+                chatMsg.senderName = senderName;
+                chatMsg.message = message;
+                chatMessages_.push_back(chatMsg);
+                chatVersion_++;
+
+                // Keep only the last 50 messages
+                if (chatMessages_.size() > 50) {
+                    chatMessages_.erase(chatMessages_.begin());
+                }
+
+                std::cout << "[NetworkManager] 💬 [" << senderName << "]: " << message << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[NetworkManager] Error parsing CHAT_MESSAGE: " << e.what() << std::endl;
             }
             break;
         }

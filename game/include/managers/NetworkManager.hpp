@@ -132,9 +132,24 @@ public:
     const std::vector<Network::RoomInfo>& getRoomList() const { return roomList_; }
 
     /**
+     * Get room list version (incremented each time room list is updated)
+     */
+    uint32_t getRoomListVersion() const { return roomListVersion_; }
+
+    /**
      * Get current room ID
      */
     uint32_t getCurrentRoomId() const { return currentRoomId_; }
+
+    /**
+     * Get current room name
+     */
+    const std::string& getCurrentRoomName() const { return currentRoomName_; }
+
+    /**
+     * Get current room max players
+     */
+    uint8_t getCurrentMaxPlayers() const { return currentMaxPlayers_; }
 
     /**
      * Get local player ID (assigned by server)
@@ -151,6 +166,31 @@ public:
      */
     const std::string& getPlayerName() const { return playerName_; }
 
+    // === Chat ===
+
+    /**
+     * Send a chat message to the current room
+     */
+    void sendChatMessage(const std::string& message);
+
+    /**
+     * Chat message struct for display
+     */
+    struct ChatMessage {
+        std::string senderName;
+        std::string message;
+    };
+
+    /**
+     * Get chat messages for display
+     */
+    const std::vector<ChatMessage>& getChatMessages() const { return chatMessages_; }
+
+    /**
+     * Get chat version (incremented on each new message)
+     */
+    uint32_t getChatVersion() const { return chatVersion_; }
+
     // === Callbacks ===
     
     using ConnectionCallback = std::function<void(bool success, const std::string& message)>;
@@ -159,6 +199,8 @@ public:
     using GameStartCallback = std::function<void()>;
     using WorldSnapshotCallback = std::function<void(const std::vector<RType::EntityState>&)>;
     using LevelChangeCallback = std::function<void(uint8_t level)>;
+    using GameOverCallback = std::function<void(uint32_t totalScore)>;
+    using VictoryCallback = std::function<void(uint32_t totalScore)>;
     
     void setConnectionCallback(ConnectionCallback callback) { onConnection_ = callback; }
     void setRoomListCallback(RoomListCallback callback) { onRoomList_ = callback; }
@@ -166,6 +208,8 @@ public:
     void setGameStartCallback(GameStartCallback callback) { gameStartCallback_ = callback; }
     void setWorldSnapshotCallback(WorldSnapshotCallback callback) { onWorldSnapshot_ = callback; }
     void setLevelChangeCallback(LevelChangeCallback callback) { onLevelChange_ = callback; }
+    void setGameOverCallback(GameOverCallback callback) { onGameOver_ = callback; }
+    void setVictoryCallback(VictoryCallback callback) { onVictory_ = callback; }
 
     /**
      * Update network (process packets)
@@ -182,8 +226,15 @@ private:
     
     // Room state
     uint32_t currentRoomId_ = 0;
+    std::string currentRoomName_;
+    uint8_t currentMaxPlayers_ = 4;
     std::vector<Network::RoomInfo> roomList_;
+    uint32_t roomListVersion_ = 0;  // Incremented each time room list is updated
     std::vector<PlayerInfo> roomPlayers_;  // Players in current room
+    
+    // Chat state
+    std::vector<ChatMessage> chatMessages_;
+    uint32_t chatVersion_ = 0;
     
     // Callbacks
     ConnectionCallback onConnection_;
@@ -192,6 +243,8 @@ private:
     GameStartCallback gameStartCallback_;
     WorldSnapshotCallback onWorldSnapshot_;
     LevelChangeCallback onLevelChange_;
+    GameOverCallback onGameOver_;
+    VictoryCallback onVictory_;
     
     // Phase 5.3: Real network client
     std::unique_ptr<NetworkClient> client_;
