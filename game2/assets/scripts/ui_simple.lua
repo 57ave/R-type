@@ -26,7 +26,7 @@ UI.scores = {}
 UI.leaderboard = {}
 
 function UI.init()
-    print("✅ Simple UI initialized")
+    print("Simple UI initialized")
 end
 
 -- Main render function called from C++

@@ -1,5 +1,6 @@
 #include "systems/InputSystem.hpp"
 #include <components/Velocity.hpp>
+#include <components/Tag.hpp>
 #include <iostream>
 
 InputSystem::InputSystem(ECS::Coordinator* coordinator)
@@ -12,6 +13,16 @@ void InputSystem::Init() {
 
 void InputSystem::Update(float dt) {
     for (auto entity : mEntities) {
+        // Only process player entities
+        if (!m_Coordinator->HasComponent<Tag>(entity)) {
+            continue;
+        }
+        
+        auto& tag = m_Coordinator->GetComponent<Tag>(entity);
+        if (tag.name != "player") {
+            continue;  // Skip non-player entities
+        }
+        
         // Process entities with velocity component
         if (!m_Coordinator->HasComponent<Velocity>(entity)) {
             continue;
@@ -19,7 +30,7 @@ void InputSystem::Update(float dt) {
         
         auto& velocity = m_Coordinator->GetComponent<Velocity>(entity);
         
-        // Apply input to velocity
+        // Apply input to velocity (only for player!)
         velocity.dx = 0;
         velocity.dy = 0;
         

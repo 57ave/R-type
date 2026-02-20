@@ -21,8 +21,94 @@ target_include_directories(r-type_client PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Link contre engine et game
+# Link contre engine seulement (game est un exécutable séparé maintenant)
 target_link_libraries(r-type_client PRIVATE
     engine
-    game
 )
+
+add_custom_command(TARGET r-type_client POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:r-type_client>/assets
+    COMMENT "Copying client assets to build directory"
+)
+
+if(WIN32)
+    # Copy SFML DLLs explicitly
+    add_custom_command(TARGET r-type_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:sfml-graphics>
+            $<TARGET_FILE:sfml-window>
+            $<TARGET_FILE:sfml-system>
+            $<TARGET_FILE:sfml-audio>
+            $<TARGET_FILE:sfml-network>
+            $<TARGET_FILE_DIR:r-type_client>
+    )
+
+    # Copy dependencies (freetype, flac, ogg, etc.)
+    # Located in the same directory as sfml-graphics
+    add_custom_command(TARGET r-type_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND} 
+            -DSOURCE_DIR=$<TARGET_FILE_DIR:sfml-graphics> 
+            -DDEST_DIR=$<TARGET_FILE_DIR:r-type_client> 
+            -P ${CMAKE_SOURCE_DIR}/scripts/CopyRuntimeDlls.cmake
+    )
+
+    # OpenAL might be in a different place (from OpenAL-Soft static build or SFML extlibs)
+    # If using SFML's extlibs:
+    if(EXISTS "${SFML_SOURCE_DIR}/extlibs/bin/x64/openal32.dll")
+        add_custom_command(TARGET r-type_client POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${SFML_SOURCE_DIR}/extlibs/bin/x64/openal32.dll"
+                $<TARGET_FILE_DIR:r-type_client>
+        )
+    elseif(EXISTS "${SFML_SOURCE_DIR}/extlibs/bin/x86/openal32.dll")
+         add_custom_command(TARGET r-type_client POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${SFML_SOURCE_DIR}/extlibs/bin/x86/openal32.dll"
+                $<TARGET_FILE_DIR:r-type_client>
+        )
+    endif()
+
+    # Copy freetype.dll only if present (not produced in MinGW cross-compilation)
+    add_custom_command(TARGET r-type_client POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC_FILE=$<TARGET_FILE_DIR:sfml-graphics>/freetype.dll
+            -DDST_DIR=$<TARGET_FILE_DIR:r-type_client>
+            -P ${CMAKE_SOURCE_DIR}/scripts/CopyIfExists.cmake
+        COMMENT "Copying freetype.dll if present"
+    )
+
+    # Copy lua.dll (built as shared library on Windows)
+    if(TARGET lua)
+        add_custom_command(TARGET r-type_client POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:lua>
+                $<TARGET_FILE_DIR:r-type_client>
+            COMMENT "Copying lua.dll to client output directory"
+        )
+    endif()
+
+    # Copy engine system DLLs (all built as SHARED on Windows)
+    foreach(_sys
+        MovementSystem
+        AnimationSystem
+        StateMachineAnimationSystem
+        UISystem
+        AudioSystem
+        InputSystem
+        LifetimeSystem
+        BoundarySystem
+        HealthSystem
+        ScrollingBackgroundSystem
+    )
+        if(TARGET ${_sys})
+            add_custom_command(TARGET r-type_client POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_sys}>
+                    $<TARGET_FILE_DIR:r-type_client>
+                COMMENT "Copying ${_sys}.dll to client output directory"
+            )
+        endif()
+    endforeach()
+endif()

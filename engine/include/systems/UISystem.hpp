@@ -1,6 +1,7 @@
 #ifndef ENG_ENGINE_SYSTEMS_UISYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_UISYSTEM_HPP
 
+#include <core/Export.hpp>
 #include <ecs/System.hpp>
 #include <ecs/Types.hpp>
 #include <rendering/IRenderer.hpp>
@@ -52,7 +53,7 @@ namespace eng
  * - Manage font resources
  * - Support menu groups for showing/hiding entire menus
  */
-class UISystem : public ECS::System
+class RTYPE_API UISystem : public ECS::System
 {
 public:
     // Text alignment for DrawText helper

@@ -5,7 +5,7 @@
 -- Pipes are the main obstacles in Flappy Bird.
 -- ============================================================================
 
-print("🚧 Loading Pipe Entity Factory...")
+print("Loading Pipe Entity Factory...")
 
 -- Pipe configuration
 PipeConfig = {
@@ -118,7 +118,7 @@ function createPipePair(gapY, gapHeight)
     local pipeData = createPipeComponent(topEntity, gapY, gapHeight)
     Components.Pipe[bottomEntity] = pipeData  -- Share the same component
     
-    print(string.format("🚧 Created pipe pair %d: gap Y=%.1f, height=%.1f", 
+    print(string.format("Created pipe pair %d: gap Y=%.1f, height=%.1f", 
         pairId, gapY, gapHeight))
     
     return topEntity, bottomEntity, pairId
@@ -190,10 +190,10 @@ function destroyPipe(entityId)
     -- Destroy ECS entity
     Coordinator:DestroyEntity(entityId)
     
-    print(string.format("  🗑️  Destroyed pipe entity %d", entityId))
+    print(string.format("  Destroyed pipe entity %d", entityId))
 end
 
-print("✅ Pipe Entity Factory loaded!")
+print("Pipe Entity Factory loaded!")
 print(string.format("   - Pipe width: %d, speed: %d", PipeConfig.width, PipeConfig.speed))
 print(string.format("   - Gap height: %d, Y range: %d-%d", 
     PipeConfig.gapHeight, PipeConfig.minGapY, PipeConfig.maxGapY))

@@ -3,6 +3,7 @@
 #include <components/ScrollingBackground.hpp>
 #include <components/Sprite.hpp>
 #include <ecs/Coordinator.hpp>
+#include <iostream>
 
 ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinator)
     : coordinator_(coordinator)
@@ -11,6 +12,7 @@ ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinat
 
 void ScrollingBackgroundSystem::Init()
 {
+    std::cout << "[ScrollingBackgroundSystem] Initialized" << std::endl;
 }
 
 void ScrollingBackgroundSystem::Shutdown()
@@ -20,6 +22,8 @@ void ScrollingBackgroundSystem::Shutdown()
 void ScrollingBackgroundSystem::Update(float dt)
 {
     if (!coordinator_) return;
+
+    static int frameCount = 0;
 
     for (auto entity : mEntities) {
         if (!coordinator_->HasComponent<Position>(entity) || 

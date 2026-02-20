@@ -8,6 +8,7 @@
 #ifndef ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
 #define ENG_ENGINE_SYSTEMS_AUDIOSYSTEM_HPP
 
+#include <core/Export.hpp>
 #include "ecs/System.hpp"
 #include "ecs/Coordinator.hpp"
 #include "ecs/Types.hpp"
@@ -22,10 +23,18 @@ namespace eng {
 namespace engine {
 namespace systems {
 
-class AudioSystem : public ::ECS::System {
+class RTYPE_API AudioSystem : public ::ECS::System {
 public:
     AudioSystem() = default;
     ~AudioSystem() override = default;
+
+    // Disable copying
+    AudioSystem(const AudioSystem&) = delete;
+    AudioSystem& operator=(const AudioSystem&) = delete;
+
+    // Enable moving
+    AudioSystem(AudioSystem&&) = default;
+    AudioSystem& operator=(AudioSystem&&) = default;
 
     // Initialize with base path for SFX files
     void Init(const std::string& sfxPath);

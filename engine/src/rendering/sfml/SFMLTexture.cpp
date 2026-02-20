@@ -20,6 +20,11 @@ namespace eng
                     return texture_.loadFromFile(path);
                 }
 
+                bool SFMLTexture::loadFromImage(const sf::Image &image, const sf::IntRect &area)
+                {
+                    return texture_.loadFromImage(image, area);
+                }
+
             }
         }
     }

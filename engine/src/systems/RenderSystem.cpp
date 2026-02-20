@@ -78,6 +78,8 @@ void RenderSystem::Update(float /*dt*/)
         auto &pos = coordinator_->GetComponent<Position>(entity);
         auto &spr = coordinator_->GetComponent<Sprite>(entity);
 
+        // Debug logs removed for performance
+
         if (!spr.sprite)
             continue; // nothing to draw
 

@@ -25,13 +25,13 @@ function Network.connect(serverIp, port)
     
     if success then
         Network.connected = true
-        print("[Network] ✅ Connected to server!")
+        print("[Network] Connected to server!")
         
         -- Start receiving packets in a coroutine/update loop
         Network.startReceiving()
         return true
     else
-        print("[Network] ❌ Failed to connect to server")
+        print("[Network] Failed to connect to server")
         return false
     end
 end

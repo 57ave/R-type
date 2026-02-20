@@ -56,6 +56,15 @@ public:
             }
         }
     }
+    
+    bool setPlayerReady(uint32_t roomId, uint32_t playerId, bool ready) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = rooms_.find(roomId);
+        if (it != rooms_.end()) {
+            return it->second->setPlayerReady(playerId, ready);
+        }
+        return false;
+    }
 
 
     std::shared_ptr<Room> getRoom(uint32_t roomId) {

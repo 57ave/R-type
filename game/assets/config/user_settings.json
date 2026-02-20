@@ -1,9 +1,12 @@
 {
     "audio": {
-        "musicVolume": 40,
-        "sfxVolume": 100
+        "master_volume": 100,
+        "music_volume": 70,
+        "sfx_volume": 80
     },
-    "gameplay": {
-        "difficulty": "normal"
+    "graphics": {
+        "vsync": true,
+        "fullscreen": false,
+        "show_fps": true
     }
 }

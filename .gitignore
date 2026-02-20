@@ -1,9 +1,35 @@
 # Build directories
 build/
-cmake-build-*/
 out/
 bin/
 lib/
+vcpkg_installed/
+vcpkg/
+vcpkg_downloads/
+vcpkg_buildtrees/
+vcpkg_packages/
+*.log
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.ipch
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+build_log.txt
+
+# Artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
 
 # External dependencies (downloaded by CMake)
 engine/external/
@@ -22,74 +48,29 @@ _deps/
 cpm-package-lock.cmake
 
 # Compiled binaries
-*.exe
-*.dll
 *.so
 *.dylib
 *.o
 *.a
 *.out
 
-# Precompiled headers
-*.gch
-*.pch
-
 # Object files
 *.slo
 *.lo
 *.obj
 
-# Static libraries
-*.lai
-*.la
-*.lib
-
-# Fortran modules
-*.mod
-*.smod
-
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
+# Misc
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+Subject.md
+SubjectCompilation.md
 
-# Logs and temporary files
-*.log
-*.tmp
-*.bak
+# Archives / binaries that should not be tracked
+*.zip
+*.tar.gz
 
-# Package managers
-conan/
-vcpkg/
-node_modules/
+# Windows install scripts (auto-generated)
+install.cmd
 
-# Game assets (if any)
-data/
-
-# User-specific configs
-.env
-config.local.json
-
-# Backup files
-*.orig
-*.rej
-
-*.pdf
-r-type_server
-Makefile
-CPack*
-build
-.vscode/
-engine/build
-engine/external
+# Release dirs
+release_linux/
+release_windows/

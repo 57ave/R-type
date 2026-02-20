@@ -7,7 +7,8 @@
 #include <iostream>
 #include "Serializer.hpp"
 
-#ifdef __APPLE__
+#ifdef _WIN32
+#elif defined(__APPLE__)
 #include <machine/endian.h>
 #else
 #include <endian.h>

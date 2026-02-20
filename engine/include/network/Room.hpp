@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <algorithm>
 
@@ -16,6 +17,7 @@ public:
     uint32_t id;
     std::string name;
     std::vector<uint32_t> playerIds;
+    std::map<uint32_t, bool> playerReadyStates; // playerId -> ready state
     RoomState state;
     uint8_t maxPlayers;
     uint32_t hostPlayerId;
@@ -32,6 +34,7 @@ public:
             return false;
         }
         playerIds.push_back(playerId);
+        playerReadyStates[playerId] = false; // New players start as not ready
         return true;
     }
 
@@ -39,9 +42,31 @@ public:
         auto it = std::find(playerIds.begin(), playerIds.end(), playerId);
         if (it != playerIds.end()) {
             playerIds.erase(it);
+            playerReadyStates.erase(playerId);
             return true;
         }
         return false;
+    }
+    
+    bool setPlayerReady(uint32_t playerId, bool ready) {
+        if (!hasPlayer(playerId)) {
+            return false;
+        }
+        playerReadyStates[playerId] = ready;
+        return true;
+    }
+    
+    bool isPlayerReady(uint32_t playerId) const {
+        auto it = playerReadyStates.find(playerId);
+        return (it != playerReadyStates.end()) ? it->second : false;
+    }
+    
+    bool allPlayersReady() const {
+        if (playerIds.empty()) return false;
+        for (uint32_t pid : playerIds) {
+            if (!isPlayerReady(pid)) return false;
+        }
+        return true;
     }
 
     bool hasPlayer(uint32_t playerId) const {

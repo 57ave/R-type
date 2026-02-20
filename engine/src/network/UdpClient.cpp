@@ -14,8 +14,15 @@ UdpClient::UdpClient(asio::io_context& io_context, const std::string& serverAddr
 }
 
 UdpClient::~UdpClient() {
+    close();
+}
+
+void UdpClient::close() {
+    connected_ = false;
     if (socket_.is_open()) {
-        socket_.close();
+        std::error_code ec;
+        socket_.cancel(ec);  // Cancel pending async operations
+        socket_.close(ec);
     }
 }
 
@@ -24,8 +31,11 @@ void UdpClient::start() {
 }
 
 void UdpClient::send(const NetworkPacket& packet) {
+    if (!socket_.is_open()) return;
     try {
         auto buffer = packet.serialize();
+        std::cout << "[UdpClient] Sending packet type " << packet.header.type 
+                  << " (" << buffer.size() << " bytes) to " << serverEndpoint_ << std::endl;
         socket_.async_send_to(
             asio::buffer(buffer),
             serverEndpoint_,
@@ -49,6 +59,7 @@ bool UdpClient::popPacket(NetworkPacket& outPacket) {
 }
 
 void UdpClient::startReceive() {
+    if (!socket_.is_open()) return;
     socket_.async_receive_from(
         asio::buffer(recvBuffer_),
         serverEndpoint_,
@@ -59,7 +70,17 @@ void UdpClient::startReceive() {
 }
 
 void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_transferred) {
-    if (!error && bytes_transferred > 0) {
+    if (error) {
+        // Socket was closed or operation cancelled - stop the receive loop
+        if (error == asio::error::operation_aborted || !socket_.is_open()) {
+            return;
+        }
+        std::cerr << "[UdpClient] Receive error: " << error.message() << std::endl;
+        startReceive();
+        return;
+    }
+
+    if (bytes_transferred > 0) {
         try {
             NetworkPacket packet = NetworkPacket::deserialize(recvBuffer_.data(), bytes_transferred);
             
@@ -77,7 +98,7 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
             }
 
         } catch (const std::exception& e) {
-            std::cerr << "[UdpClient] Receive error: " << e.what() << std::endl;
+            std::cerr << "[UdpClient] Receive parse error: " << e.what() << std::endl;
         }
     }
 
@@ -85,8 +106,10 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
     startReceive();
 }
 
-void UdpClient::handleSend(const std::error_code& error, std::size_t) {
+void UdpClient::handleSend(const std::error_code& error, std::size_t bytes_transferred) {
     if (error) {
         std::cerr << "[UdpClient] Send error: " << error.message() << std::endl;
+    } else {
+        std::cout << "[UdpClient] Successfully sent " << bytes_transferred << " bytes" << std::endl;
     }
 }

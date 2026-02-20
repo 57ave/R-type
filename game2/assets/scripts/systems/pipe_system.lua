@@ -5,11 +5,11 @@
 -- Pipes continuously spawn from the right and move left.
 -- ============================================================================
 
-print("🚧 Loading Pipe System...")
+print("Loading Pipe System...")
 
 -- Make sure pipe entity factory is loaded
 if not createPipePair then
-    print("⚠️  Warning: Pipe entity factory not loaded yet!")
+    print("Warning: Pipe entity factory not loaded yet!")
 end
 
 -- System state
@@ -34,32 +34,32 @@ PipeSystem = {
 -- ============================================================================
 
 function PipeSystem:init()
-    print("  🔧 Initializing Pipe System...")
+    print("  Initializing Pipe System...")
     self.timeSinceLastSpawn = 0
     self.activePipes = {}
     self.pipesPassed = {}
     self.pipeCount = 0
     self.isActive = false
     
-    print(string.format("  ⚙️  Spawn interval: %.1fs", self.spawnInterval))
+    print(string.format("  Spawn interval: %.1fs", self.spawnInterval))
 end
 
 -- Start the pipe system (begin spawning)
 function PipeSystem:start()
     self.isActive = true
     self.timeSinceLastSpawn = self.spawnInterval  -- Spawn immediately
-    print("  ▶️  Pipe System started (spawning enabled)")
+    print("  ▶Pipe System started (spawning enabled)")
 end
 
 -- Stop the pipe system (pause spawning)
 function PipeSystem:stop()
     self.isActive = false
-    print("  ⏸️  Pipe System stopped (spawning disabled)")
+    print("  ⏸Pipe System stopped (spawning disabled)")
 end
 
 -- Reset the pipe system (clear all pipes)
 function PipeSystem:reset()
-    print("  🔄 Resetting Pipe System...")
+    print("  Resetting Pipe System...")
     
     -- Destroy all active pipes
     for _, pairId in ipairs(self.activePipes) do
@@ -82,7 +82,7 @@ function PipeSystem:reset()
     self.timeSinceLastSpawn = 0
     self.pipeCount = 0
     
-    print("  ✅ Pipe System reset complete")
+    print("  Pipe System reset complete")
 end
 
 -- ============================================================================
@@ -154,7 +154,7 @@ function PipeSystem:spawnPipePair()
     self.pipesPassed[pairId] = {}  -- Init scoring tracker
     self.pipeCount = self.pipeCount + 1
     
-    print(string.format("  🆕 Spawned pipe pair #%d (entities: %d, %d)", 
+    print(string.format("  Spawned pipe pair #%d (entities: %d, %d)", 
         self.pipeCount, topEntity, bottomEntity))
     
     return pairId
@@ -208,7 +208,7 @@ function PipeSystem:awardScore(pairId, birdEntityId, playerId)
     local birdComp = Components.FlappyBird[birdEntityId]
     if birdComp then
         birdComp.score = birdComp.score + 1
-        print(string.format("  🏆 Player %d scored! (Pipe #%d, Total: %d)", 
+        print(string.format("  Player %d scored! (Pipe #%d, Total: %d)", 
             playerId, pairId, birdComp.score))
     end
     
@@ -247,13 +247,13 @@ end
 -- Set spawn interval (difficulty adjustment)
 function PipeSystem:setSpawnInterval(interval)
     self.spawnInterval = math.max(1.0, interval)  -- Min 1 second
-    print(string.format("  ⚙️  Pipe spawn interval changed to %.1fs", self.spawnInterval))
+    print(string.format("  Pipe spawn interval changed to %.1fs", self.spawnInterval))
 end
 
 -- Increase difficulty (faster spawning)
 function PipeSystem:increaseDifficulty()
     self.spawnInterval = math.max(1.5, self.spawnInterval - 0.2)
-    print(string.format("  📈 Difficulty increased! Spawn interval: %.1fs", self.spawnInterval))
+    print(string.format("  Difficulty increased! Spawn interval: %.1fs", self.spawnInterval))
 end
 
 -- ============================================================================
@@ -277,7 +277,7 @@ function PipeSystem:debugPrint()
     end
 end
 
-print("✅ Pipe System loaded!")
+print("Pipe System loaded!")
 print("   - Spawning, movement, scoring, cleanup")
 
 return PipeSystem

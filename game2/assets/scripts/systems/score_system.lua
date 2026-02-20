@@ -5,7 +5,7 @@
 -- Tracks individual player scores and determines winners.
 -- ============================================================================
 
-print("🏆 Loading Score System...")
+print("Loading Score System...")
 
 ScoreSystem = {
     -- Leaderboard
@@ -26,7 +26,7 @@ ScoreSystem = {
 -- ============================================================================
 
 function ScoreSystem:init()
-    print("  🔧 Initializing Score System...")
+    print("  Initializing Score System...")
     self.leaderboard = {}
     self.gameStartTime = 0
     self.gameDuration = 0
@@ -34,19 +34,19 @@ function ScoreSystem:init()
     self.highestScore = 0
     self.winnerId = -1
     
-    print("  📊 Leaderboard ready")
+    print("  Leaderboard ready")
 end
 
 -- Start tracking scores (game started)
 function ScoreSystem:start()
     self.gameStartTime = os.clock()  -- Record start time
     self:updateLeaderboard()
-    print("  ▶️  Score tracking started")
+    print("  ▶Score tracking started")
 end
 
 -- Reset the score system
 function ScoreSystem:reset()
-    print("  🔄 Resetting Score System...")
+    print("  Resetting Score System...")
     self:init()
 end
 
@@ -110,7 +110,6 @@ function ScoreSystem:updateLeaderboard()
 end
 
 -- Get the current leaderboard
--- @return table of {playerId, entityId, score, isAlive}
 function getLeaderboard()
     if ScoreSystem then
         return ScoreSystem.leaderboard
@@ -119,7 +118,6 @@ function getLeaderboard()
 end
 
 -- Get leaderboard as formatted string
--- @return string
 function ScoreSystem:getLeaderboardString()
     local str = "=== LEADERBOARD ===\n"
     
@@ -142,8 +140,6 @@ end
 -- ============================================================================
 
 -- Award points to a player
--- @param playerId: the player ID
--- @param points: number of points to award (default: 1)
 function ScoreSystem:awardPoints(playerId, points)
     points = points or 1
     
@@ -151,7 +147,7 @@ function ScoreSystem:awardPoints(playerId, points)
     for entityId, birdComp in pairs(Components.FlappyBird) do
         if birdComp.playerId == playerId then
             birdComp.score = birdComp.score + points
-            print(string.format("  🏆 Player %d scored %d point(s)! Total: %d",
+            print(string.format("  Player %d scored %d point(s)! Total: %d",
                 playerId, points, birdComp.score))
             return
         end
@@ -159,22 +155,18 @@ function ScoreSystem:awardPoints(playerId, points)
 end
 
 -- Award points to a bird entity
--- @param entityId: the bird entity
--- @param points: number of points to award (default: 1)
 function ScoreSystem:awardPointsToEntity(entityId, points)
     points = points or 1
     
     local birdComp = Components.FlappyBird[entityId]
     if birdComp then
         birdComp.score = birdComp.score + points
-        print(string.format("  🏆 Player %d scored %d point(s)! Total: %d",
+        print(string.format("  Player %d scored %d point(s)! Total: %d",
             birdComp.playerId, points, birdComp.score))
     end
 end
 
 -- Get score for a player
--- @param playerId: the player ID
--- @return score (or 0 if not found)
 function ScoreSystem:getPlayerScore(playerId)
     for entityId, birdComp in pairs(Components.FlappyBird) do
         if birdComp.playerId == playerId then
@@ -214,7 +206,6 @@ function ScoreSystem:checkGameOver()
 end
 
 -- Trigger game over
--- @param lastAlivePlayerId: ID of the last player standing (-1 if all dead)
 function ScoreSystem:triggerGameOver(lastAlivePlayerId)
     local gameState = Components.GameState[0]
     if not gameState then return end
@@ -223,7 +214,7 @@ function ScoreSystem:triggerGameOver(lastAlivePlayerId)
     if gameState.state == "gameover" then return end
     
     print("=" .. string.rep("=", 50))
-    print("🏁 GAME OVER!")
+    print("GAME OVER!")
     print("=" .. string.rep("=", 50))
     
     -- Determine winner
@@ -234,12 +225,12 @@ function ScoreSystem:triggerGameOver(lastAlivePlayerId)
         self.winnerId = winner.playerId
         gameState.winnerId = winner.playerId
         
-        print(string.format("🏆 WINNER: Player %d with %d points!",
+        print(string.format("WINNER: Player %d with %d points!",
             winner.playerId, winner.score))
     else
         self.winnerId = -1
         gameState.winnerId = -1
-        print("💀 All players died!")
+        print("All players died!")
     end
     
     -- Print final leaderboard
@@ -265,7 +256,6 @@ end
 -- ============================================================================
 
 -- Get game statistics
--- @return table with stats
 function ScoreSystem:getStatistics()
     return {
         duration = self.gameDuration,
@@ -278,7 +268,6 @@ function ScoreSystem:getStatistics()
 end
 
 -- Get number of alive players
--- @return count
 function ScoreSystem:getAlivePlayerCount()
     local count = 0
     for _, birdComp in pairs(Components.FlappyBird) do
@@ -290,7 +279,6 @@ function ScoreSystem:getAlivePlayerCount()
 end
 
 -- Get winner info
--- @return {playerId, score} or nil
 function ScoreSystem:getWinner()
     if #self.leaderboard > 0 then
         local winner = self.leaderboard[1]
@@ -308,12 +296,9 @@ end
 -- ============================================================================
 
 -- Broadcast score update (for network play)
--- @param playerId: the player whose score changed
--- @param newScore: the new score
 function ScoreSystem:broadcastScoreUpdate(playerId, newScore)
-    -- TODO: Implement network broadcast
     -- For now, just log it
-    print(string.format("  📡 Broadcasting: Player %d score: %d", playerId, newScore))
+    print(string.format("  Broadcasting: Player %d score: %d", playerId, newScore))
 end
 
 -- ============================================================================
@@ -338,7 +323,7 @@ function ScoreSystem:debugPrint()
     end
 end
 
-print("✅ Score System loaded!")
+print("Score System loaded!")
 print("   - Leaderboard tracking")
 print("   - Game over detection")
 print("   - Statistics and winners")

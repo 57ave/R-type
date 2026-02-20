@@ -6,7 +6,7 @@
 -- Pattern: Components.ComponentName[entityId] = { ... }
 -- ============================================================================
 
-print("📦 Loading Flappy Bird Lua Components...")
+print("Loading Flappy Bird Lua Components...")
 
 -- Component storage tables
 Components = {
@@ -115,7 +115,7 @@ function createBirdComponent(entityId, playerId, color)
         0           -- initial score
     )
     Components.FlappyBird[entityId] = component
-    print(string.format("  🐦 Created FlappyBird component for entity %d (Player %d, Color %d)", 
+    print(string.format("  Created FlappyBird component for entity %d (Player %d, Color %d)", 
         entityId, playerId, color))
     return component
 end
@@ -128,7 +128,7 @@ end
 function createGravityComponent(entityId, force, terminalVelocity)
     local component = Components.Gravity:new(force, terminalVelocity)
     Components.Gravity[entityId] = component
-    print(string.format("  ⬇️  Created Gravity component for entity %d (force: %.1f)", 
+    print(string.format("  ⬇Created Gravity component for entity %d (force: %.1f)", 
         entityId, component.force))
     return component
 end
@@ -141,7 +141,7 @@ end
 function createPipeComponent(entityId, gapY, gapHeight)
     local component = Components.Pipe:new(gapY, gapHeight)
     Components.Pipe[entityId] = component
-    print(string.format("  🚧 Created Pipe component for entity %d (gap Y: %.1f, height: %.1f)", 
+    print(string.format("  Created Pipe component for entity %d (gap Y: %.1f, height: %.1f)", 
         entityId, gapY, gapHeight))
     return component
 end
@@ -153,7 +153,7 @@ end
 function createScoreComponent(entityId, playerId)
     local component = Components.Score:new(playerId, 0)
     Components.Score[entityId] = component
-    print(string.format("  🏆 Created Score component for entity %d (Player %d)", 
+    print(string.format("  Created Score component for entity %d (Player %d)", 
         entityId, playerId))
     return component
 end
@@ -163,7 +163,7 @@ end
 function createGameStateComponent()
     local component = Components.GameState:new("waiting", 3.0, -1)
     Components.GameState[0] = component
-    print("  🎮 Created GameState component (singleton)")
+    print("  Created GameState component (singleton)")
     return component
 end
 
@@ -271,7 +271,7 @@ function debugPrintComponentSummary()
     end
 end
 
-print("✅ Flappy Bird Lua Components loaded!")
+print("Flappy Bird Lua Components loaded!")
 print("   - FlappyBird, Gravity, Pipe, Score, GameState")
 print("   - Factory functions ready")
 
