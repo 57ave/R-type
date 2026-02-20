@@ -73,6 +73,6 @@ VFX = {
     }
 }
 
-print("[LUA] ✅ VFX config loaded")
+
 
 return VFX

@@ -1,57 +1,37 @@
 # R-Type Network Protocol
 
-This directory contains **R-Type specific network protocol definitions**.
+This directory contains the R-Type specific protocol definitions.
 
-## 📄 RTypeProtocol.hpp
+## RTypeProtocol.hpp
 
-Defines the R-Type multiplayer protocol:
+Defines all packet types and data structures for the R-Type multiplayer protocol.
 
 ### Packet Types
-- `CLIENT_HELLO` - Client connection request
-- `CLIENT_INPUT` - Player input (movement, shoot, bomb)
-- `CLIENT_DISCONNECT` - Client leaving
-- `SERVER_WELCOME` - Server accepting client
-- `WORLD_SNAPSHOT` - Full game state update
-- `ENTITY_SPAWN` - New entity created
-- `ENTITY_DESTROY` - Entity destroyed
-- `PLAYER_DIED` - Player death event
+
+- `CLIENT_HELLO` — connection request
+- `CLIENT_INPUT` — player input (movement, shoot)
+- `CLIENT_DISCONNECT` — clean disconnect
+- `SERVER_WELCOME` — connection accepted
+- `WORLD_SNAPSHOT` — full game state update (10 Hz)
+- `ENTITY_SPAWN` — new entity created
+- `ENTITY_DESTROY` — entity removed
+- `PLAYER_DIED` — player death event
 
 ### Entity Types
-- `ENTITY_PLAYER` - Player ship
-- `ENTITY_MONSTER` - Enemy ship
-- `ENTITY_PLAYER_MISSILE` - Player projectile
-- `ENTITY_MONSTER_MISSILE` - Enemy projectile
-- `ENTITY_OBSTACLE` - Destructible obstacle
-- `ENTITY_EXPLOSION` - Visual effect
 
-### Data Structures
+- `ENTITY_PLAYER`
+- `ENTITY_MONSTER`
+- `ENTITY_PLAYER_MISSILE`
+- `ENTITY_MONSTER_MISSILE`
+- `ENTITY_OBSTACLE`
+- `ENTITY_EXPLOSION`
 
-**ClientInput**
-- `playerId` - Player identifier
-- `inputMask` - Bitfield for arrow keys, shoot, bomb
-- `chargeLevel` - Charge shot level (0-5)
+### Key Structures
 
-**EntityState**
-- Standard fields: id, type, position, velocity, hp
-- R-Type specific:
-  - `playerLine` - Player color/spritesheet row
-  - `chargeLevel` - Missile charge level
-  - `enemyType` - Enemy behavior type
-  - `projectileType` - Projectile visual type
+**ClientInput**: `playerId`, `inputMask` (bitfield for directional keys + shoot), `chargeLevel` (0–5)
 
-## 🔗 Shared Between
+**EntityState**: `id`, `type`, `position`, `velocity`, `hp`, `playerLine`, `chargeLevel`, `enemyType`, `projectileType`
 
-- **Server** (`server/src/`) - Authoritative game server
-- **Client** (`game/` and `client/`) - Game clients
+## Shared Between
 
-The protocol is defined here (in server) as the **server is authoritative**.
-Clients and game code include it via CMake include paths.
-
-## 🎮 Why Here?
-
-This protocol is **100% R-Type specific**. Moving it out of the engine allows:
-- Engine to be reusable for other games
-- Clear separation of generic vs game-specific code
-- Each game can define its own protocol
-
-Other games using the engine would create their own protocol definitions!
+This header is included by both the server (`server/src/`) and the game client (`game/`, `client/`). It lives in `server/` because the server is authoritative and defines the protocol.

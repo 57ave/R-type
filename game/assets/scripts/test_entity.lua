@@ -27,7 +27,7 @@ if health then
     print("[LUA TEST] Health: " .. health.current .. "/" .. health.max)
 end
 
-print("[LUA TEST] ✅ Lua-ECS integration working!")
+print("[LUA TEST] Lua-ECS integration working!")
 
 return {
     test_passed = true

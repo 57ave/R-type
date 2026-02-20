@@ -311,6 +311,6 @@ Bosses = {
     }
 }
 
-print("[LUA] ✅ Bosses config loaded")
+
 
 return Bosses

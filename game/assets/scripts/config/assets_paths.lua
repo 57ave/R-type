@@ -127,6 +127,6 @@ Assets = {
     }
 }
 
-print("[LUA] ✅ Assets paths loaded")
+
 
 return Assets

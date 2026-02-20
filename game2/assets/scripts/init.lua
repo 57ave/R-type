@@ -11,7 +11,7 @@
     ALL game logic is here in Lua!
 ]]--
 
-print("🐦 [Lua] Flappy Bird scripts loading...")
+print("[Lua] Flappy Bird scripts loading...")
 
 -- Get script base path
 local scriptPath = "game2/assets/scripts/"
@@ -100,7 +100,7 @@ Components = {
 -- INITIALIZATION
 -- ============================================
 function Init()
-    print("🐦 [Lua] Init() called")
+    print("[Lua] Init() called")
     print("   Screen: " .. Game.screenWidth .. "x" .. Game.screenHeight)
     
     -- Initialize UI system (with nil check)
@@ -116,7 +116,7 @@ function Init()
     -- Start at menu
     SetGameState(GameState.MENU)
     
-    print("🐦 [Lua] Init() complete!")
+    print("[Lua] Init() complete!")
     return true
 end
 
@@ -127,7 +127,7 @@ function SetGameState(newState)
     local oldState = Game.state
     Game.state = newState
     
-    print("🎮 [GameState] " .. oldState .. " -> " .. newState)
+    print("[GameState] " .. oldState .. " -> " .. newState)
     
     if newState == GameState.MENU then
         OnEnterMenu()
@@ -154,7 +154,7 @@ function OnEnterMenu()
         UI.showMenu()
     end
     
-    print("📋 [Menu] Ready!")
+    print("[Menu] Ready!")
 end
 
 function OnEnterWaiting()
@@ -194,7 +194,7 @@ function OnEnterCountdown()
         UI.showCountdown(Game.countdown)
     end
     
-    print("⏱️ [Countdown] 3...")
+    print("⏱[Countdown] 3...")
 end
 
 function OnEnterPlaying()
@@ -205,13 +205,13 @@ function OnEnterPlaying()
         UI.showPlaying()
     end
     
-    print("🎮 [Playing] GO!")
+    print("[Playing] GO!")
 end
 
 function OnEnterGameOver()
     local winnerId = GetWinner()
     local winnerScore = Game.scores[winnerId] or 0
-    print("🏆 [GameOver] Winner: Player " .. winnerId .. " with score: " .. winnerScore)
+    print("[GameOver] Winner: Player " .. winnerId .. " with score: " .. winnerScore)
     
     -- Build leaderboard
     local leaderboard = {}
@@ -234,13 +234,13 @@ function OnEnterGameOver()
     
     -- Show game over UI (with nil check)
     if UI and UI.showGameOver then
-        print("📺 Calling UI.showGameOver with " .. #leaderboard .. " entries")
+        print("Calling UI.showGameOver with " .. #leaderboard .. " entries")
         UI.showGameOver(leaderboard)
     else
-        print("⚠️ WARNING: UI.showGameOver not available!")
+        print("WARNING: UI.showGameOver not available!")
     end
     
-    print("🎮 Game Over state entered successfully")
+    print("Game Over state entered successfully")
 end
 
 -- ============================================
@@ -266,7 +266,7 @@ function CreateBackground()
         print("WARNING: Failed to setup background sprite")
     end
     
-    print("🖼️ Created background entity: " .. entity)
+    print("Created background entity: " .. entity)
     return entity
 end
 
@@ -315,7 +315,7 @@ function CreateBird(playerId, x, y)
         terminalVelocity = Game.terminalVelocity
     }
     
-    print("🐦 Created bird for player " .. playerId .. " at (" .. x .. ", " .. y .. ") entity: " .. entity)
+    print("Created bird for player " .. playerId .. " at (" .. x .. ", " .. y .. ") entity: " .. entity)
     return entity
 end
 
@@ -372,7 +372,7 @@ function CreatePipePair(gapY)
     
     table.insert(Game.pipes, bottomEntity)
     
-    print("🚧 Created pipe pair at gapY=" .. gapY .. " (entities: " .. topEntity .. ", " .. bottomEntity .. ")")
+    print("Created pipe pair at gapY=" .. gapY .. " (entities: " .. topEntity .. ", " .. bottomEntity .. ")")
     return topEntity, bottomEntity
 end
 
@@ -382,7 +382,7 @@ end
 function UpdateBirdFromServer(playerId, x, y, velY, isAlive)
     local entity = Game.birds[playerId]
     if not entity then
-        print("⚠️ [Network] No bird entity for player " .. playerId)
+        print("[Network] No bird entity for player " .. playerId)
         return
     end
     
@@ -456,7 +456,7 @@ function CreatePipeFromServer(x, gapY)
     
     table.insert(Game.pipes, bottomEntity)
     
-    print("🎋 [Network] Created pipe from server at x=" .. x .. ", gapY=" .. gapY)
+    print("[Network] Created pipe from server at x=" .. x .. ", gapY=" .. gapY)
     return topEntity, bottomEntity
 end
 
@@ -476,7 +476,7 @@ function Flap(playerId)
         vel.dy = -birdData.flapStrength
         -- Sync to ::Velocity
         Flappy.SetVelocity(entity, vel.dx, vel.dy)
-        print("🐦 Player " .. playerId .. " flapped! vel.dy = " .. vel.dy)
+        print("Player " .. playerId .. " flapped! vel.dy = " .. vel.dy)
     end
 end
 
@@ -489,7 +489,7 @@ function KillBird(playerId)
         if birdData.isAlive then
             birdData.isAlive = false
             local finalScore = Game.scores[playerId] or 0
-            print("☠️ Player " .. playerId .. " died! Final score: " .. finalScore)
+            print("Player " .. playerId .. " died! Final score: " .. finalScore)
             
             -- Check if game over
             CheckGameOver()
@@ -568,7 +568,7 @@ function CreatePipeFromServer(x, gapY)
     
     table.insert(Game.pipes, bottomEntity)
     
-    print("🎋 Created pipe pair at x=" .. x .. ", gapY=" .. gapY)
+    print("Created pipe pair at x=" .. x .. ", gapY=" .. gapY)
 end
 
 function CheckGameOver()
@@ -583,15 +583,15 @@ function CheckGameOver()
         end
     end
     
-    print("🔍 CheckGameOver: " .. alivePlayers .. " alive, mode=" .. Game.mode)
+    print("CheckGameOver: " .. alivePlayers .. " alive, mode=" .. Game.mode)
     
     if alivePlayers == 0 then
         -- Everyone dead
-        print("💀 All players dead - triggering game over")
+        print("All players dead - triggering game over")
         SetGameState(GameState.GAMEOVER)
     elseif alivePlayers == 1 and Game.mode == "network" then
         -- Battle Royale: last one standing wins
-        print("👑 Last player standing (Player " .. lastAlive .. ") - triggering game over")
+        print("Last player standing (Player " .. lastAlive .. ") - triggering game over")
         SetGameState(GameState.GAMEOVER)
     end
 end
@@ -629,7 +629,7 @@ function CleanupGame()
     -- Reset scores
     Game.scores = {}
     
-    print("🧹 Game cleaned up")
+    print("Game cleaned up")
 end
 
 -- ============================================
@@ -700,7 +700,7 @@ function UpdateWaiting(deltaTime)
     if Flappy and Flappy.Input then
         -- ESC = Return to menu and disconnect
         if Flappy.Input.EscapeJustPressed then
-            print("🔙 Returning to menu from waiting...")
+            print("Returning to menu from waiting...")
             OnReturnToMenu()
         end
     end
@@ -714,7 +714,7 @@ function UpdateCountdown(deltaTime)
         Game.countdown = Game.countdown - 1
         
         if Game.countdown > 0 then
-            print("⏱️ [Countdown] " .. Game.countdown .. "...")
+            print("⏱[Countdown] " .. Game.countdown .. "...")
             if UI and UI.updateCountdown then
                 UI.updateCountdown(Game.countdown)
             end
@@ -736,7 +736,7 @@ function UpdatePlaying(deltaTime)
     elseif Game.mode == "network" and Flappy and Flappy.Input and Flappy.Input.SpaceJustPressed then
         -- In network mode, ONLY send input to server (no local prediction)
         if Network and Network.sendFlap then
-            print("⬆️ [Input] Sending flap to server")
+            print("⬆[Input] Sending flap to server")
             Network.sendFlap(Game.localPlayerId)
         end
     end
@@ -788,7 +788,7 @@ function UpdateGameOver(deltaTime)
     -- Handle space or ESC to return to menu
     if Flappy and Flappy.Input then
         if Flappy.Input.SpaceJustPressed or Flappy.Input.EscapeJustPressed then
-            print("🔙 Returning to menu from game over...")
+            print("Returning to menu from game over...")
             OnReturnToMenu()
         end
     end
@@ -891,7 +891,7 @@ function UpdateCollisions()
             if birdRight > pipeLeft and birdLeft < pipeRight and
                birdBottom > pipeTop and birdTop < pipeBottom then
                 -- Collision!
-                print("💥 Player " .. playerId .. " hit a pipe!")
+                print("Player " .. playerId .. " hit a pipe!")
                 KillBird(playerId)
                 goto continue
             end
@@ -925,7 +925,7 @@ function UpdateScoring()
                 
                 -- Check for win condition (30 points)
                 if Game.scores[playerId] >= 30 then
-                    print("🏆 Player " .. playerId .. " reached 30 points and WON!")
+                    print("Player " .. playerId .. " reached 30 points and WON!")
                     SetGameState(GameState.GAMEOVER)
                     return  -- Exit scoring immediately
                 end
@@ -975,7 +975,7 @@ function CheckBounds()
             
             -- Hit ceiling or floor
             if pos.y < 0 or pos.y > Game.screenHeight - Game.birdSize then
-                print("💥 Player " .. playerId .. " hit the bounds!")
+                print("Player " .. playerId .. " hit the bounds!")
                 KillBird(playerId)
             end
         end
@@ -1015,7 +1015,7 @@ function HandleNetworkPacket(packet)
     if packetType == PacketType.WELCOME then
         if packet.size >= 1 then
             local playerId = packet.data[1]
-            print("👋 [Network] Welcome! Assigned player ID: " .. playerId)
+            print("[Network] Welcome! Assigned player ID: " .. playerId)
             Game.localPlayerId = playerId
             Game.opponentPlayerId = (playerId == 1) and 2 or 1
         end
@@ -1024,7 +1024,7 @@ function HandleNetworkPacket(packet)
     elseif packetType == PacketType.GAME_START then
         if packet.size >= 1 then
             local countdownSeconds = packet.data[1]
-            print("🎮 [Network] Game starting! Countdown: " .. countdownSeconds)
+            print("[Network] Game starting! Countdown: " .. countdownSeconds)
             
             if Game.state == GameState.WAITING then
                 Game.waitingForOpponent = false
@@ -1042,7 +1042,7 @@ function HandleNetworkPacket(packet)
     elseif packetType == PacketType.COUNTDOWN_UPDATE then
         if packet.size >= 1 then
             local countdownSeconds = packet.data[1]
-            print("⏱️ [Network] Countdown: " .. countdownSeconds)
+            print("⏱[Network] Countdown: " .. countdownSeconds)
             Game.countdown = countdownSeconds
             
             if UI and UI.updateCountdown then
@@ -1060,7 +1060,7 @@ function HandleNetworkPacket(packet)
         if packet.size >= 2 then
             local x = packet.data[1]
             local gapY = packet.data[2]
-            print("🎋 [Network] Spawning pipe at x=" .. x .. ", gapY=" .. gapY)
+            print("[Network] Spawning pipe at x=" .. x .. ", gapY=" .. gapY)
             
             -- Create top and bottom pipes
             CreatePipeFromServer(x, gapY)
@@ -1114,7 +1114,7 @@ function HandleNetworkPacket(packet)
     elseif packetType == PacketType.PLAYER_DIED then
         if packet.size >= 1 then
             local playerId = packet.data[1]
-            print("💀 [Network] Player " .. playerId .. " died")
+            print("[Network] Player " .. playerId .. " died")
             KillBird(playerId)
         end
     
@@ -1123,7 +1123,7 @@ function HandleNetworkPacket(packet)
         if packet.size >= 2 then
             local playerId = packet.data[1]
             local score = packet.data[2]
-            print("🎯 [Network] Player " .. playerId .. " score: " .. score)
+            print("[Network] Player " .. playerId .. " score: " .. score)
             
             Game.scores[playerId] = score
             
@@ -1137,7 +1137,7 @@ function HandleNetworkPacket(packet)
     elseif packetType == PacketType.GAME_OVER then
         if packet.size >= 1 then
             local winnerId = packet.data[1]
-            print("🏆 [Network] Game Over! Winner: Player " .. winnerId)
+            print("[Network] Game Over! Winner: Player " .. winnerId)
             
             -- Build leaderboard
             local leaderboard = {
@@ -1167,7 +1167,7 @@ function HandleNetworkPacket(packet)
     elseif packetType == PacketType.PLAYER_DISCONNECT then
         if packet.size >= 1 then
             local playerId = packet.data[1]
-            print("🚪 [Network] Player " .. playerId .. " disconnected")
+            print("[Network] Player " .. playerId .. " disconnected")
             
             -- If in game, the remaining player wins
             if Game.state == GameState.PLAYING or Game.state == GameState.COUNTDOWN then
@@ -1199,7 +1199,7 @@ function HandleNetworkPacket(packet)
         end
     
     else
-        print("❓ [Network] Unknown packet type: " .. packetType)
+        print("[Network] Unknown packet type: " .. packetType)
     end
 end
 
@@ -1213,45 +1213,45 @@ function OnPlayLocal()
 end
 
 function OnPlayMultiplayer()
-    print("🌐 [Multiplayer] Starting multiplayer mode...")
+    print("[Multiplayer] Starting multiplayer mode...")
     Game.mode = "network"
     
     -- Check if Network module exists
     if not Network then
-        print("❌ [Multiplayer] Network module not available!")
+        print("[Multiplayer] Network module not available!")
         SetGameState(GameState.MENU)
         return
     end
     
     -- Initialize network client
     if Network.init then
-        print("🔧 [Multiplayer] Initializing NetworkClient...")
+        print("[Multiplayer] Initializing NetworkClient...")
         local success = Network.init("127.0.0.1", 8888)
         if not success then
-            print("❌ [Multiplayer] Failed to initialize NetworkClient!")
+            print("[Multiplayer] Failed to initialize NetworkClient!")
             SetGameState(GameState.MENU)
             return
         end
-        print("✅ [Multiplayer] NetworkClient initialized!")
+        print("[Multiplayer] NetworkClient initialized!")
     end
     
     -- Connect to server
     if not Network.connect then
-        print("❌ [Multiplayer] Network.connect not available!")
+        print("[Multiplayer] Network.connect not available!")
         SetGameState(GameState.MENU)
         return
     end
     
-    print("🔌 [Multiplayer] Connecting to server...")
+    print("[Multiplayer] Connecting to server...")
     local success = Network.connect("127.0.0.1", 8888)
     
     if not success then
-        print("❌ [Multiplayer] Failed to connect to server!")
+        print("[Multiplayer] Failed to connect to server!")
         SetGameState(GameState.MENU)
         return
     end
     
-    print("✅ [Multiplayer] Connected to server!")
+    print("[Multiplayer] Connected to server!")
     Game.isConnectedToServer = true
     
     -- Transition to WAITING state
@@ -1302,4 +1302,4 @@ function math.clamp(val, min, max)
     return val
 end
 
-print("🐦 [Lua] Flappy Bird scripts loaded!")
+print("[Lua] Flappy Bird scripts loaded!")

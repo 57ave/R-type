@@ -1,6 +1,4 @@
--- ==========================================
 -- R-Type Game - Weapons Configuration
--- Phase 7: Complete Weapons System
 -- ==========================================
 
 Weapons = {
@@ -406,6 +404,6 @@ Weapons = {
 -- 2.0s = charge_level_5 (maintien long)
 Weapons.charge_timings = {0.0, 0.2, 0.6, 1.0, 1.5, 2.0}
 
-print("[LUA] ✅ Weapons config loaded (basic + 5 charge levels + 4 modules)")
+
 
 return Weapons

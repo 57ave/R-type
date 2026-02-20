@@ -65,6 +65,6 @@ function on_back()
     print("[LUA] Back to main menu clicked!")
 end
 
-print("[LUA] ✅ Multiplayer Menu UI loaded")
+print("[LUA] Multiplayer Menu UI loaded")
 
 return MultiplayerMenu

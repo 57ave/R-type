@@ -16,11 +16,11 @@ This repository uses an automated release workflow to build and publish R-Type b
 5. Click **Run workflow**
 
 The workflow will:
-- ✅ Increment version in `VERSION` file
-- ✅ Build for Linux and Windows
-- ✅ Package binaries with all assets
-- ✅ Create GitHub release with downloads
-- ✅ Push version tag to repository
+- Increment version in `VERSION` file
+- Build for Linux and Windows
+- Package binaries with all assets
+- Create GitHub release with downloads
+- Push version tag to repository
 
 ### Option 2: Tag Push
 

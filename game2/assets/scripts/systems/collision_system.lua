@@ -5,7 +5,7 @@
 -- Works in conjunction with C++ CollisionSystem but adds game-specific logic.
 -- ============================================================================
 
-print("💥 Loading Collision System...")
+print("Loading Collision System...")
 
 CollisionSystem = {
     -- Bird collision box (smaller than sprite for forgiveness)
@@ -24,8 +24,8 @@ CollisionSystem = {
 -- ============================================================================
 
 function CollisionSystem:init()
-    print("  🔧 Initializing Collision System...")
-    print(string.format("  📐 Bird hitbox: %dx%d (offset: %d)", 
+    print("  Initializing Collision System...")
+    print(string.format("  Bird hitbox: %dx%d (offset: %d)", 
         self.birdHitboxSize, self.birdHitboxSize, self.birdHitboxOffset))
     
     self.recentCollisions = {}
@@ -56,7 +56,6 @@ end
 -- ============================================================================
 
 -- Check if a bird collides with any pipes
--- @param birdEntityId: the bird entity to check
 function CollisionSystem:checkBirdVsPipes(birdEntityId)
     if not Coordinator:HasComponent_Position(birdEntityId) then
         return
@@ -83,10 +82,6 @@ function CollisionSystem:checkBirdVsPipes(birdEntityId)
 end
 
 -- Check collision between a bird and a pipe (AABB)
--- @param birdPos: bird Position component
--- @param pipePos: pipe Position component
--- @param pipeCollider: pipe Collider component
--- @return true if collision detected
 function CollisionSystem:checkBirdVsPipe(birdPos, pipePos, pipeCollider)
     -- Bird hitbox (centered, smaller than sprite)
     local birdLeft = birdPos.x + self.birdHitboxOffset
@@ -112,9 +107,6 @@ end
 -- ============================================================================
 
 -- Generic collision check between two entities (with Collider components)
--- @param entityA: first entity ID
--- @param entityB: second entity ID
--- @return true if collision detected
 function checkCollision(entityA, entityB)
     if not Coordinator:HasComponent_Position(entityA) or 
        not Coordinator:HasComponent_Position(entityB) or
@@ -150,8 +142,6 @@ end
 -- ============================================================================
 
 -- Handle bird-pipe collision
--- @param birdEntityId: the bird that collided
--- @param pipeEntityId: the pipe that was hit
 function CollisionSystem:onBirdPipeCollision(birdEntityId, pipeEntityId)
     -- Check if this collision was recently handled (prevent double-processing)
     local collisionKey = string.format("%d_%d", birdEntityId, pipeEntityId)
@@ -167,7 +157,7 @@ function CollisionSystem:onBirdPipeCollision(birdEntityId, pipeEntityId)
     if not birdComp then return end
     
     -- Kill the bird
-    print(string.format("💥 Bird %d (Player %d) hit pipe %d!", 
+    print(string.format("Bird %d (Player %d) hit pipe %d!", 
         birdEntityId, birdComp.playerId, pipeEntityId))
     
     -- Use GravitySystem to kill the bird (handles all death logic)
@@ -183,20 +173,16 @@ function CollisionSystem:onBirdPipeCollision(birdEntityId, pipeEntityId)
         onBirdDeath(birdEntityId, "pipe")
     end
     
-    -- TODO: Play death sound
-    -- TODO: Spawn particle effect
 end
 
 -- Callback for when a bird dies (can be called from other systems)
--- @param birdEntityId: the bird that died
--- @param reason: death reason ("pipe", "ground", "ceiling")
 function onBirdDeath(birdEntityId, reason)
     reason = reason or "unknown"
     
     local birdComp = Components.FlappyBird[birdEntityId]
     if not birdComp then return end
     
-    print(string.format("☠️  Bird %d (Player %d) died by %s! Final score: %d",
+    print(string.format("Bird %d (Player %d) died by %s! Final score: %d",
         birdEntityId, birdComp.playerId, reason, birdComp.score))
     
     -- Update game state
@@ -206,7 +192,7 @@ function onBirdDeath(birdEntityId, reason)
         
         -- Check for game over
         if gameState.alivePlayers <= 1 and gameState.state == "playing" then
-            print("🏁 Game Over condition met!")
+            print("Game Over condition met!")
             -- ScoreSystem will handle the actual game over logic
         end
     end
@@ -241,16 +227,16 @@ end
 function CollisionSystem:setDebugMode(enabled)
     self.debugMode = enabled
     if enabled then
-        print("  🐛 Collision debug mode ENABLED")
+        print("  Collision debug mode ENABLED")
     else
-        print("  🐛 Collision debug mode DISABLED")
+        print("  Collision debug mode DISABLED")
     end
 end
 
 -- Adjust bird hitbox size (for difficulty tuning)
 function CollisionSystem:setBirdHitboxSize(size)
     self.birdHitboxSize = math.max(10, math.min(40, size))
-    print(string.format("  📐 Bird hitbox size changed to %d", self.birdHitboxSize))
+    print(string.format("  Bird hitbox size changed to %d", self.birdHitboxSize))
 end
 
 -- ============================================================================
@@ -269,7 +255,6 @@ end
 function CollisionSystem:debugDrawHitboxes()
     if not self.debugMode then return end
     
-    -- TODO: Implement debug rendering
     -- This would require access to the renderer
     -- For now, just print positions
     
@@ -286,7 +271,7 @@ function CollisionSystem:debugDrawHitboxes()
     end
 end
 
-print("✅ Collision System loaded!")
+print("Collision System loaded!")
 print("   - Bird vs Pipes collision detection")
 print("   - Death handling and callbacks")
 

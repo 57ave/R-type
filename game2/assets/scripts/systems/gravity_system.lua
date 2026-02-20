@@ -6,7 +6,7 @@
 -- and Lua components (Gravity, FlappyBird).
 -- ============================================================================
 
-print("⬇️  Loading Gravity System...")
+print("⬇Loading Gravity System...")
 
 -- System configuration
 GravitySystem = {
@@ -31,11 +31,11 @@ GravitySystem = {
 -- ============================================================================
 
 function GravitySystem:init()
-    print("  🔧 Initializing Gravity System...")
+    print("  Initializing Gravity System...")
     self.lastFlapTime = {}
-    print(string.format("  📐 Screen bounds: %dx%d (ground: %.1f, ceiling: %.1f)", 
+    print(string.format("  Screen bounds: %dx%d (ground: %.1f, ceiling: %.1f)", 
         self.screenWidth, self.screenHeight, self.groundY, self.ceilingY))
-    print(string.format("  ⚙️  Physics: gravity=%.1f, flap=%.1f, terminal=%.1f", 
+    print(string.format("  Physics: gravity=%.1f, flap=%.1f, terminal=%.1f", 
         self.defaultGravity, self.defaultFlapStrength, self.defaultTerminalVelocity))
 end
 
@@ -44,7 +44,6 @@ end
 -- ============================================================================
 
 -- Main update function called every frame
--- @param deltaTime: time since last frame in seconds
 function GravitySystem:update(deltaTime)
     -- Iterate over all entities with Gravity component
     for entityId, gravityComp in pairs(Components.Gravity) do
@@ -75,9 +74,6 @@ end
 -- ============================================================================
 
 -- Apply a flap (jump) to an entity
--- @param entityId: the entity to flap
--- @param currentTime: current game time (for cooldown check)
--- @return true if flap was successful, false if on cooldown or dead
 function GravitySystem:flap(entityId, currentTime)
     currentTime = currentTime or 0
     
@@ -107,13 +103,12 @@ function GravitySystem:flap(entityId, currentTime)
     self.lastFlapTime[entityId] = currentTime
     
     -- Optional: Add flap animation or sound trigger here
-    -- print(string.format("🐦 Entity %d flapped! (vy = %.1f)", entityId, velocity.vy))
+    -- print(string.format("Entity %d flapped! (vy = %.1f)", entityId, velocity.vy))
     
     return true
 end
 
 -- Flap with default parameters (no time check - immediate flap)
--- @param entityId: the entity to flap
 function GravitySystem:flapImmediate(entityId)
     local birdComp = Components.FlappyBird[entityId]
     if not birdComp or not birdComp.isAlive then
@@ -135,8 +130,6 @@ end
 -- ============================================================================
 
 -- Check if entity hit screen boundaries (death condition)
--- @param entityId: entity to check
--- @param position: Position component reference
 function GravitySystem:checkBoundaries(entityId, position)
     local birdComp = Components.FlappyBird[entityId]
     
@@ -165,8 +158,6 @@ end
 -- ============================================================================
 
 -- Kill a bird (mark as dead)
--- @param entityId: the bird to kill
--- @param reason: reason for death ("ceiling", "ground", "pipe")
 function GravitySystem:killBird(entityId, reason)
     local birdComp = Components.FlappyBird[entityId]
     if not birdComp then return end
@@ -175,7 +166,7 @@ function GravitySystem:killBird(entityId, reason)
     if birdComp.isAlive then
         birdComp.isAlive = false
         
-        print(string.format("💀 Bird %d (Player %d) died by %s! Final score: %d", 
+        print(string.format("Bird %d (Player %d) died by %s! Final score: %d", 
             entityId, birdComp.playerId, reason or "unknown", birdComp.score))
         
         -- Update game state (decrease alive count)
@@ -222,7 +213,7 @@ function GravitySystem:handleGameOver()
     gameState.state = "gameover"
     gameState.winnerId = winnerId
     
-    print(string.format("🏆 GAME OVER! Winner: Player %d (Score: %d)", 
+    print(string.format("GAME OVER! Winner: Player %d (Score: %d)", 
         winnerId, maxScore))
 end
 
@@ -237,7 +228,7 @@ function GravitySystem:setScreenSize(width, height)
     self.groundY = height - 40  -- 40 pixels from bottom
     self.ceilingY = 40           -- 40 pixels from top
     
-    print(string.format("  📐 Gravity System: Screen updated to %dx%d", width, height))
+    print(string.format("  Gravity System: Screen updated to %dx%d", width, height))
 end
 
 -- Reset cooldowns (useful for game restart)
@@ -278,7 +269,7 @@ function GravitySystem:debugPrint()
     end
 end
 
-print("✅ Gravity System loaded!")
+print("Gravity System loaded!")
 print("   - Physics: gravity, flapping, boundaries")
 print("   - Death detection: ceiling, ground, pipes")
 

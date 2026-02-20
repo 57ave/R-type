@@ -155,6 +155,6 @@ function on_back_to_menu()
     -- Pop SettingsState, return to MainMenuState
 end
 
-print("[LUA] ✅ Settings Menu UI loaded")
+print("[LUA] Settings Menu UI loaded")
 
 return SettingsMenu

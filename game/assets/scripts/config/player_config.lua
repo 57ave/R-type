@@ -78,6 +78,6 @@ Player = {
     }
 }
 
-print("[LUA] ✅ Player config loaded")
+
 
 return Player
