@@ -1,9 +1,8 @@
 #include "LuaParser.hpp"
 
 #include <algorithm>
-#include <fstream>
+#include <filesystem>
 #include <iostream>
-#include <sstream>
 
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
@@ -37,68 +36,22 @@ static bool SolBool(const sol::table& t, const char* key, bool def = false) {
     return v.value_or(def);
 }
 
-bool LuaParser::LoadStages(const std::string& path, std::vector<StageData>& outStages,
-                           std::string& outHelperBlock) {
-    outStages.clear();
-
-    {
-        std::ifstream file(path);
-        if (!file.is_open()) {
-            lastError_ = "Cannot open file: " + path;
-            return false;
-        }
-        std::string content((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
-
-        int braceDepth = 0;
-        bool inStagesConfig = false;
-        size_t endPos = std::string::npos;
-
-        for (size_t i = 0; i < content.size(); i++) {
-            if (content[i] == '"') {
-                i++;
-                while (i < content.size() && content[i] != '"') {
-                    if (content[i] == '\\') i++;
-                    i++;
-                }
-                continue;
-            }
-            if (content[i] == '-' && i + 1 < content.size() && content[i + 1] == '-') {
-                while (i < content.size() && content[i] != '\n') i++;
-                continue;
-            }
-
-            if (!inStagesConfig) {
-                if (i + 12 <= content.size() && content.substr(i, 12) == "StagesConfig") {
-                    size_t j = i + 12;
-                    while (j < content.size() && (content[j] == ' ' || content[j] == '\t')) j++;
-                    if (j < content.size() && content[j] == '=') {
-                        inStagesConfig = true;
-                        i = j;
-                    }
-                }
-            } else {
-                if (content[i] == '{') {
-                    braceDepth++;
-                } else if (content[i] == '}') {
-                    braceDepth--;
-                    if (braceDepth == 0) {
-                        endPos = i + 1;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (endPos != std::string::npos && endPos < content.size()) {
-            outHelperBlock = content.substr(endPos);
-        } else {
-            outHelperBlock = "";
+static std::vector<int> SolIntArray(const sol::table& t, const char* key) {
+    std::vector<int> result;
+    sol::optional<sol::table> arr = t[key];
+    if (arr) {
+        for (size_t i = 1; i <= arr->size(); i++) {
+            sol::optional<int> v = (*arr)[i];
+            if (v) result.push_back(*v);
         }
     }
+    return result;
+}
 
+bool LuaParser::LoadSingleLevel(const std::string& path, LevelData& outLevel) {
     sol::state lua;
-    lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
+    lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string,
+                       sol::lib::table, sol::lib::io);
 
     try {
         auto result = lua.safe_script_file(path);
@@ -112,85 +65,134 @@ bool LuaParser::LoadStages(const std::string& path, std::vector<StageData>& outS
         return false;
     }
 
-    sol::table stagesTable = lua["StagesConfig"];
-    if (!stagesTable.valid()) {
-        lastError_ = "StagesConfig table not found in " + path;
+    // Find the LevelN table by trying Level1, Level2, ... Level10
+    sol::table levelTable;
+    int foundId = 0;
+    for (int i = 1; i <= 10; i++) {
+        std::string name = "Level" + std::to_string(i);
+        sol::object obj = lua[name];
+        if (obj.valid() && obj.get_type() == sol::type::table) {
+            levelTable = obj.as<sol::table>();
+            foundId = i;
+            break;
+        }
+    }
+
+    if (!levelTable.valid()) {
+        lastError_ = "No LevelN table found in " + path;
         return false;
     }
 
-    for (auto& [key, value] : stagesTable) {
-        if (value.get_type() != sol::type::table) continue;
+    outLevel.filePath = path;
+    outLevel.id = SolInt(levelTable, "id", foundId);
+    outLevel.name = SolStr(levelTable, "name", "Level " + std::to_string(outLevel.id));
+    outLevel.enemyTypes = SolIntArray(levelTable, "enemy_types");
+    outLevel.moduleTypes = SolIntArray(levelTable, "module_types");
+    outLevel.stopSpawningAtBoss = SolBool(levelTable, "stop_spawning_at_boss", true);
 
-        StageData stage;
-        stage.key = key.as<std::string>();
-        sol::table t = value.as<sol::table>();
-
-        stage.name = SolStr(t, "name");
-        stage.description = SolStr(t, "description");
-        stage.stageNumber = SolInt(t, "stageNumber", 1);
-        stage.duration = SolFloat(t, "duration", 180.0f);
-        stage.music = SolStr(t, "music");
-        stage.bossMusic = SolStr(t, "bossMusic");
-
-        sol::optional<sol::table> bg = t["background"];
-        if (bg) {
-            stage.background.texture = SolStr(*bg, "texture");
-            stage.background.scrollSpeed = SolFloat(*bg, "scrollSpeed", 200.0f);
-        }
-
-        stage.completionBonus = SolInt(t, "completionBonus", 5000);
-        stage.perfectBonus = SolInt(t, "perfectBonus", 10000);
-        stage.speedBonusTime = SolFloat(t, "speedBonusTime", 120.0f);
-        stage.speedBonus = SolInt(t, "speedBonus", 3000);
-
-        sol::optional<sol::table> waves = t["waves"];
-        if (waves) {
-            for (size_t i = 1; i <= waves->size(); i++) {
-                sol::table wt = (*waves)[i];
-                WaveData wave;
-                wave.name = SolStr(wt, "name");
-                wave.startTime = SolFloat(wt, "startTime");
-                wave.duration = SolFloat(wt, "duration", 30.0f);
-                wave.isBossWave = SolBool(wt, "isBossWave");
-                wave.boss = SolStr(wt, "boss");
-
-                sol::optional<sol::table> spawns = wt["spawns"];
-                if (spawns) {
-                    for (size_t j = 1; j <= spawns->size(); j++) {
-                        sol::table st = (*spawns)[j];
-                        SpawnData spawn;
-                        spawn.time = SolFloat(st, "time");
-                        spawn.enemy = SolStr(st, "enemy", "basic");
-                        spawn.y = SolFloat(st, "y", 400.0f);
-                        spawn.pattern = SolStr(st, "pattern", "straight");
-                        spawn.count = SolInt(st, "count", 1);
-                        spawn.spacing = SolFloat(st, "spacing", 0.3f);
-                        wave.spawns.push_back(spawn);
-                    }
-                }
-
-                sol::optional<sol::table> reward = wt["reward"];
-                if (reward) {
-                    RewardData r;
-                    r.type = SolStr(*reward, "type");
-                    r.y = SolFloat(*reward, "y", 400.0f);
-                    wave.reward = r;
-                }
-
-                stage.waves.push_back(wave);
-            }
-        }
-
-        outStages.push_back(stage);
+    // Parse spawn config
+    sol::optional<sol::table> spawnTable = levelTable["spawn"];
+    if (spawnTable) {
+        outLevel.spawn.enemyInterval = SolFloat(*spawnTable, "enemy_interval", 2.5f);
+        outLevel.spawn.powerupInterval = SolFloat(*spawnTable, "powerup_interval", 15.0f);
+        outLevel.spawn.moduleInterval = SolFloat(*spawnTable, "module_interval", 25.0f);
+        outLevel.spawn.maxEnemies = SolInt(*spawnTable, "max_enemies", 8);
     }
 
-    std::sort(outStages.begin(), outStages.end(),
-              [](const StageData& a, const StageData& b) {
-                  return a.stageNumber < b.stageNumber;
+    // Parse waves
+    sol::optional<sol::table> wavesTable = levelTable["waves"];
+    if (wavesTable) {
+        for (size_t i = 1; i <= wavesTable->size(); i++) {
+            sol::optional<sol::table> wt = (*wavesTable)[i];
+            if (!wt) continue;
+
+            WaveData wave;
+            wave.time = SolFloat(*wt, "time");
+
+            sol::optional<sol::table> enemiesArr = (*wt)["enemies"];
+            if (enemiesArr) {
+                for (size_t j = 1; j <= enemiesArr->size(); j++) {
+                    sol::optional<sol::table> et = (*enemiesArr)[j];
+                    if (!et) continue;
+
+                    WaveEnemy enemy;
+                    enemy.type = SolInt(*et, "type", 0);
+                    enemy.count = SolInt(*et, "count", 1);
+                    enemy.interval = SolFloat(*et, "interval", 1.0f);
+                    wave.enemies.push_back(enemy);
+                }
+            }
+
+            outLevel.waves.push_back(wave);
+        }
+    }
+
+    // Parse boss
+    sol::optional<sol::table> bossTable = levelTable["boss"];
+    if (bossTable) {
+        outLevel.boss.spawnTime = SolFloat(*bossTable, "spawn_time", 90.0f);
+        outLevel.boss.type = SolInt(*bossTable, "type", 3);
+        outLevel.boss.name = SolStr(*bossTable, "name");
+        outLevel.boss.health = SolInt(*bossTable, "health", 200);
+        outLevel.boss.speed = SolFloat(*bossTable, "speed", 80.0f);
+        outLevel.boss.fireRate = SolFloat(*bossTable, "fire_rate", 2.0f);
+        outLevel.boss.firePattern = SolInt(*bossTable, "fire_pattern", 0);
+
+        sol::optional<sol::table> spriteTable = (*bossTable)["sprite"];
+        if (spriteTable) {
+            outLevel.boss.sprite.path = SolStr(*spriteTable, "path");
+            outLevel.boss.sprite.frameWidth = SolInt(*spriteTable, "frame_width", 0);
+            outLevel.boss.sprite.frameHeight = SolInt(*spriteTable, "frame_height", 0);
+            outLevel.boss.sprite.frameCount = SolInt(*spriteTable, "frame_count", 1);
+            outLevel.boss.sprite.frameTime = SolFloat(*spriteTable, "frame_time", 0.15f);
+            outLevel.boss.sprite.scale = SolFloat(*spriteTable, "scale", 1.5f);
+            outLevel.boss.sprite.vertical = SolBool(*spriteTable, "vertical", false);
+        }
+    }
+
+    std::cout << "[LuaParser] Loaded level " << outLevel.id << " (" << outLevel.name
+              << ") from " << path << std::endl;
+    return true;
+}
+
+bool LuaParser::LoadLevels(const std::string& dir, std::vector<LevelData>& outLevels) {
+    outLevels.clear();
+    namespace fs = std::filesystem;
+
+    if (!fs::exists(dir) || !fs::is_directory(dir)) {
+        lastError_ = "Levels directory not found: " + dir;
+        return false;
+    }
+
+    std::vector<std::string> levelFiles;
+    for (const auto& entry : fs::directory_iterator(dir)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            if (filename.find("level_") == 0 && filename.find(".lua") != std::string::npos) {
+                levelFiles.push_back(entry.path().string());
+            }
+        }
+    }
+
+    std::sort(levelFiles.begin(), levelFiles.end());
+
+    for (const auto& file : levelFiles) {
+        LevelData level;
+        if (LoadSingleLevel(file, level)) {
+            outLevels.push_back(level);
+        } else {
+            std::cerr << "[LuaParser] Warning: failed to load " << file
+                      << ": " << lastError_ << std::endl;
+        }
+    }
+
+    std::sort(outLevels.begin(), outLevels.end(),
+              [](const LevelData& a, const LevelData& b) {
+                  return a.id < b.id;
               });
 
-    std::cout << "[LuaParser] Loaded " << outStages.size() << " stages from " << path << std::endl;
-    return true;
+    std::cout << "[LuaParser] Loaded " << outLevels.size() << " levels from " << dir << std::endl;
+    return !outLevels.empty();
 }
 
 bool LuaParser::LoadEnemies(const std::string& path, std::vector<EnemyTypeInfo>& outEnemies) {
@@ -211,30 +213,50 @@ bool LuaParser::LoadEnemies(const std::string& path, std::vector<EnemyTypeInfo>&
         return false;
     }
 
-    sol::table enemiesTable = lua["EnemiesConfig"];
+    sol::table enemiesTable = lua["EnemiesSimple"];
     if (!enemiesTable.valid()) {
-        lastError_ = "EnemiesConfig table not found in " + path;
+        lastError_ = "EnemiesSimple table not found in " + path;
         return false;
     }
 
     for (auto& [key, value] : enemiesTable) {
         if (value.get_type() != sol::type::table) continue;
 
+        std::string keyStr = key.as<std::string>();
+        // Skip non-enemy entries like enemy_projectiles
+        if (keyStr == "enemy_projectiles") continue;
+
         EnemyTypeInfo info;
-        info.key = key.as<std::string>();
+        info.key = keyStr;
         sol::table t = value.as<sol::table>();
 
         info.name = SolStr(t, "name", info.key);
-        info.category = SolStr(t, "category", "common");
-        info.health = SolInt(t, "health", 1);
+        info.health = SolInt(t, "health", 10);
+        info.damage = SolInt(t, "damage", 20);
         info.speed = SolFloat(t, "speed", 200.0f);
+        info.score = SolInt(t, "score", 50);
 
         sol::optional<sol::table> sprite = t["sprite"];
         if (sprite) {
-            info.texture = SolStr(*sprite, "texture");
-            info.frameWidth = SolInt(*sprite, "frameWidth", 32);
-            info.frameHeight = SolInt(*sprite, "frameHeight", 32);
-            info.scale = SolFloat(*sprite, "scale", 2.0f);
+            info.spritePath = SolStr(*sprite, "path");
+            sol::optional<sol::table> scale = (*sprite)["scale"];
+            if (scale) {
+                sol::optional<double> sx = (*scale)[1];
+                sol::optional<double> sy = (*scale)[2];
+                if (sx) info.scaleX = static_cast<float>(*sx);
+                if (sy) info.scaleY = static_cast<float>(*sy);
+            }
+        }
+
+        sol::optional<sol::table> anim = t["animation"];
+        if (anim) {
+            info.frameWidth = SolInt(*anim, "frame_width", 32);
+            info.frameHeight = SolInt(*anim, "frame_height", 32);
+        }
+
+        sol::optional<sol::table> movement = t["movement"];
+        if (movement) {
+            info.movementType = SolStr(*movement, "type", "straight");
         }
 
         outEnemies.push_back(info);

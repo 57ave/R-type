@@ -6,12 +6,11 @@
 #include <imgui-SFML.h>
 #include <imgui.h>
 
-#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
 
-static std::string ResolveAssetsPath(int argc, char* argv[]) {
+static std::string ResolveScriptsPath(int argc, char* argv[]) {
     if (argc > 1) {
         return argv[1];
     }
@@ -20,9 +19,12 @@ static std::string ResolveAssetsPath(int argc, char* argv[]) {
         "../../assets/scripts",
         "../../../assets/scripts",
         "assets/scripts",
+        "game/assets/scripts",
+        "../game/assets/scripts",
+        "../../game/assets/scripts",
     };
     for (const auto& p : candidates) {
-        if (std::filesystem::exists(p + "/stages_config.lua")) {
+        if (std::filesystem::exists(p + "/levels/level_1.lua")) {
             return p;
         }
     }
@@ -30,8 +32,13 @@ static std::string ResolveAssetsPath(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string assetsPath = ResolveAssetsPath(argc, argv);
-    std::cout << "[Editor] Assets path: " << assetsPath << std::endl;
+    std::string scriptsPath = ResolveScriptsPath(argc, argv);
+    std::string levelsDir = scriptsPath + "/levels";
+    std::string enemiesPath = scriptsPath + "/config/enemies_simple.lua";
+
+    std::cout << "[Editor] Scripts path: " << scriptsPath << std::endl;
+    std::cout << "[Editor] Levels dir: " << levelsDir << std::endl;
+    std::cout << "[Editor] Enemies config: " << enemiesPath << std::endl;
 
     sf::RenderWindow window(sf::VideoMode(1600, 900), "R-Type Level Editor");
     window.setFramerateLimit(60);
@@ -42,7 +49,7 @@ int main(int argc, char* argv[]) {
     }
 
     Editor::EditorApp editor;
-    editor.Init(assetsPath + "/stages_config.lua", assetsPath + "/enemies_config.lua");
+    editor.Init(levelsDir, enemiesPath);
 
     sf::Clock deltaClock;
     while (window.isOpen()) {
