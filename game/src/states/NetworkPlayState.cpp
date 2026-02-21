@@ -90,8 +90,8 @@ void NetworkPlayState::onEnter()
 
     // Register world snapshot callback
     if (networkManager) {
-        networkManager->setWorldSnapshotCallback([this](const std::vector<RType::EntityState>& entities) {
-            this->onWorldSnapshot(entities);
+        networkManager->setWorldSnapshotCallback([this](const RType::WorldSnapshotData& snapshot) {
+            this->onWorldSnapshot(snapshot);
         });
         networkManager->setLevelChangeCallback([this](uint8_t level) {
             this->onLevelChange(level);
@@ -548,15 +548,59 @@ NetworkPlayState::SpriteInfo NetworkPlayState::getSpriteInfo(const RType::Entity
     return info;
 }
 
-void NetworkPlayState::onWorldSnapshot(const std::vector<RType::EntityState>& entities)
+void NetworkPlayState::onWorldSnapshot(const RType::WorldSnapshotData& snapshot)
 {
-    // Sync all entities from snapshot
-    for (const auto& state : entities) {
+    // Find the ack for our local player
+    uint32_t ackedInputSeq = 0;
+    for (const auto& ack : snapshot.acks) {
+        if (ack.playerId == static_cast<uint8_t>(localPlayerId_)) {
+            ackedInputSeq = ack.lastProcessedInputSeq;
+            break;
+        }
+    }
+
+    // Process each entity
+    for (const auto& state : snapshot.entities) {
+        bool isLocalPlayer = (state.type == RType::EntityType::ENTITY_PLAYER &&
+                              state.playerId == localPlayerId_);
+
+        if (isLocalPlayer) {
+            // Reconcile local player prediction with server state
+            reconcileLocalPlayer(state, ackedInputSeq);
+        } else {
+            // Update interpolation buffer for remote entities
+            updateInterpolationBuffer(state);
+        }
+
+        // Always sync ECS entity (sprite, tag, health, score, etc.)
         syncEntityFromState(state);
     }
-    
+
+    // Override local player position with predicted position (after syncEntityFromState set server pos)
+    if (predictionInitialized_ && localPlayerEntity_ != 0) {
+        auto coordinator = game_->getCoordinator();
+        if (coordinator && coordinator->HasComponent<Position>(localPlayerEntity_)) {
+            auto& pos = coordinator->GetComponent<Position>(localPlayerEntity_);
+            pos.x = predictedX_;
+            pos.y = predictedY_;
+        }
+    }
+
     // Remove entities that are no longer in the snapshot
-    removeStaleEntities(entities);
+    removeStaleEntities(snapshot.entities);
+
+    // Clean up interpolation buffers for destroyed entities
+    for (auto it = interpolationBuffers_.begin(); it != interpolationBuffers_.end();) {
+        bool found = false;
+        for (const auto& state : snapshot.entities) {
+            if (state.id == it->first) { found = true; break; }
+        }
+        if (!found) {
+            it = interpolationBuffers_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void NetworkPlayState::syncEntityFromState(const RType::EntityState& state)
@@ -1057,14 +1101,39 @@ void NetworkPlayState::update(float deltaTime)
     if (chargeTime_ > 1.2f) chargeLevel = 4;
     if (chargeTime_ > 1.6f) chargeLevel = 5;
 
-    // Send input to server every frame
+    // Send input to server every frame + apply local prediction
     auto* networkManager = game_->getNetworkManager();
     if (networkManager) {
+        // Build input mask for prediction
+        uint8_t inputMask = RType::ClientInput::buildInputMask(
+            inputUp_, inputDown_, inputLeft_, inputRight_, inputFire_);
+
+        // Apply client-side prediction immediately (before server confirms)
+        if (predictionInitialized_ && !isSpectating_) {
+            applyInputToLocalPlayer(inputMask, deltaTime);
+
+            // Store in pending buffer for reconciliation
+            PredictedInput pi;
+            pi.seq = networkManager->getInputSequence() + 1; // Will be incremented in sendInput
+            pi.inputMask = inputMask;
+            pi.dt = deltaTime;
+            pendingInputs_.push_back(pi);
+            if (pendingInputs_.size() > MAX_PENDING_INPUTS) {
+                pendingInputs_.pop_front();
+            }
+        }
+
         networkManager->sendInput(inputUp_, inputDown_, inputLeft_, inputRight_, inputFire_, chargeLevel);
-        
-        // Update network (receive snapshots)
-        networkManager->update();
+
+        // Update network (receive snapshots, send pings)
+        networkManager->update(deltaTime);
     }
+
+    // Update local clock for interpolation
+    localClock_ += deltaTime;
+
+    // Interpolate remote entities smoothly between snapshots
+    interpolateRemoteEntities(deltaTime);
 
     // Update local systems
     if (scrollingSystem_) scrollingSystem_->Update(deltaTime);
@@ -1319,4 +1388,138 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
     spawnBackground();
     
     std::cout << "[NetworkPlayState] 🎮 Level changed to " << (int)level << ": " << name << std::endl;
+}
+
+// === Client-side prediction ===
+
+void NetworkPlayState::applyMovementInput(float& x, float& y, uint8_t inputMask, float speed, float dt,
+                                           float minX, float minY, float maxX, float maxY)
+{
+    float vx = 0.0f, vy = 0.0f;
+    if (inputMask & 0x01) vy = -speed; // Up
+    if (inputMask & 0x02) vy =  speed; // Down
+    if (inputMask & 0x04) vx = -speed; // Left
+    if (inputMask & 0x08) vx =  speed; // Right
+
+    x += vx * dt;
+    y += vy * dt;
+
+    // Clamp to bounds (same as server)
+    if (x < minX) x = minX;
+    if (y < minY) y = minY;
+    if (x > maxX) x = maxX;
+    if (y > maxY) y = maxY;
+}
+
+void NetworkPlayState::applyInputToLocalPlayer(uint8_t inputMask, float dt)
+{
+    applyMovementInput(predictedX_, predictedY_, inputMask, PLAYER_SPEED, dt,
+                       SCREEN_MIN_X, SCREEN_MIN_Y, SCREEN_MAX_X, SCREEN_MAX_Y);
+
+    // Write predicted position to ECS immediately for responsive feel
+    auto coordinator = game_->getCoordinator();
+    if (coordinator && localPlayerEntity_ != 0 && coordinator->HasComponent<Position>(localPlayerEntity_)) {
+        auto& pos = coordinator->GetComponent<Position>(localPlayerEntity_);
+        pos.x = predictedX_;
+        pos.y = predictedY_;
+    }
+}
+
+void NetworkPlayState::reconcileLocalPlayer(const RType::EntityState& serverState, uint32_t ackedInputSeq)
+{
+    // Initialize prediction from first server state
+    if (!predictionInitialized_) {
+        predictedX_ = static_cast<float>(serverState.x);
+        predictedY_ = static_cast<float>(serverState.y);
+        predictionInitialized_ = true;
+        pendingInputs_.clear();
+        return;
+    }
+
+    // Drop acknowledged inputs
+    while (!pendingInputs_.empty() && pendingInputs_.front().seq <= ackedInputSeq) {
+        pendingInputs_.pop_front();
+    }
+
+    // Start from server's authoritative position
+    float reconciledX = static_cast<float>(serverState.x);
+    float reconciledY = static_cast<float>(serverState.y);
+
+    // Replay all unacknowledged inputs on top of server state
+    for (const auto& input : pendingInputs_) {
+        applyMovementInput(reconciledX, reconciledY, input.inputMask, PLAYER_SPEED, input.dt,
+                           SCREEN_MIN_X, SCREEN_MIN_Y, SCREEN_MAX_X, SCREEN_MAX_Y);
+    }
+
+    // Check error between reconciled and current predicted position
+    float dx = reconciledX - predictedX_;
+    float dy = reconciledY - predictedY_;
+    float error = std::sqrt(dx * dx + dy * dy);
+
+    if (error > RECONCILIATION_THRESHOLD) {
+        // Significant divergence: snap to reconciled position
+        predictedX_ = reconciledX;
+        predictedY_ = reconciledY;
+    }
+    // Otherwise: keep current predicted position (close enough, avoids jitter)
+}
+
+// === Entity interpolation for remote entities ===
+
+void NetworkPlayState::updateInterpolationBuffer(const RType::EntityState& state)
+{
+    auto& interp = interpolationBuffers_[state.id];
+
+    // Shift: current becomes previous
+    interp.previous = interp.current;
+
+    // New state becomes current
+    interp.current.x = static_cast<float>(state.x);
+    interp.current.y = static_cast<float>(state.y);
+    interp.current.vx = static_cast<float>(state.vx);
+    interp.current.vy = static_cast<float>(state.vy);
+    interp.current.hp = state.hp;
+    interp.current.timestamp = localClock_;
+
+    if (!interp.hasTwoSnapshots) {
+        // First snapshot: copy to previous too
+        interp.previous = interp.current;
+        interp.hasTwoSnapshots = true;
+    }
+}
+
+void NetworkPlayState::interpolateRemoteEntities(float /*deltaTime*/)
+{
+    auto coordinator = game_->getCoordinator();
+    if (!coordinator) return;
+
+    for (auto& [entityId, interp] : interpolationBuffers_) {
+        if (!interp.hasTwoSnapshots) continue;
+
+        // Skip local player (handled by prediction)
+        auto netIt = networkEntities_.find(entityId);
+        if (netIt == networkEntities_.end()) continue;
+
+        // Check if this is the local player entity
+        ECS::Entity localEntity = netIt->second;
+        if (localEntity == localPlayerEntity_ && predictionInitialized_) continue;
+
+        // Compute interpolation factor
+        float elapsed = localClock_ - interp.current.timestamp;
+        // We want to render one snapshot interval behind (interpolation delay)
+        float t = elapsed / SNAPSHOT_INTERVAL;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f; // Hold at current, no extrapolation
+
+        // Lerp position
+        float interpX = interp.previous.x + (interp.current.x - interp.previous.x) * t;
+        float interpY = interp.previous.y + (interp.current.y - interp.previous.y) * t;
+
+        // Apply interpolated position to ECS
+        if (coordinator->HasComponent<Position>(localEntity)) {
+            auto& pos = coordinator->GetComponent<Position>(localEntity);
+            pos.x = interpX;
+            pos.y = interpY;
+        }
+    }
 }
