@@ -86,7 +86,11 @@ if(ENABLE_SCRIPTING)
             
             # Workaround for GCC 15 compatibility with sol2/sol3
             if(NOT MSVC)
-                add_compile_options(-Wno-error=template-body)
+                include(CheckCXXCompilerFlag)
+                check_cxx_compiler_flag("-Wno-error=template-body" HAS_TEMPLATE_BODY_WARNING)
+                if(HAS_TEMPLATE_BODY_WARNING)
+                    add_compile_options(-Wno-error=template-body)
+                endif()
             endif()
         else()
              if(NOT DEFINED SOL3_INCLUDE_DIR)

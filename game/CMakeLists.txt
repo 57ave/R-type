@@ -5,9 +5,13 @@ project(rtype_game)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Ignore Sol2 template warnings
+# Ignore Sol2 template warnings (only if compiler supports it)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wno-error=template-body)
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag("-Wno-error=template-body" HAS_TEMPLATE_BODY_WARNING)
+    if(HAS_TEMPLATE_BODY_WARNING)
+        add_compile_options(-Wno-error=template-body)
+    endif()
 endif()
 
 message(STATUS "🎮 R-Type Game - Configuring...")
