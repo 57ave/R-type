@@ -179,88 +179,11 @@ ServerConfig = {
     },
 
     -- ==========================================
-    -- LEVELS
+    -- LEVELS (loaded from level_*.lua — single source of truth)
     -- ==========================================
     levels = {
         max_level = 3,
-        -- Level 1: First Contact
-        [1] = {
-            name = "First Contact",
-            enemy_types = {0},
-            module_types = {3, 4},
-            enemy_interval = 2.5,
-            powerup_interval = 15.0,
-            module_interval = 25.0,
-            max_enemies = 8,
-            stop_spawning_at_boss = true,
-            waves = {
-                {time = 3.0,  groups = {{type = 0, count = 3, interval = 1.5}}},
-                {time = 15.0, groups = {{type = 0, count = 5, interval = 1.0}}},
-                {time = 30.0, groups = {{type = 0, count = 6, interval = 0.8}}},
-                {time = 50.0, groups = {{type = 0, count = 8, interval = 0.6}}},
-                {time = 70.0, groups = {{type = 0, count = 10, interval = 0.5}}},
-            },
-            boss = {
-                enemy_type = 3,
-                health = 1000,
-                speed = 80.0,
-                fire_rate = 2.0,
-                fire_pattern = 0,
-                spawn_time = 90.0,
-            },
-        },
-        -- Level 2: Rising Threat
-        [2] = {
-            name = "Rising Threat",
-            enemy_types = {0, 1},
-            module_types = {3, 4},
-            enemy_interval = 2.0,
-            powerup_interval = 12.0,
-            module_interval = 22.0,
-            max_enemies = 12,
-            stop_spawning_at_boss = true,
-            waves = {
-                {time = 3.0,  groups = {{type = 0, count = 3, interval = 1.2}, {type = 1, count = 2, interval = 1.5}}},
-                {time = 18.0, groups = {{type = 0, count = 4, interval = 0.8}, {type = 1, count = 3, interval = 1.0}}},
-                {time = 35.0, groups = {{type = 1, count = 5, interval = 0.7}, {type = 0, count = 3, interval = 1.0}}},
-                {time = 55.0, groups = {{type = 0, count = 6, interval = 0.5}, {type = 1, count = 4, interval = 0.6}}},
-                {time = 75.0, groups = {{type = 0, count = 8, interval = 0.4}, {type = 1, count = 5, interval = 0.5}}},
-            },
-            boss = {
-                enemy_type = 4,
-                health = 2000,
-                speed = 60.0,
-                fire_rate = 1.5,
-                fire_pattern = 2,
-                spawn_time = 95.0,
-            },
-        },
-        -- Level 3: Final Assault
-        [3] = {
-            name = "Final Assault",
-            enemy_types = {0, 1, 2},
-            module_types = {1, 3, 4},
-            enemy_interval = 1.5,
-            powerup_interval = 10.0,
-            module_interval = 20.0,
-            max_enemies = 15,
-            stop_spawning_at_boss = true,
-            waves = {
-                {time = 3.0,  groups = {{type = 0, count = 4, interval = 0.8}, {type = 1, count = 3, interval = 1.0}, {type = 2, count = 2, interval = 1.2}}},
-                {time = 18.0, groups = {{type = 2, count = 5, interval = 0.6}, {type = 0, count = 3, interval = 0.8}}},
-                {time = 35.0, groups = {{type = 0, count = 5, interval = 0.5}, {type = 1, count = 4, interval = 0.6}, {type = 2, count = 3, interval = 0.7}}},
-                {time = 55.0, groups = {{type = 0, count = 8, interval = 0.3}, {type = 1, count = 5, interval = 0.4}, {type = 2, count = 4, interval = 0.5}}},
-                {time = 75.0, groups = {{type = 0, count = 10, interval = 0.3}, {type = 1, count = 6, interval = 0.4}, {type = 2, count = 5, interval = 0.4}}},
-            },
-            boss = {
-                enemy_type = 5,
-                health = 3000,
-                speed = 100.0,
-                fire_rate = 1.0,
-                fire_pattern = 3,
-                spawn_time = 95.0,
-            },
-        },
+        -- Levels are loaded dynamically below from levels/level_N.lua
     },
 
     -- ==========================================
@@ -284,5 +207,33 @@ ServerConfig = {
 }
 
 print("[LUA] ✅ Server config loaded")
+
+-- ==========================================
+-- LOAD LEVELS from level_*.lua (single source of truth)
+-- ==========================================
+local levelFiles = {
+    "assets/scripts/levels/level_1.lua",
+    "assets/scripts/levels/level_2.lua",
+    "assets/scripts/levels/level_3.lua",
+}
+
+local levelGlobals = { "Level1", "Level2", "Level3" }
+
+for i, path in ipairs(levelFiles) do
+    local ok, err = pcall(dofile, path)
+    if ok then
+        local levelData = _G[levelGlobals[i]]
+        if levelData then
+            ServerConfig.levels[i] = levelData
+            print("[LUA]   Level " .. i .. " loaded from " .. path)
+        else
+            print("[LUA]   ⚠️ Level " .. i .. ": global " .. levelGlobals[i] .. " not found after loading " .. path)
+        end
+    else
+        print("[LUA]   ⚠️ Failed to load " .. path .. ": " .. tostring(err))
+    end
+end
+
+ServerConfig.levels.max_level = #levelFiles
 
 return ServerConfig

@@ -1,5 +1,5 @@
-#ifndef ENEMY_FACTORY_HPP
-#define ENEMY_FACTORY_HPP
+#ifndef SHOOTEMUP_FACTORIES_ENEMYFACTORY_HPP
+#define SHOOTEMUP_FACTORIES_ENEMYFACTORY_HPP
 
 #include <ecs/Coordinator.hpp>
 #include <rendering/sfml/SFMLTexture.hpp>
@@ -21,86 +21,18 @@
 using namespace eng::engine::rendering::sfml;
 
 /**
- * @brief Factory pour créer différents types d'ennemis
+ * @brief Generic factory for creating enemies from data (Lua configs).
  *
- * Centralise la création des ennemis avec leurs configurations spécifiques
+ * All enemy definitions come from external data (Lua tables).
+ * The engine does NOT define game-specific enemy types.
  */
 class EnemyFactory {
 public:
     /**
-     * @brief Crée un ennemi BASIC - Simple mouvement horizontal
-     */
-    static ECS::Entity CreateBasicEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un ennemi ZIGZAG - Mouvement en zigzag
-     */
-    static ECS::Entity CreateZigZagEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un ennemi SINE_WAVE - Mouvement sinusoïdal
-     */
-    static ECS::Entity CreateSineWaveEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un ennemi KAMIKAZE - Fonce vers le joueur
-     */
-    static ECS::Entity CreateKamikazeEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée une TURRET - Statique qui tire
-     */
-    static ECS::Entity CreateTurretEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un BOSS - Ennemi puissant avec patterns complexes
-     */
-    static ECS::Entity CreateBossEnemy(
-        ECS::Coordinator& coordinator,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un ennemi générique selon le type (string-based)
-     * @param enemyType Type d'ennemi défini en Lua (ex: "basic", "zigzag", "boss")
-     */
-    static ECS::Entity CreateEnemy(
-        ECS::Coordinator& coordinator,
-        const std::string& enemyType,
-        float x, float y,
-        SFMLTexture* texture,
-        std::vector<SFMLSprite*>& spriteList
-    );
-
-    /**
-     * @brief Crée un ennemi à partir d'une configuration Lua (table)
+     * @brief Create an enemy entity from a Lua config table.
+     *
+     * This is the primary factory method. All enemy properties (sprite,
+     * health, movement pattern, weapon, etc.) are read from the Lua table.
      */
     static ECS::Entity CreateEnemyFromLuaConfig(
         ECS::Coordinator& coordinator,
@@ -111,7 +43,7 @@ public:
     );
 
 private:
-    // Helper pour créer le sprite de base
+    // Helper to create the base sprite
     static SFMLSprite* CreateEnemySprite(
         float x, float y,
         SFMLTexture* texture,
@@ -121,4 +53,4 @@ private:
     );
 };
 
-#endif // ENEMY_FACTORY_HPP
+#endif // SHOOTEMUP_FACTORIES_ENEMYFACTORY_HPP

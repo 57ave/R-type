@@ -90,13 +90,21 @@ bool LuaParser::LoadSingleLevel(const std::string& path, LevelData& outLevel) {
     outLevel.moduleTypes = SolIntArray(levelTable, "module_types");
     outLevel.stopSpawningAtBoss = SolBool(levelTable, "stop_spawning_at_boss", true);
 
-    // Parse spawn config
+    // Parse spawn config — new format: flat fields at root level
+    // Fallback: old format with spawn = { ... } sub-table
     sol::optional<sol::table> spawnTable = levelTable["spawn"];
     if (spawnTable) {
+        // Old format: spawn = { enemy_interval = ... }
         outLevel.spawn.enemyInterval = SolFloat(*spawnTable, "enemy_interval", 2.5f);
         outLevel.spawn.powerupInterval = SolFloat(*spawnTable, "powerup_interval", 15.0f);
         outLevel.spawn.moduleInterval = SolFloat(*spawnTable, "module_interval", 25.0f);
         outLevel.spawn.maxEnemies = SolInt(*spawnTable, "max_enemies", 8);
+    } else {
+        // New format: flat fields directly in level table
+        outLevel.spawn.enemyInterval = SolFloat(levelTable, "enemy_interval", 2.5f);
+        outLevel.spawn.powerupInterval = SolFloat(levelTable, "powerup_interval", 15.0f);
+        outLevel.spawn.moduleInterval = SolFloat(levelTable, "module_interval", 25.0f);
+        outLevel.spawn.maxEnemies = SolInt(levelTable, "max_enemies", 8);
     }
 
     // Parse waves
@@ -109,10 +117,12 @@ bool LuaParser::LoadSingleLevel(const std::string& path, LevelData& outLevel) {
             WaveData wave;
             wave.time = SolFloat(*wt, "time");
 
-            sol::optional<sol::table> enemiesArr = (*wt)["enemies"];
-            if (enemiesArr) {
-                for (size_t j = 1; j <= enemiesArr->size(); j++) {
-                    sol::optional<sol::table> et = (*enemiesArr)[j];
+            // New format: "groups", fallback to old format: "enemies"
+            sol::optional<sol::table> groupsArr = (*wt)["groups"];
+            if (!groupsArr) groupsArr = (*wt)["enemies"];
+            if (groupsArr) {
+                for (size_t j = 1; j <= groupsArr->size(); j++) {
+                    sol::optional<sol::table> et = (*groupsArr)[j];
                     if (!et) continue;
 
                     WaveEnemy enemy;
@@ -131,7 +141,13 @@ bool LuaParser::LoadSingleLevel(const std::string& path, LevelData& outLevel) {
     sol::optional<sol::table> bossTable = levelTable["boss"];
     if (bossTable) {
         outLevel.boss.spawnTime = SolFloat(*bossTable, "spawn_time", 90.0f);
-        outLevel.boss.type = SolInt(*bossTable, "type", 3);
+        // New format: "enemy_type", fallback to old format: "type"
+        sol::optional<int> bossEnemyType = (*bossTable)["enemy_type"];
+        if (bossEnemyType) {
+            outLevel.boss.type = *bossEnemyType;
+        } else {
+            outLevel.boss.type = SolInt(*bossTable, "type", 3);
+        }
         outLevel.boss.name = SolStr(*bossTable, "name");
         outLevel.boss.health = SolInt(*bossTable, "health", 200);
         outLevel.boss.speed = SolFloat(*bossTable, "speed", 80.0f);

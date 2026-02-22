@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_WEAPONSYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_WEAPONSYSTEM_HPP
+#ifndef SHOOTEMUP_SYSTEMS_WEAPONSYSTEM_HPP
+#define SHOOTEMUP_SYSTEMS_WEAPONSYSTEM_HPP
 
 #include <ecs/System.hpp>
 
@@ -23,4 +23,4 @@ class WeaponSystem : public ECS::System {
         void CreateProjectile(ECS::Entity owner, bool charged, int chargeLevel);
 };
 
-#endif // RTYPE_ENGINE_SYSTEMS_WEAPONSYSTEM_HPP
+#endif // SHOOTEMUP_SYSTEMS_WEAPONSYSTEM_HPP

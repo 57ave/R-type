@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_WAVE_HPP
-#define RTYPE_ENGINE_COMPONENTS_WAVE_HPP
+#ifndef SHOOTEMUP_COMPONENTS_WAVE_HPP
+#define SHOOTEMUP_COMPONENTS_WAVE_HPP
 
 #include <string>
 #include <vector>
@@ -65,9 +65,9 @@ struct Wave {
  */
 struct Stage {
     int stageNumber = 1;
-    std::string stageName = "Stage 1: Space Colony";
-    std::string backgroundMusic = "stage1_bgm";
-    std::string backgroundTexture = "stage1_bg";
+    std::string stageName = "Stage 1";
+    std::string backgroundMusic = "";
+    std::string backgroundTexture = "";
     
     // Waves in this stage
     std::vector<Wave> waves;
@@ -104,16 +104,16 @@ struct Stage {
  */
 struct GameProgress {
     int currentStage = 1;
-    int maxStages = 5;
+    int maxStages = 1;
     int totalScore = 0;
     int lives = 3;
     int continues = 2;
     
     // Power-up state (persists between stages)
-    std::string currentWeapon = "single_shot";
+    std::string currentWeapon = "";
     int weaponLevel = 1;
     bool hasShield = false;
-    int speedLevel = 0;  // 0-3 speed upgrades
+    int speedLevel = 0;  // speed upgrades
     
     // Statistics
     int enemiesKilled = 0;
@@ -130,4 +130,4 @@ struct GameProgress {
 } // namespace Components
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_COMPONENTS_WAVE_HPP
+#endif // SHOOTEMUP_COMPONENTS_WAVE_HPP

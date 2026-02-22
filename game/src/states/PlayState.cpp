@@ -41,6 +41,204 @@
 #include <cmath>
 #include <algorithm> // for std::find
 
+// ==========================================
+// LEVEL SYSTEM (Solo) - Structs & Lua loader
+// Placed before PlayState methods so they're visible everywhere
+// ==========================================
+
+struct LevelWaveEnemy {
+    std::string type;   // "bug", "fighter", "tank"
+    int count;
+    float interval;
+};
+
+struct LevelWave {
+    float time;
+    std::vector<LevelWaveEnemy> enemies;
+};
+
+struct SoloLevelConfig {
+    int id = 0;
+    std::string name;
+    std::vector<std::string> enemyTypes;
+    std::vector<std::string> moduleTypes;   // "spread", "wave", "laser"
+    float enemyInterval = 999.0f;
+    float powerupInterval = 999.0f;
+    float moduleInterval = 999.0f;
+    int maxEnemies = 0;
+    std::vector<LevelWave> waves;
+
+    // Boss
+    std::string bossSprite;
+    int bossHealth = 1;
+    float bossSpeed = 0.0f;
+    float bossFireRate = 999.0f;
+    std::string bossFirePattern;
+    float bossSpawnTime = 99999.0f;
+    bool stopSpawningAtBoss = true;
+};
+
+// Mapping: numeric enemy type → string name used by EnemiesSimple
+static std::string enemyTypeIdToString(int typeId) {
+    switch (typeId) {
+        case 0: return "bug";
+        case 1: return "fighter";
+        case 2: return "tank";
+        default: return "bug";
+    }
+}
+
+// Mapping: numeric module type → string name used by solo spawning
+static std::string moduleTypeIdToString(int typeId) {
+    switch (typeId) {
+        case 1: return "laser";
+        case 3: return "spread";
+        case 4: return "wave";
+        default: return "spread";
+    }
+}
+
+// Mapping: numeric fire pattern → string name used by solo rendering
+static std::string firePatternIdToString(int patternId) {
+    switch (patternId) {
+        case 0: return "straight";
+        case 1: return "aimed";
+        case 2: return "circle";
+        case 3: return "spread";
+        default: return "straight";
+    }
+}
+
+// Boss sprite lookup: default paths by enemy_type if not specified in Lua
+static std::string bossSpritePath(int enemyType) {
+    switch (enemyType) {
+        case 3: return "assets/enemies/FirstBoss.png";
+        case 4: return "assets/enemies/SecondBoss.png";
+        case 5: return "assets/enemies/LastBossFly.png";
+        default: return "assets/enemies/FirstBoss.png";
+    }
+}
+
+// Cache of loaded level configs (populated once from Lua)
+static std::vector<SoloLevelConfig> s_soloLevelConfigs;
+static bool s_soloLevelsLoaded = false;
+
+static void loadSoloLevelConfigsFromLua(sol::state& lua) {
+    s_soloLevelConfigs.clear();
+    s_soloLevelsLoaded = true;
+
+    const std::vector<std::string> levelFiles = {
+        "assets/scripts/levels/level_1.lua",
+        "assets/scripts/levels/level_2.lua",
+        "assets/scripts/levels/level_3.lua",
+    };
+    const std::vector<std::string> levelGlobals = { "Level1", "Level2", "Level3" };
+
+    for (size_t i = 0; i < levelFiles.size(); ++i) {
+        SoloLevelConfig config;
+        config.id = static_cast<int>(i + 1);
+
+        try {
+            lua.safe_script_file(levelFiles[i]);
+            sol::table lT = lua[levelGlobals[i]];
+            if (!lT.valid()) {
+                std::cerr << "[PlayState] ⚠️ " << levelGlobals[i] << " table not found after loading " << levelFiles[i] << std::endl;
+                s_soloLevelConfigs.push_back(config);
+                continue;
+            }
+
+            config.name = lT.get_or("name", std::string("Level " + std::to_string(i + 1)));
+            config.enemyInterval = lT.get_or("enemy_interval", 2.5f);
+            config.powerupInterval = lT.get_or("powerup_interval", 15.0f);
+            config.moduleInterval = lT.get_or("module_interval", 25.0f);
+            config.maxEnemies = lT.get_or("max_enemies", 8);
+            config.stopSpawningAtBoss = lT.get_or("stop_spawning_at_boss", true);
+
+            // Enemy types (numeric → string)
+            sol::optional<sol::table> etT = lT["enemy_types"];
+            if (etT) {
+                for (auto& kv : etT.value()) {
+                    config.enemyTypes.push_back(enemyTypeIdToString(kv.second.as<int>()));
+                }
+            }
+            if (config.enemyTypes.empty()) config.enemyTypes.push_back("bug");
+
+            // Module types (numeric → string)
+            sol::optional<sol::table> mtT = lT["module_types"];
+            if (mtT) {
+                for (auto& kv : mtT.value()) {
+                    config.moduleTypes.push_back(moduleTypeIdToString(kv.second.as<int>()));
+                }
+            }
+            if (config.moduleTypes.empty()) config.moduleTypes.push_back("spread");
+
+            // Waves
+            sol::optional<sol::table> wavesT = lT["waves"];
+            if (wavesT) {
+                for (auto& wkv : wavesT.value()) {
+                    sol::table waveT = wkv.second.as<sol::table>();
+                    LevelWave wave;
+                    wave.time = waveT.get_or("time", 0.0f);
+
+                    sol::optional<sol::table> groupsT = waveT["groups"];
+                    if (groupsT) {
+                        for (auto& gkv : groupsT.value()) {
+                            sol::table gt = gkv.second.as<sol::table>();
+                            LevelWaveEnemy enemy;
+                            enemy.type = enemyTypeIdToString(gt.get_or("type", 0));
+                            enemy.count = gt.get_or("count", 1);
+                            enemy.interval = gt.get_or("interval", 1.0f);
+                            wave.enemies.push_back(enemy);
+                        }
+                    }
+                    config.waves.push_back(wave);
+                }
+            }
+
+            // Boss
+            sol::optional<sol::table> bossT = lT["boss"];
+            if (bossT) {
+                int bossEnemyType = bossT.value().get_or("enemy_type", 3);
+                config.bossHealth = bossT.value().get_or("health", 1000);
+                config.bossSpeed = bossT.value().get_or("speed", 80.0f);
+                config.bossFireRate = bossT.value().get_or("fire_rate", 2.0f);
+                config.bossFirePattern = firePatternIdToString(bossT.value().get_or("fire_pattern", 0));
+                config.bossSpawnTime = bossT.value().get_or("spawn_time", 90.0f);
+
+                // Boss sprite: try from Lua sprite table, fallback to default
+                sol::optional<sol::table> spriteT = bossT.value()["sprite"];
+                if (spriteT) {
+                    config.bossSprite = spriteT.value().get_or("path", bossSpritePath(bossEnemyType));
+                } else {
+                    config.bossSprite = bossSpritePath(bossEnemyType);
+                }
+            }
+
+            std::cout << "[PlayState] ✅ Level " << config.id << " loaded from Lua: " << config.name
+                      << " (waves=" << config.waves.size() << ", boss HP=" << config.bossHealth << ")" << std::endl;
+
+        } catch (const std::exception& e) {
+            std::cerr << "[PlayState] ⚠️ Error loading " << levelFiles[i] << ": " << e.what() << std::endl;
+        }
+
+        s_soloLevelConfigs.push_back(config);
+    }
+}
+
+static SoloLevelConfig getSoloLevelConfig(int level) {
+    int idx = level - 1;
+    if (idx >= 0 && idx < (int)s_soloLevelConfigs.size()) {
+        return s_soloLevelConfigs[idx];
+    }
+    // Empty fallback — level file is missing or empty, nothing will spawn
+    SoloLevelConfig empty;
+    empty.id = level;
+    empty.name = "Unknown";
+    return empty;
+}
+
+// ==========================================
+
 PlayState::PlayState(Game* game)
     : playerEntity_(0)
     , chargeIndicatorEntity_(0)
@@ -92,6 +290,11 @@ void PlayState::onEnter()
     
     // Load VFX configuration from Lua
     loadVFXConfig();
+
+    // Load level configs from Lua (single source of truth: level_*.lua files)
+    if (!s_soloLevelsLoaded) {
+        loadSoloLevelConfigsFromLua(game_->getLuaState().GetState());
+    }
 
     // Setup all systems
     setupSystems();
@@ -3235,121 +3438,6 @@ void PlayState::addScore(uint32_t points)
     }
 }
 
-// ==========================================
-// LEVEL SYSTEM (Solo)
-// ==========================================
-
-struct LevelWaveEnemy {
-    std::string type;   // "bug", "fighter", "tank"
-    int count;
-    float interval;
-};
-
-struct LevelWave {
-    float time;
-    std::vector<LevelWaveEnemy> enemies;
-};
-
-struct SoloLevelConfig {
-    int id;
-    std::string name;
-    std::vector<std::string> enemyTypes;
-    std::vector<std::string> moduleTypes;   // "spread", "wave", "laser"
-    float enemyInterval;
-    float powerupInterval;
-    float moduleInterval;
-    int maxEnemies;
-    std::vector<LevelWave> waves;
-    
-    // Boss
-    std::string bossSprite;
-    int bossHealth;
-    float bossSpeed;
-    float bossFireRate;
-    std::string bossFirePattern;
-    float bossSpawnTime;
-    bool stopSpawningAtBoss;
-};
-
-static SoloLevelConfig getSoloLevelConfig(int level) {
-    SoloLevelConfig config;
-    config.stopSpawningAtBoss = true;
-    
-    switch (level) {
-        case 1:
-            config.id = 1;
-            config.name = "First Contact";
-            config.enemyTypes = {"bug"};
-            config.moduleTypes = {"spread", "wave"};
-            config.enemyInterval = 2.5f;
-            config.powerupInterval = 15.0f;
-            config.moduleInterval = 25.0f;
-            config.maxEnemies = 8;
-            config.waves = {
-                {3.0f,  {{"bug", 3, 1.5f}}},
-                {15.0f, {{"bug", 5, 1.0f}}},
-                {30.0f, {{"bug", 6, 0.8f}}},
-                {50.0f, {{"bug", 8, 0.6f}}},
-                {70.0f, {{"bug", 10, 0.5f}}},
-            };
-            config.bossSprite = "assets/enemies/FirstBoss.png";
-            config.bossHealth = 1000;
-            config.bossSpeed = 80.0f;
-            config.bossFireRate = 2.0f;
-            config.bossFirePattern = "straight";
-            config.bossSpawnTime = 90.0f;
-            break;
-        case 2:
-            config.id = 2;
-            config.name = "Rising Threat";
-            config.enemyTypes = {"bug", "fighter"};
-            config.moduleTypes = {"spread", "wave"};
-            config.enemyInterval = 2.0f;
-            config.powerupInterval = 12.0f;
-            config.moduleInterval = 22.0f;
-            config.maxEnemies = 12;
-            config.waves = {
-                {3.0f,  {{"bug", 3, 1.2f}, {"fighter", 2, 1.5f}}},
-                {18.0f, {{"bug", 4, 0.8f}, {"fighter", 3, 1.0f}}},
-                {35.0f, {{"fighter", 5, 0.7f}, {"bug", 3, 1.0f}}},
-                {55.0f, {{"bug", 6, 0.5f}, {"fighter", 4, 0.6f}}},
-                {75.0f, {{"bug", 8, 0.4f}, {"fighter", 5, 0.5f}}},
-            };
-            config.bossSprite = "assets/enemies/SecondBoss.png";
-            config.bossHealth = 2000;
-            config.bossSpeed = 60.0f;
-            config.bossFireRate = 1.5f;
-            config.bossFirePattern = "circle";
-            config.bossSpawnTime = 95.0f;
-            break;
-        case 3:
-        default:
-            config.id = 3;
-            config.name = "Final Assault";
-            config.enemyTypes = {"bug", "fighter", "tank"};
-            config.moduleTypes = {"laser", "spread", "wave"};
-            config.enemyInterval = 1.5f;
-            config.powerupInterval = 10.0f;
-            config.moduleInterval = 20.0f;
-            config.maxEnemies = 15;
-            config.waves = {
-                {3.0f,  {{"bug", 4, 0.8f}, {"fighter", 3, 1.0f}, {"tank", 2, 1.2f}}},
-                {18.0f, {{"tank", 5, 0.6f}, {"bug", 3, 0.8f}}},
-                {35.0f, {{"bug", 5, 0.5f}, {"fighter", 4, 0.6f}, {"tank", 3, 0.7f}}},
-                {55.0f, {{"bug", 8, 0.3f}, {"fighter", 5, 0.4f}, {"tank", 4, 0.5f}}},
-                {75.0f, {{"bug", 10, 0.3f}, {"fighter", 6, 0.4f}, {"tank", 5, 0.4f}}},
-            };
-            config.bossSprite = "assets/enemies/LastBossFly.png";
-            config.bossHealth = 3000;
-            config.bossSpeed = 100.0f;
-            config.bossFireRate = 1.0f;
-            config.bossFirePattern = "spread";
-            config.bossSpawnTime = 95.0f;
-            break;
-    }
-    return config;
-}
-
 void PlayState::startLevel(int level) {
     currentLevel_ = level;
     levelTimer_ = 0.0f;
@@ -3431,7 +3519,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
             // Boss entity was destroyed
             bossAlive_ = false;
             
-            if (currentLevel_ < 3) {
+            if (currentLevel_ < (int)s_soloLevelConfigs.size()) {
                 currentLevel_++;
                 levelActive_ = false;
                 // Small delay before next level starts
@@ -3456,7 +3544,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
                 kamikazeEntities_.erase(bossEntity_);
                 addScore(500); // Boss kill score
                 
-                if (currentLevel_ < 3) {
+                if (currentLevel_ < (int)s_soloLevelConfigs.size()) {
                     currentLevel_++;
                     startLevel(currentLevel_);
                 } else {
@@ -3514,7 +3602,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
     
     // Regular spawning between waves
     bool canSpawnRegular = !(bossSpawned_ && config.stopSpawningAtBoss);
-    if (canSpawnRegular && enemyCount < config.maxEnemies) {
+    if (canSpawnRegular && enemyCount < config.maxEnemies && !config.enemyTypes.empty()) {
         enemySpawnTimer_ += deltaTime;
         if (enemySpawnTimer_ >= config.enemyInterval) {
             enemySpawnTimer_ = 0.0f;
@@ -3538,7 +3626,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
     
     // Spawn modules (only allowed types)
     moduleSpawnTimer_ += deltaTime;
-    if (moduleSpawnTimer_ >= config.moduleInterval) {
+    if (moduleSpawnTimer_ >= config.moduleInterval && !config.moduleTypes.empty()) {
         moduleSpawnTimer_ = 0.0f;
         const auto& modTypes = config.moduleTypes;
         const std::string& modType = modTypes[moduleRotationIdx_ % modTypes.size()];

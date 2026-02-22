@@ -30,6 +30,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 NetworkPlayState::NetworkPlayState(Game* game)
 {
@@ -52,6 +53,7 @@ void NetworkPlayState::onEnter()
     // Load game configuration from Lua
     loadGameConfig();
     loadPlayerConfig();
+    loadLevelNamesFromLua();
 
     // Setup systems
     setupSystems();
@@ -77,7 +79,11 @@ void NetworkPlayState::onEnter()
         levelText_->setFont(scoreFont_.get());
         levelText_->setCharacterSize(72);
         levelText_->setFillColor(0xFFFF00FF); // Yellow
-        levelText_->setString("Level 1");
+        {
+            auto it = levelNames_.find(1);
+            std::string initName = (it != levelNames_.end()) ? it->second : "Level 1";
+            levelText_->setString("Level 1: " + initName);
+        }
         // Center it
         levelText_->setPosition(windowWidth_ / 2.0f - 120.0f, windowHeight_ / 2.0f - 50.0f);
         showLevelText_ = true;
@@ -253,6 +259,43 @@ void NetworkPlayState::loadPlayerConfig()
     } catch (const std::exception& e) {
         std::cerr << "[NetworkPlayState] Error loading player config: " << e.what() << std::endl;
     }
+}
+
+void NetworkPlayState::loadLevelNamesFromLua()
+{
+    auto& lua = game_->getLuaState();
+
+    for (int i = 1; i <= 10; i++) {
+        std::string path = "assets/scripts/levels/level_" + std::to_string(i) + ".lua";
+        try {
+            lua.GetState().script_file(path);
+        } catch (...) {
+            break; // No more level files
+        }
+
+        std::string varName = "Level" + std::to_string(i);
+        sol::object obj = lua.GetState()[varName];
+        if (!obj.valid() || obj.get_type() != sol::type::table) continue;
+
+        sol::table lt = obj.as<sol::table>();
+        sol::optional<std::string> name = lt["name"];
+        if (name) {
+            levelNames_[i] = *name;
+        }
+
+        sol::optional<sol::table> boss = lt["boss"];
+        if (boss) {
+            sol::optional<int> bossType = (*boss)["enemy_type"];
+            if (!bossType) bossType = (*boss)["type"];
+            sol::optional<std::string> bossName = (*boss)["name"];
+            if (bossType && bossName) {
+                bossNames_[*bossType] = *bossName;
+            }
+        }
+    }
+
+    std::cout << "[NetworkPlayState] Loaded " << levelNames_.size() 
+              << " level names and " << bossNames_.size() << " boss names from Lua" << std::endl;
 }
 
 eng::engine::rendering::ISprite* NetworkPlayState::loadSprite(const std::string& texturePath, const eng::engine::rendering::IntRect* rect)
@@ -1265,8 +1308,16 @@ void NetworkPlayState::render()
                 bossNameText_->setFillColor(0xFF4444FF);
             }
             if (bossNameText_) {
-                const char* bossNames[] = {"", "", "", "GUARDIAN BOSS", "RISING THREAT", "FINAL BOSS"};
-                std::string name = (bossEnemyType_ < 6) ? bossNames[bossEnemyType_] : "BOSS";
+                std::string name;
+                auto it = bossNames_.find(bossEnemyType_);
+                if (it != bossNames_.end()) {
+                    // Transform to uppercase for display
+                    name = it->second;
+                    std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+                } else {
+                    const char* defaultBossNames[] = {"", "", "", "GUARDIAN BOSS", "RISING THREAT", "FINAL BOSS"};
+                    name = (bossEnemyType_ < 6) ? defaultBossNames[bossEnemyType_] : "BOSS";
+                }
                 bossNameText_->setString(name);
                 bossNameText_->setPosition(bossBarX + bossBarWidth / 2.0f - 100.0f, bossBarY + bossBarHeight + 5.0f);
                 renderer->drawText(*bossNameText_);
@@ -1376,7 +1427,13 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
     bossEnemyType_ = 0;
 
     const char* levelNames[] = {"", "First Contact", "Rising Threat", "Final Assault"};
-    std::string name = (level >= 1 && level <= 3) ? levelNames[level] : "Unknown";
+    std::string name;
+    auto it = levelNames_.find(level);
+    if (it != levelNames_.end()) {
+        name = it->second;
+    } else {
+        name = (level >= 1 && level <= 3) ? levelNames[level] : "Unknown";
+    }
     
     if (levelText_) {
         levelText_->setString("Level " + std::to_string(level) + ": " + name);

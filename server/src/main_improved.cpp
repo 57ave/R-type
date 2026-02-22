@@ -212,7 +212,7 @@ private:
         LevelConfig config;
         config.stopSpawningAtBoss = true;
         
-        // Try to use Lua-loaded config
+        // Use Lua-loaded config (from server_config.lua which loads level_*.lua)
         int idx = level - 1;
         if (idx >= 0 && idx < (int)cfg_.levels.size()) {
             const auto& ld = cfg_.levels[idx];
@@ -246,64 +246,20 @@ private:
             return config;
         }
         
-        // Fallback defaults if Lua config not loaded for this level
-        switch (level) {
-            case 1:
-                config.id = 1;
-                config.name = "First Contact";
-                config.enemyTypes = {0};
-                config.moduleTypes = {3, 4};
-                config.enemyInterval = 2.5f;
-                config.powerupInterval = 15.0f;
-                config.moduleInterval = 25.0f;
-                config.maxEnemies = 8;
-                config.waves = {
-                    {3.0f,  {{0, 3, 1.5f}}},
-                    {15.0f, {{0, 5, 1.0f}}},
-                    {30.0f, {{0, 6, 0.8f}}},
-                    {50.0f, {{0, 8, 0.6f}}},
-                    {70.0f, {{0, 10, 0.5f}}},
-                };
-                config.boss = {3, 1000, 80.0f, 2.0f, 0, 90.0f};
-                break;
-            case 2:
-                config.id = 2;
-                config.name = "Rising Threat";
-                config.enemyTypes = {0, 1};
-                config.moduleTypes = {3, 4};
-                config.enemyInterval = 2.0f;
-                config.powerupInterval = 12.0f;
-                config.moduleInterval = 22.0f;
-                config.maxEnemies = 12;
-                config.waves = {
-                    {3.0f,  {{0, 3, 1.2f}, {1, 2, 1.5f}}},
-                    {18.0f, {{0, 4, 0.8f}, {1, 3, 1.0f}}},
-                    {35.0f, {{1, 5, 0.7f}, {0, 3, 1.0f}}},
-                    {55.0f, {{0, 6, 0.5f}, {1, 4, 0.6f}}},
-                    {75.0f, {{0, 8, 0.4f}, {1, 5, 0.5f}}},
-                };
-                config.boss = {4, 2000, 60.0f, 1.5f, 2, 95.0f};
-                break;
-            case 3:
-            default:
-                config.id = 3;
-                config.name = "Final Assault";
-                config.enemyTypes = {0, 1, 2};
-                config.moduleTypes = {1, 3, 4};
-                config.enemyInterval = 1.5f;
-                config.powerupInterval = 10.0f;
-                config.moduleInterval = 20.0f;
-                config.maxEnemies = 15;
-                config.waves = {
-                    {3.0f,  {{0, 4, 0.8f}, {1, 3, 1.0f}, {2, 2, 1.2f}}},
-                    {18.0f, {{2, 5, 0.6f}, {0, 3, 0.8f}}},
-                    {35.0f, {{0, 5, 0.5f}, {1, 4, 0.6f}, {2, 3, 0.7f}}},
-                    {55.0f, {{0, 8, 0.3f}, {1, 5, 0.4f}, {2, 4, 0.5f}}},
-                    {75.0f, {{0, 10, 0.3f}, {1, 6, 0.4f}, {2, 5, 0.4f}}},
-                };
-                config.boss = {5, 3000, 100.0f, 1.0f, 3, 95.0f};
-                break;
-        }
+        // Fallback: level Lua file was empty or missing — nothing spawns
+        std::cerr << "[GameServer] ⚠️ No Lua config for level " << level 
+                  << " — level_*.lua file may be empty or missing. Nothing will spawn." << std::endl;
+        config.id = level;
+        config.name = "Empty Level";
+        config.enemyTypes = {};
+        config.moduleTypes = {};
+        config.enemyInterval = 999.0f;
+        config.powerupInterval = 999.0f;
+        config.moduleInterval = 999.0f;
+        config.maxEnemies = 0;
+        config.waves = {};
+        config.boss = {3, 1, 0.0f, 999.0f, 0, 99999.0f};
+        config.stopSpawningAtBoss = true;
         return config;
     }
     
@@ -432,7 +388,7 @@ private:
         
         // Spawn modules (only allowed types for this level)
         gs.moduleSpawnTimer += dt;
-        if (gs.moduleSpawnTimer >= config.moduleInterval) {
+        if (gs.moduleSpawnTimer >= config.moduleInterval && !config.moduleTypes.empty()) {
             gs.moduleSpawnTimer = 0.0f;
             uint8_t modType = config.moduleTypes[gs.moduleRotationIdx % config.moduleTypes.size()];
             spawnModule(modType, gs);
@@ -474,6 +430,7 @@ private:
     }
     
     void spawnLevelEnemy(const LevelConfig& config, RoomGameState& gs) {
+        if (config.enemyTypes.empty()) return;
         // Pick random allowed enemy type for this level
         uint8_t enemyType = config.enemyTypes[dist_(rng_) % config.enemyTypes.size()];
         spawnEnemyOfType(enemyType, gs);

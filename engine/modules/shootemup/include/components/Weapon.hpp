@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_WEAPON_HPP
-#define RTYPE_ENGINE_COMPONENTS_WEAPON_HPP
+#ifndef SHOOTEMUP_COMPONENTS_WEAPON_HPP
+#define SHOOTEMUP_COMPONENTS_WEAPON_HPP
 
 #include <string>
 
@@ -49,4 +49,4 @@ struct Weapon {
 } // namespace Components
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_COMPONENTS_WEAPON_HPP
+#endif // SHOOTEMUP_COMPONENTS_WEAPON_HPP

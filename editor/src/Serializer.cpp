@@ -57,12 +57,11 @@ std::string Serializer::SerializeLevel(const LevelData& level) {
     ss << "},\n";
     ss << "\n";
 
-    ss << i1 << "spawn = {\n";
-    ss << i2 << "enemy_interval = " << FormatFloat(level.spawn.enemyInterval) << ",\n";
-    ss << i2 << "powerup_interval = " << FormatFloat(level.spawn.powerupInterval) << ",\n";
-    ss << i2 << "module_interval = " << FormatFloat(level.spawn.moduleInterval) << ",\n";
-    ss << i2 << "max_enemies = " << level.spawn.maxEnemies << ",\n";
-    ss << i1 << "},\n";
+    ss << i1 << "enemy_interval = " << FormatFloat(level.spawn.enemyInterval) << ",\n";
+    ss << i1 << "powerup_interval = " << FormatFloat(level.spawn.powerupInterval) << ",\n";
+    ss << i1 << "module_interval = " << FormatFloat(level.spawn.moduleInterval) << ",\n";
+    ss << i1 << "max_enemies = " << level.spawn.maxEnemies << ",\n";
+    ss << i1 << "stop_spawning_at_boss = " << (level.stopSpawningAtBoss ? "true" : "false") << ",\n";
     ss << "\n";
 
     ss << i1 << "waves = {\n";
@@ -70,7 +69,7 @@ std::string Serializer::SerializeLevel(const LevelData& level) {
         const auto& wave = level.waves[w];
         ss << i2 << "{\n";
         ss << i3 << "time = " << FormatFloat(wave.time) << ",\n";
-        ss << i3 << "enemies = {\n";
+        ss << i3 << "groups = {\n";
         for (size_t e = 0; e < wave.enemies.size(); e++) {
             const auto& enemy = wave.enemies[e];
             ss << i3 << "    {type = " << enemy.type
@@ -85,7 +84,7 @@ std::string Serializer::SerializeLevel(const LevelData& level) {
 
     ss << i1 << "boss = {\n";
     ss << i2 << "spawn_time = " << FormatFloat(level.boss.spawnTime) << ",\n";
-    ss << i2 << "type = " << level.boss.type << ",\n";
+    ss << i2 << "enemy_type = " << level.boss.type << ",\n";
     ss << i2 << "name = \"" << level.boss.name << "\",\n";
     ss << i2 << "health = " << level.boss.health << ",\n";
     ss << i2 << "speed = " << FormatFloat(level.boss.speed) << ",\n";
@@ -102,8 +101,6 @@ std::string Serializer::SerializeLevel(const LevelData& level) {
     ss << i2 << "},\n";
     ss << i1 << "},\n";
     ss << "\n";
-
-    ss << i1 << "stop_spawning_at_boss = " << (level.stopSpawningAtBoss ? "true" : "false") << ",\n";
     ss << "}\n";
     ss << "\n";
     ss << "print(\"[LUA] Level " << level.id << " loaded\")\n";
