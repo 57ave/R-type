@@ -127,7 +127,7 @@ install(DIRECTORY include/
     DESTINATION include/shootemup
 )
 
-message(STATUS "✅ Shoot'em Up module configured successfully")
+message(STATUS " Shoot'em Up module configured successfully")
 message(STATUS "   Components: ${CMAKE_CURRENT_SOURCE_DIR}/include/components")
 message(STATUS "   Systems: ${CMAKE_CURRENT_SOURCE_DIR}/include/systems")
 message(STATUS "   Factories: ${CMAKE_CURRENT_SOURCE_DIR}/include/factories")

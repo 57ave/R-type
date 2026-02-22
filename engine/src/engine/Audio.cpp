@@ -7,7 +7,7 @@
 
 #include "engine/Audio.hpp"
 #include <SFML/Audio.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace eng {
     namespace engine {
@@ -117,7 +117,7 @@ namespace eng {
                 m_soundBuffers[name] = std::move(buffer);
                 return true;
             }
-            std::cerr << "Warning: Could not load sound: " << filename << std::endl;
+            LOG_WARNING("AUDIO", "Could not load sound: " + filename);
             return false;
         }
 

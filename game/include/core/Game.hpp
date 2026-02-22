@@ -15,6 +15,8 @@
 // Forward declarations
 class StateManager;
 class NetworkManager;
+class MusicManager;
+class SFXManager;
 class UISystem;
 
 namespace eng::engine::rendering {
@@ -50,6 +52,8 @@ public:
     Scripting::LuaState& getLuaState() { return Scripting::LuaState::Instance(); }
     StateManager* getStateManager() { return stateManager_.get(); }
     NetworkManager* getNetworkManager() { return networkManager_.get(); }
+    MusicManager* getMusicManager() { return musicManager_.get(); }
+    SFXManager* getSFXManager() { return sfxManager_.get(); }
     UISystem* getUISystem() { return uiSystem_.get(); }
     GameConfig& getConfig() { return config_; }
 
@@ -73,6 +77,8 @@ private:
     std::unique_ptr<eng::engine::rendering::IRenderer> renderer_;
     std::unique_ptr<StateManager> stateManager_;
     std::unique_ptr<NetworkManager> networkManager_;
+    std::unique_ptr<MusicManager> musicManager_;
+    std::unique_ptr<SFXManager> sfxManager_;
     
     // Systems
     std::shared_ptr<UISystem> uiSystem_;

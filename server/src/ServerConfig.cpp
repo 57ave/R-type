@@ -1,5 +1,5 @@
 #include "ServerConfig.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 #include <filesystem>
 
 #if SERVER_SCRIPTING_ENABLED
@@ -17,8 +17,8 @@ bool loadFromLua(Config& config, const std::string& luaPath) {
 #if SERVER_SCRIPTING_ENABLED
     // Check file exists
     if (!std::filesystem::exists(luaPath)) {
-        std::cerr << "[ServerConfig] ⚠️ Config file not found: " << luaPath << std::endl;
-        std::cerr << "[ServerConfig] Using default values." << std::endl;
+        LOG_WARNING("SERVERCONFIG", " Config file not found: " + luaPath);
+        LOG_WARNING("SERVERCONFIG", "Using default values.");
         return false;
     }
 
@@ -29,13 +29,13 @@ bool loadFromLua(Config& config, const std::string& luaPath) {
         auto result = lua.safe_script_file(luaPath, sol::script_pass_on_error);
         if (!result.valid()) {
             sol::error err = result;
-            std::cerr << "[ServerConfig] Failed to load Lua config: " << err.what() << std::endl;
+            LOG_ERROR("SERVERCONFIG", "Failed to load Lua config: " + std::string(err.what()));
             return false;
         }
 
         sol::table cfg = lua["ServerConfig"];
         if (!cfg.valid()) {
-            std::cerr << "[ServerConfig] 'ServerConfig' table not found in " << luaPath << std::endl;
+            LOG_WARNING("SERVERCONFIG", "'ServerConfig' table not found in " + luaPath);
             return false;
         }
 
@@ -292,24 +292,22 @@ bool loadFromLua(Config& config, const std::string& luaPath) {
             s.maxPlayerShips    = srvT.value().get_or("max_player_ships", s.maxPlayerShips);
         }
 
-        std::cout << "[ServerConfig] ✅ Loaded config from " << luaPath << std::endl;
-        std::cout << "[ServerConfig]   Player speed=" << config.player.speed 
-                  << " hp=" << config.player.maxHealth << std::endl;
-        std::cout << "[ServerConfig]   Levels: " << config.levels.size() << std::endl;
+        LOG_INFO("SERVERCONFIG", " Loaded config from " + luaPath);
+        LOG_INFO("SERVERCONFIG", "  Player speed=" + std::to_string(config.player.speed) + " hp=" + std::to_string(config.player.maxHealth));
+        LOG_INFO("SERVERCONFIG", "  Levels: " + std::to_string(config.levels.size()));
         for (size_t i = 0; i < config.levels.size(); ++i) {
             const auto& l = config.levels[i];
-            std::cout << "[ServerConfig]     L" << l.id << ": " << l.name
-                      << " (boss HP=" << l.boss.health << ", waves=" << l.waves.size() << ")" << std::endl;
+            LOG_INFO("SERVERCONFIG", "    L" + std::to_string(l.id) + ": " + l.name + " (boss HP=" + std::to_string(l.boss.health) + ", waves=" + std::to_string(l.waves.size()) + ")");
         }
         return true;
 
     } catch (const std::exception& e) {
-        std::cerr << "[ServerConfig] Exception loading Lua config: " << e.what() << std::endl;
+        LOG_ERROR("SERVERCONFIG", "Exception loading Lua config: " + std::string(e.what()));
         return false;
     }
 #else
     (void)luaPath;
-    std::cout << "[ServerConfig] Lua scripting not enabled, using defaults" << std::endl;
+    LOG_INFO("SERVERCONFIG", "Lua scripting not enabled, using defaults");
     return false;
 #endif
 }

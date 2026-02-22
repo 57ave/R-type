@@ -1,7 +1,7 @@
 #include "systems/MovementSystem.hpp"
 #include "components/Position.hpp"
 #include "components/Velocity.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 #include <cmath>
 
 MovementSystem::MovementSystem(ECS::Coordinator* coordinator)
@@ -9,7 +9,7 @@ MovementSystem::MovementSystem(ECS::Coordinator* coordinator)
 }
 
 void MovementSystem::Init() {
-    std::cout << "[MovementSystem] Initialized" << std::endl;
+    LOG_INFO("MOVEMENTSYSTEM", "Initialized");
 }
 
 void MovementSystem::Update(float dt) {
@@ -32,7 +32,7 @@ void MovementSystem::Update(float dt) {
 }
 
 void MovementSystem::Shutdown() {
-    std::cout << "[MovementSystem] Shutdown" << std::endl;
+    LOG_INFO("MOVEMENTSYSTEM", "Shutdown");
 }
 
 // C API implementation

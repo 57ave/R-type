@@ -96,13 +96,13 @@ if(ENABLE_SCRIPTING)
              endif()
         endif()
 
-        message(STATUS "🎯 Scripting ENABLED with Lua and Sol3")
+        message(STATUS " Scripting ENABLED with Lua and Sol3")
     else()
-        message(WARNING "⚠️ Lua not found and could not be fetched. Scripting features will be disabled.")
+        message(WARNING " Lua not found and could not be fetched. Scripting features will be disabled.")
         set(ENABLE_SCRIPTING OFF)
     endif()
 else()
-    message(STATUS "ℹ️ Scripting disabled by user option")
+    message(STATUS "ℹ Scripting disabled by user option")
 endif()
 
 # ECS Library
@@ -499,6 +499,6 @@ install(DIRECTORY include/
 option(BUILD_SHOOTEMUP_MODULE "Build the Shoot'em Up game module" ON)
 
 if(BUILD_SHOOTEMUP_MODULE)
-    message(STATUS "🎮 Building Shoot'em Up module")
+    message(STATUS " Building Shoot'em Up module")
     add_subdirectory(modules/shootemup)
 endif()

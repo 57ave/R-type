@@ -1,5 +1,5 @@
 #include "network/NetworkServer.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 
 // R-Type specific protocol - TODO: This should be refactored to make engine protocol-agnostic
 // For now, include the game-specific protocol from the server
@@ -30,19 +30,19 @@ void NetworkServer::process() {
     while (server_.popPacket(packet, sender)) {
         auto session = server_.getSession(sender);
         if (!session) {
-            std::cerr << "[NetworkServer] WARNING: No session found for " << sender << " - skipping packet" << std::endl;
+            LOG_WARNING("NETWORKSERVER", "WARNING: No session found for " + (sender.address().to_string() + ":" + std::to_string(sender.port())) + " - skipping packet");
             continue;
         }
 
         uint16_t type = packet.header.type;
         
         if (type == static_cast<uint16_t>(GamePacketType::CLIENT_HELLO)) {
-            std::cout << "[NetworkServer] Received CLIENT_HELLO from " << sender << std::endl;
+            LOG_INFO("NETWORKSERVER", "Received CLIENT_HELLO from " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
             NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
             welcome.header.seq = packet.header.seq;
             welcome.setPayload({(char)session->playerId});
             server_.sendTo(welcome, sender);
-            std::cout << "[Network] Welcome sent to " << sender << std::endl;
+            LOG_INFO("NETWORK", "Welcome sent to " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
         } 
         else if (type == static_cast<uint16_t>(GamePacketType::CREATE_ROOM)) {
             try {
@@ -56,27 +56,27 @@ void NetworkServer::process() {
                 replyPayload.roomId = roomId;
                 reply.setPayload(replyPayload.serialize());
                 server_.sendTo(reply, sender);
-                std::cout << "[Room] Created room " << payload.name << " (ID: " << roomId << ") by player " << (int)session->playerId << std::endl;
+                LOG_INFO("ROOM", "Created room " + payload.name + " (ID: " + std::to_string(roomId) + ") by player " + std::to_string((int)session->playerId));
             } catch (const std::exception& e) {
-                std::cerr << "[Room] Error creating room: " << e.what() << std::endl;
+                LOG_ERROR("ROOM", std::string("Error creating room: ") + e.what());
             }
         }
         else if (type == static_cast<uint16_t>(GamePacketType::RENAME_ROOM)) {
              try {
                 auto payload = RenameRoomPayload::deserialize(packet.payload);
                 if (roomManager_.renameRoom(payload.roomId, session->playerId, payload.newName)) {
-                    std::cout << "[Room] Room " << payload.roomId << " renamed to " << payload.newName << std::endl;
+                    LOG_INFO("ROOM", "Room " + std::to_string(payload.roomId) + " renamed to " + payload.newName);
                 } else {
-                    std::cerr << "[Room] Failed to rename room " << payload.roomId << " (Permission denied or not found)" << std::endl;
+                    LOG_WARNING("ROOM", "Failed to rename room " + std::to_string(payload.roomId) + " (Permission denied or not found)");
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[Room] Error renaming room: " << e.what() << std::endl;
+                LOG_ERROR("ROOM", std::string("Error renaming room: ") + e.what());
             }
         }
         else if (type == static_cast<uint16_t>(GamePacketType::JOIN_ROOM)) {
             try {
                 auto payload = JoinRoomPayload::deserialize(packet.payload);
-                std::cout << "[NetworkServer] Received JOIN_ROOM request from " << sender << " for room " << payload.roomId << std::endl;
+                LOG_INFO("NETWORKSERVER", "Received JOIN_ROOM request from " + (sender.address().to_string() + ":" + std::to_string(sender.port())) + " for room " + std::to_string(payload.roomId));
                 
                 if (roomManager_.joinRoom(payload.roomId, session->playerId)) {
                     session->roomId = payload.roomId;
@@ -93,8 +93,8 @@ void NetworkServer::process() {
                         NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
                         reply.setPayload(replyPayload.serialize());
                         server_.sendTo(reply, sender);
-                        std::cout << "[Room] Player " << (int)session->playerId << " joined room " << payload.roomId 
-                                  << " (" << room->playerIds.size() << "/" << (int)room->maxPlayers << " players)" << std::endl;
+                        LOG_INFO("ROOM", "Player " + std::to_string((int)session->playerId) + " joined room " + std::to_string(payload.roomId)
+                                  + " (" + std::to_string(room->playerIds.size()) + "/" + std::to_string((int)room->maxPlayers) + " players)");
                         
                         // Broadcast player list update to all players in the room
                         RoomPlayersPayload playersUpdate;
@@ -118,19 +118,19 @@ void NetworkServer::process() {
                                 server_.sendTo(updatePacket, s.endpoint);
                             }
                         }
-                        std::cout << "[Room] Sent player list update to all players in room " << room->id << std::endl;
+                        LOG_INFO("ROOM", "Sent player list update to all players in room " + std::to_string(room->id));
                     } else {
-                        std::cerr << "[Room] Room " << payload.roomId << " not found after join" << std::endl;
+                        LOG_WARNING("ROOM", "Room " + std::to_string(payload.roomId) + " not found after join");
                     }
                 } else {
-                    std::cerr << "[Room] Failed to join room " << payload.roomId << std::endl;
+                    LOG_ERROR("ROOM", "Failed to join room " + std::to_string(payload.roomId));
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[Room] Error joining room: " << e.what() << std::endl;
+                LOG_ERROR("ROOM", std::string("Error joining room: ") + e.what());
             }
         }
         else if (type == static_cast<uint16_t>(GamePacketType::ROOM_LIST)) {
-            std::cout << "[NetworkServer] Received ROOM_LIST request from " << sender << std::endl;
+            LOG_INFO("NETWORKSERVER", "Received ROOM_LIST request from " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
             auto rooms = roomManager_.getRooms();
             RoomListPayload listPayload;
             for (const auto& room : rooms) {
@@ -141,14 +141,13 @@ void NetworkServer::process() {
                 info.maxPlayers = room.maxPlayers;
                 info.inGame = (room.state == RoomState::PLAYING);
                 listPayload.rooms.push_back(info);
-                std::cout << "[NetworkServer]   Room '" << room.name << "' state=" 
-                          << (int)room.state << " inGame=" << info.inGame << std::endl;
+                LOG_INFO("NETWORKSERVER", "  Room '" + room.name + "' state=" + std::to_string((int)room.state) + " inGame=" + (info.inGame ? "true" : "false"));
             }
-            std::cout << "[NetworkServer] Sending ROOM_LIST_REPLY with " << listPayload.rooms.size() << " rooms to " << sender << std::endl;
+            LOG_INFO("NETWORKSERVER", "Sending ROOM_LIST_REPLY with " + std::to_string(listPayload.rooms.size()) + " rooms to " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
             NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_LIST_REPLY));
             reply.setPayload(listPayload.serialize());
             server_.sendTo(reply, sender);
-            std::cout << "[NetworkServer] ROOM_LIST_REPLY sent" << std::endl;
+            LOG_INFO("NETWORKSERVER", "ROOM_LIST_REPLY sent");
         }
         else {
             std::lock_guard<std::mutex> lock(packetsMutex_);

@@ -1,5 +1,5 @@
 #include "network/NetworkClient.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 
 NetworkClient::NetworkClient(const std::string& serverAddress, short serverPort)
     : client_(io_context_, serverAddress, serverPort),
@@ -12,7 +12,7 @@ NetworkClient::NetworkClient(const std::string& serverAddress, short serverPort)
 }
 
 NetworkClient::~NetworkClient() {
-    std::cout << "[NetworkClient] Destructor called!" << std::endl;
+    LOG_INFO("NETWORKCLIENT", "Destructor called!");
     disconnect();
 }
 
@@ -20,19 +20,19 @@ void NetworkClient::start() {
     client_.start();
     
     // Start io_context in a separate thread
-    std::cout << "[NetworkClient] Starting io_context thread..." << std::endl;
+    LOG_INFO("NETWORKCLIENT", "Starting io_context thread...");
     io_thread_ = std::thread([this]() {
-        std::cout << "[NetworkClient] io_context thread started, running io_context..." << std::endl;
+        LOG_INFO("NETWORKCLIENT", "io_context thread started, running io_context...");
         try {
             io_context_.run();
-            std::cout << "[NetworkClient] io_context.run() exited" << std::endl;
+            LOG_INFO("NETWORKCLIENT", "io_context.run() exited");
         } catch (const std::exception& e) {
-            std::cerr << "[NetworkClient] io_context exception: " << e.what() << std::endl;
+            LOG_ERROR("NETWORKCLIENT", std::string("io_context exception: ") + e.what());
         }
     });
     
     connected_ = true;
-    std::cout << "[NetworkClient] Started" << std::endl;
+    LOG_INFO("NETWORKCLIENT", "Started");
 }
 
 void NetworkClient::process() {
@@ -45,7 +45,7 @@ void NetworkClient::process() {
 }
 
 void NetworkClient::disconnect() {
-    std::cout << "[NetworkClient] disconnect() called, connected_=" << connected_ << std::endl;
+    LOG_INFO("NETWORKCLIENT", std::string("disconnect() called, connected_=") + (connected_ ? "true" : "false"));
     if (connected_) {
         // Send disconnect packet (type 0x04 is common convention)
         NetworkPacket packet(0x04);  // CLIENT_DISCONNECT
@@ -60,7 +60,7 @@ void NetworkClient::disconnect() {
         // Give the async send a moment to flush the disconnect packet
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         
-        std::cout << "[NetworkClient] Disconnected" << std::endl;
+        LOG_INFO("NETWORKCLIENT", "Disconnected");
     }
 
     // Close the UDP socket to cancel all pending async operations
@@ -91,7 +91,7 @@ void NetworkClient::sendHello() {
     ).count();
 
     client_.send(packet);
-    std::cout << "[NetworkClient] Sent CLIENT_HELLO" << std::endl;
+    LOG_INFO("NETWORKCLIENT", "Sent CLIENT_HELLO");
 }
 
 bool NetworkClient::hasReceivedPackets() {
@@ -126,6 +126,6 @@ void NetworkClient::update(float) {
         
         client_.send(pingPacket);
         lastPingSent_ = now;
-        std::cout << "[NetworkClient] Sent CLIENT_PING (keep-alive)" << std::endl;
+        LOG_INFO("NETWORKCLIENT", "Sent CLIENT_PING (keep-alive)");
     }
 }

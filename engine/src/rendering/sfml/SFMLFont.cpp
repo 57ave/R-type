@@ -1,5 +1,5 @@
 #include <rendering/sfml/SFMLFont.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace eng
 {
@@ -14,7 +14,7 @@ namespace eng
                 {
                     m_loaded = m_font.loadFromFile(filename);
                     if (!m_loaded) {
-                        std::cerr << "[SFMLFont] Failed to load font from: " << filename << std::endl;
+                        LOG_ERROR("SFMLFONT", "Failed to load font from: " + filename);
                     }
                     return m_loaded;
                 }

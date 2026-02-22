@@ -84,4 +84,4 @@ else()
     target_compile_options(flappy_bird PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-message(STATUS "✅ Flappy Bird (game2) configured successfully")
+message(STATUS " Flappy Bird (game2) configured successfully")

@@ -1,4 +1,6 @@
 #include "network/UdpClient.hpp"
+#include "core/Logger.hpp"
+#include <sstream>
 
 UdpClient::UdpClient(asio::io_context& io_context, const std::string& serverAddress, short serverPort)
     : socket_(io_context, udp::endpoint(udp::v4(), 0)), // Bind to any port
@@ -10,7 +12,7 @@ UdpClient::UdpClient(asio::io_context& io_context, const std::string& serverAddr
     serverEndpoint_ = *endpoints.begin();
     
     connected_ = true;
-    std::cout << "[UdpClient] Initialized. Server: " << serverEndpoint_ << std::endl;
+    LOG_INFO("UDPCLIENT", "Initialized. Server: " + ([&](){std::ostringstream _ss; _ss << serverEndpoint_; return _ss.str();})());
 }
 
 UdpClient::~UdpClient() {
@@ -34,8 +36,8 @@ void UdpClient::send(const NetworkPacket& packet) {
     if (!socket_.is_open()) return;
     try {
         auto buffer = packet.serialize();
-        std::cout << "[UdpClient] Sending packet type " << packet.header.type 
-                  << " (" << buffer.size() << " bytes) to " << serverEndpoint_ << std::endl;
+        LOG_INFO("UDPCLIENT", "Sending packet type " + std::to_string(packet.header.type)
+                  + " (" + std::to_string(buffer.size()) + " bytes) to " + ([&](){std::ostringstream _ss; _ss << serverEndpoint_; return _ss.str();})());
         socket_.async_send_to(
             asio::buffer(buffer),
             serverEndpoint_,
@@ -44,7 +46,7 @@ void UdpClient::send(const NetworkPacket& packet) {
             }
         );
     } catch (const std::exception& e) {
-        std::cerr << "[UdpClient] Send error: " << e.what() << std::endl;
+        LOG_ERROR("UDPCLIENT", std::string("Send error: ") + e.what());
     }
 }
 
@@ -75,7 +77,7 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
         if (error == asio::error::operation_aborted || !socket_.is_open()) {
             return;
         }
-        std::cerr << "[UdpClient] Receive error: " << error.message() << std::endl;
+        LOG_ERROR("UDPCLIENT", std::string("Receive error: ") + error.message());
         startReceive();
         return;
     }
@@ -86,7 +88,7 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
             
             // Validate magic number
             if (packet.header.magic != 0x5254) {
-                std::cerr << "[UdpClient] Invalid magic number" << std::endl;
+                LOG_ERROR("UDPCLIENT", "Invalid magic number");
                 startReceive();
                 return;
             }
@@ -98,7 +100,7 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
             }
 
         } catch (const std::exception& e) {
-            std::cerr << "[UdpClient] Receive parse error: " << e.what() << std::endl;
+            LOG_ERROR("UDPCLIENT", std::string("Receive parse error: ") + e.what());
         }
     }
 
@@ -108,8 +110,8 @@ void UdpClient::handleReceive(const std::error_code& error, std::size_t bytes_tr
 
 void UdpClient::handleSend(const std::error_code& error, std::size_t bytes_transferred) {
     if (error) {
-        std::cerr << "[UdpClient] Send error: " << error.message() << std::endl;
+        LOG_ERROR("UDPCLIENT", std::string("Send error: ") + error.message());
     } else {
-        std::cout << "[UdpClient] Successfully sent " << bytes_transferred << " bytes" << std::endl;
+        LOG_INFO("UDPCLIENT", "Successfully sent " + std::to_string(bytes_transferred) + " bytes");
     }
 }

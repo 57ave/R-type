@@ -1,7 +1,7 @@
 #include <systems/BossSystem.hpp>
 #include <components/Sprite.hpp>
 #include <cmath>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <algorithm>
 
 namespace ShootEmUp {
@@ -45,7 +45,7 @@ void BossSystem::Update(float dt) {
 
 void BossSystem::SpawnBoss(ECS::Entity bossEntity) {
     if (!coordinator_->HasComponent<Components::Boss>(bossEntity)) {
-        std::cerr << "[BossSystem] Entity " << bossEntity << " has no Boss component!" << std::endl;
+        LOG_ERROR("BOSSSYSTEM", "[BossSystem] Entity " + std::to_string(bossEntity) + " has no Boss component!");
         return;
     }
     
@@ -55,7 +55,7 @@ void BossSystem::SpawnBoss(ECS::Entity bossEntity) {
     boss.isEntering = true;
     boss.entryProgress = 0.0f;
     
-    std::cout << "[BossSystem] Boss spawned: " << boss.bossName << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Boss spawned: " + boss.bossName);
 }
 
 void BossSystem::DestroyBoss(ECS::Entity bossEntity) {
@@ -64,7 +64,7 @@ void BossSystem::DestroyBoss(ECS::Entity bossEntity) {
     if (coordinator_->HasComponent<Components::Boss>(bossEntity)) {
         auto& boss = coordinator_->GetComponent<Components::Boss>(bossEntity);
         
-        std::cout << "[BossSystem] Boss defeated: " << boss.bossName << std::endl;
+        LOG_INFO("BOSSSYSTEM", "[BossSystem] Boss defeated: " + boss.bossName);
         
         if (deathCallback_) {
             deathCallback_(bossEntity, boss.scoreValue);
@@ -122,7 +122,7 @@ void BossSystem::UpdateEntry(ECS::Entity boss, float dt) {
         bossComp.isEntering = false;
         pos.x = bossComp.targetX;
         
-        std::cout << "[BossSystem] " << bossComp.bossName << " entry complete!" << std::endl;
+        LOG_INFO("BOSSSYSTEM", "[BossSystem] " + bossComp.bossName + " entry complete!");
         return;
     }
     
@@ -228,7 +228,7 @@ void BossSystem::UpdatePhase(ECS::Entity boss) {
         int oldPhase = bossComp.currentPhase;
         bossComp.currentPhase = newPhase;
         
-        std::cout << "[BossSystem] " << bossComp.bossName << " entered phase " << newPhase << std::endl;
+        LOG_INFO("BOSSSYSTEM", "[BossSystem] " + bossComp.bossName + " entered phase " + std::to_string(newPhase));
         
         if (phaseChangeCallback_) {
             phaseChangeCallback_(boss, newPhase);
@@ -238,7 +238,7 @@ void BossSystem::UpdatePhase(ECS::Entity boss) {
     // Check rage mode
     if (!bossComp.inRageMode && healthPercent <= bossComp.rageThreshold) {
         bossComp.inRageMode = true;
-        std::cout << "[BossSystem] " << bossComp.bossName << " entered RAGE MODE!" << std::endl;
+        LOG_INFO("BOSSSYSTEM", "[BossSystem] " + bossComp.bossName + " entered RAGE MODE!");
     }
 }
 
@@ -297,7 +297,7 @@ void BossSystem::ExecuteSpreadShot(ECS::Entity boss, int count, float spreadAngl
         projectileSpawnCb_(pos.x - 50.0f, pos.y + 50.0f, angle, "boss_spread");
     }
     
-    std::cout << "[BossSystem] Spread shot: " << count << " projectiles" << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Spread shot: " + std::to_string(count) + " projectiles");
 }
 
 void BossSystem::ExecuteAimedShot(ECS::Entity boss, int count, float interval) {
@@ -312,7 +312,7 @@ void BossSystem::ExecuteAimedShot(ECS::Entity boss, int count, float interval) {
         projectileSpawnCb_(pos.x - 50.0f, pos.y + 50.0f, offsetAngle, "enemy_aimed");
     }
     
-    std::cout << "[BossSystem] Aimed shot at angle " << angle << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Aimed shot at angle " + std::to_string(angle));
 }
 
 void BossSystem::ExecuteLaserSweep(ECS::Entity boss, float sweepAngle, float duration) {
@@ -330,7 +330,7 @@ void BossSystem::ExecuteLaserSweep(ECS::Entity boss, float sweepAngle, float dur
         projectileSpawnCb_(pos.x - 60.0f, pos.y + 30.0f, angle, "boss_laser_sweep");
     }
     
-    std::cout << "[BossSystem] Laser sweep executed" << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Laser sweep executed");
 }
 
 void BossSystem::ExecuteBulletHell(ECS::Entity boss, int arms, float spiralSpeed) {
@@ -361,7 +361,7 @@ void BossSystem::ExecuteSpawnMinions(ECS::Entity boss, const std::string& type, 
         minionSpawnCb_(type, pos.x + 50.0f, pos.y + offsetY);
     }
     
-    std::cout << "[BossSystem] Spawned " << count << " " << type << " minions" << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Spawned " + std::to_string(count) + " " + type + " minions");
 }
 
 void BossSystem::ExecuteChargeAttack(ECS::Entity boss, float speed) {
@@ -377,7 +377,7 @@ void BossSystem::ExecuteChargeAttack(ECS::Entity boss, float speed) {
     vel.dx = std::cos(radians) * speed;
     vel.dy = std::sin(radians) * speed;
     
-    std::cout << "[BossSystem] Charge attack at speed " << speed << std::endl;
+    LOG_INFO("BOSSSYSTEM", "[BossSystem] Charge attack at speed " + std::to_string(speed));
 }
 
 float BossSystem::GetAngleToPlayer(float bossX, float bossY) {
@@ -453,7 +453,7 @@ void BossPartSystem::DestroyPart(ECS::Entity part) {
                 partDestroyedCb_(pair.first, part, partComp.partType);
             }
             
-            std::cout << "[BossPartSystem] Part destroyed: " << partComp.partType << std::endl;
+            LOG_INFO("BOSSSYSTEM", "[BossPartSystem] Part destroyed: " + partComp.partType);
             break;
         }
     }
@@ -500,7 +500,7 @@ void BossPartSystem::UpdatePartAttacks(float dt) {
             
             // Fire! (would need projectile spawn callback)
             // For now just log
-            // std::cout << "[BossPartSystem] Part " << partComp.partType << " fires!" << std::endl;
+            // LOG_INFO("BOSSSYSTEM", "[BossPartSystem] Part " + partComp.partType + " fires!");
         }
     }
 }

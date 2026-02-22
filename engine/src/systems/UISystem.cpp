@@ -10,7 +10,7 @@
 #include <components/UIDropdown.hpp>
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+#include "core/Logger.hpp"
 
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
@@ -95,7 +95,7 @@ void UISystem::HandleEvent(const eng::engine::InputEvent& event)
             // to avoid double-triggering callbacks
             if (m_hoveredEntity != 0) {
                 m_selectedEntity = m_hoveredEntity;
-                std::cout << "[UISystem] Click on entity " << m_hoveredEntity << std::endl;
+                LOG_INFO("UISYSTEM", "Click on entity " + std::to_string(m_hoveredEntity));
             }
         }
     }
@@ -151,10 +151,10 @@ bool UISystem::LoadFont(const std::string& fontId, const std::string& filepath)
     auto font = std::make_unique<eng::engine::rendering::sfml::SFMLFont>();
     if (font->loadFromFile(filepath)) {
         m_fonts[fontId] = std::move(font);
-        std::cout << "[UISystem] Loaded font '" << fontId << "' from " << filepath << std::endl;
+        LOG_INFO("UISYSTEM", "Loaded font '" + fontId + "' from " + filepath);
         return true;
     }
-    std::cerr << "[UISystem] Failed to load font from " << filepath << std::endl;
+    LOG_ERROR("UISYSTEM", "Failed to load font from " + filepath);
     return false;
 }
 
@@ -379,7 +379,7 @@ ECS::Entity UISystem::GetEntityAtPosition(float x, float y) const
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "[UISystem] Error checking entity " << entity << ": " << e.what() << std::endl;
+            LOG_ERROR("UISYSTEM", "Error checking entity " + std::to_string(entity) + ": " + std::string(e.what()));
         }
     }
 
@@ -393,7 +393,7 @@ void UISystem::HandleMouseInput()
     bool clicked = m_mousePressed && !m_mousePreviouslyPressed;
     if (clicked)
     {
-        std::cout << "[UISystem] Mouse click at (" << m_mouseX << "," << m_mouseY << ") entityUnderMouse=" << entityUnderMouse << std::endl;
+        LOG_INFO("UISYSTEM", "Mouse click at (" + std::to_string(m_mouseX) + "," + std::to_string(m_mouseY) + ") entityUnderMouse=" + std::to_string(entityUnderMouse));
         // 1. Dropdown: priorité à la sélection d'option si un dropdown est ouvert
         if (m_openDropdown != 0)
         {
@@ -433,11 +433,11 @@ void UISystem::HandleMouseInput()
                 // Log element/menu/callback info for debugging
                 if (m_coordinator->HasComponent<Components::UIElement>(entityUnderMouse)) {
                     const auto &elem = m_coordinator->GetComponent<Components::UIElement>(entityUnderMouse);
-                    std::cout << "[UISystem] Click on entity " << entityUnderMouse
-                              << " menu='" << elem.menuGroup << "' visible=" << elem.visible
-                              << " interactable=" << elem.interactable << std::endl;
+                    LOG_INFO("UISYSTEM", "Click on entity " + std::to_string(entityUnderMouse)
+                              + " menu='" + elem.menuGroup + "' visible=" + std::to_string(elem.visible)
+                              + " interactable=" + std::to_string(elem.interactable));
                 }
-                std::cout << "[UISystem] UIButton callback='" << button.onClickCallback << "' enabled=" << button.enabled << std::endl;
+                LOG_INFO("UISYSTEM", "UIButton callback='" + button.onClickCallback + "' enabled=" + std::to_string(button.enabled));
 
                 if (button.enabled)
                 {
@@ -637,20 +637,20 @@ std::vector<ECS::Entity> UISystem::GetNavigableEntities() const
 void UISystem::CallLuaCallback(const std::string& callbackName)
 {
     if (!m_lua || callbackName.empty()) return;
-    std::cout << "[UISystem] Attempting to call Lua callback '" << callbackName << "'" << std::endl;
+    LOG_INFO("UISYSTEM", "Attempting to call Lua callback '" + callbackName + "'");
     
     try {
         sol::protected_function func = (*m_lua)[callbackName];
         if (func.valid()) {
-            std::cout << "[UISystem] Lua function '" << callbackName << "' found, invoking..." << std::endl;
+            LOG_INFO("UISYSTEM", "Lua function '" + callbackName + "' found, invoking...");
             auto result = func();
             if (!result.valid()) {
                 sol::error err = result;
-                std::cerr << "[UISystem] Lua error in " << callbackName << ": " << err.what() << std::endl;
+                LOG_ERROR("UISYSTEM", "Lua error in " + callbackName + ": " + std::string(err.what()));
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[UISystem] Exception calling Lua callback " << callbackName << ": " << e.what() << std::endl;
+        LOG_ERROR("UISYSTEM", "Exception calling Lua callback " + callbackName + ": " + std::string(e.what()));
     }
 }
 
@@ -664,11 +664,11 @@ void UISystem::CallLuaValueCallback(const std::string& callbackName, float value
             auto result = func(value);
             if (!result.valid()) {
                 sol::error err = result;
-                std::cerr << "[UISystem] Lua error in " << callbackName << ": " << err.what() << std::endl;
+                LOG_ERROR("UISYSTEM", "Lua error in " + callbackName + ": " + std::string(err.what()));
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[UISystem] Exception calling Lua callback " << callbackName << ": " << e.what() << std::endl;
+        LOG_ERROR("UISYSTEM", "Exception calling Lua callback " + callbackName + ": " + std::string(e.what()));
     }
 }
 
@@ -682,11 +682,11 @@ void UISystem::CallLuaStringCallback(const std::string& callbackName, const std:
             auto result = func(value);
             if (!result.valid()) {
                 sol::error err = result;
-                std::cerr << "[UISystem] Lua error in " << callbackName << ": " << err.what() << std::endl;
+                LOG_ERROR("UISYSTEM", "Lua error in " + callbackName + ": " + std::string(err.what()));
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "[UISystem] Exception calling Lua callback " << callbackName << ": " << e.what() << std::endl;
+        LOG_ERROR("UISYSTEM", "Exception calling Lua callback " + callbackName + ": " + std::string(e.what()));
     }
 }
 

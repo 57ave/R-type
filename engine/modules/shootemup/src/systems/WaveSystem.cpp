@@ -1,5 +1,5 @@
 #include <systems/WaveSystem.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <algorithm>
 
 namespace ShootEmUp {
@@ -41,21 +41,21 @@ void WaveSystem::LoadStage(int stageNumber) {
     
     // Stage data must be populated externally (e.g. from Lua at game layer)
     // Use SetStage() to provide the data before calling StartStage().
-    std::cout << "[WaveSystem] Stage " << stageNumber
-              << " slot ready — populate via SetStage() then call StartStage()" << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Stage " + std::to_string(stageNumber)
+              + " slot ready — populate via SetStage() then call StartStage()");
 }
 
 void WaveSystem::SetStage(const Components::Stage& stage) {
     currentStage_ = stage;
     activeEnemies_.clear();
     
-    std::cout << "[WaveSystem] Loaded " << currentStage_.stageName 
-              << " with " << currentStage_.waves.size() << " waves" << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Loaded " + currentStage_.stageName
+              + " with " + std::to_string(currentStage_.waves.size()) + " waves");
 }
 
 void WaveSystem::StartStage() {
     if (currentStage_.waves.empty()) {
-        std::cerr << "[WaveSystem] No waves to start!" << std::endl;
+        LOG_ERROR("WAVESYSTEM", "[WaveSystem] No waves to start!");
         return;
     }
     
@@ -66,7 +66,7 @@ void WaveSystem::StartStage() {
     
     StartWave(0);
     
-    std::cout << "[WaveSystem] Stage " << currentStage_.stageNumber << " started!" << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Stage " + std::to_string(currentStage_.stageNumber) + " started!");
 }
 
 void WaveSystem::EndStage() {
@@ -77,8 +77,8 @@ void WaveSystem::EndStage() {
         stageCompleteCallback_(currentStage_.stageNumber, currentStage_.totalScore);
     }
     
-    std::cout << "[WaveSystem] Stage " << currentStage_.stageNumber 
-              << " completed! Score: " << currentStage_.totalScore << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Stage " + std::to_string(currentStage_.stageNumber)
+              + " completed! Score: " + std::to_string(currentStage_.totalScore));
 }
 
 void WaveSystem::StartWave(int waveIndex) {
@@ -102,8 +102,8 @@ void WaveSystem::StartWave(int waveIndex) {
         wave.totalEnemies += spawn.count;
     }
     
-    std::cout << "[WaveSystem] Wave " << (waveIndex + 1) << " started: " 
-              << wave.waveName << " (" << wave.totalEnemies << " enemies)" << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Wave " + std::to_string(waveIndex + 1) + " started: "
+              + wave.waveName + " (" + std::to_string(wave.totalEnemies) + " enemies)");
     
     // Check for boss wave
     if (wave.isBossWave && !wave.bossType.empty() && bossSpawnCallback_) {
@@ -124,8 +124,8 @@ void WaveSystem::EndWave() {
         waveCompleteCallback_(currentStage_.currentWaveIndex + 1, waveScore);
     }
     
-    std::cout << "[WaveSystem] Wave " << (currentStage_.currentWaveIndex + 1) 
-              << " completed! Score: " << waveScore << std::endl;
+    LOG_INFO("WAVESYSTEM", "[WaveSystem] Wave " + std::to_string(currentStage_.currentWaveIndex + 1)
+              + " completed! Score: " + std::to_string(waveScore));
     
     // Start transition to next wave
     if (currentStage_.currentWaveIndex + 1 < static_cast<int>(currentStage_.waves.size())) {

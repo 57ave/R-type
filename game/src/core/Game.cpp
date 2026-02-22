@@ -5,9 +5,13 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/MusicManager.hpp"
+#include "managers/SFXManager.hpp"
 #include "states/MainMenuState.hpp"
 #include <rendering/sfml/SFMLRenderer.hpp>
 #include <engine/Clock.hpp>
+#include <fstream>
+#include "core/Logger.hpp"
 
 // Components
 #include <components/Position.hpp>
@@ -50,8 +54,6 @@
 #include <systems/UISystem.hpp>
 #include <systems/InputSystem.hpp>
 
-#include <iostream>
-
 // Use UI components namespace
 using namespace Components;
 
@@ -68,7 +70,7 @@ Game::~Game()
 
 bool Game::initialize()
 {
-    std::cout << "[GAME] Initializing R-Type..." << std::endl;
+    LOG_INFO("GAME", "Initializing R-Type...");
 
     // Create window
     window_ = std::make_unique<eng::engine::rendering::sfml::SFMLWindow>();
@@ -80,7 +82,7 @@ bool Game::initialize()
 
     if (!window_ || !window_->isOpen())
     {
-        std::cerr << "[GAME] Failed to create window" << std::endl;
+        LOG_ERROR("GAME", "Failed to create window");
         return false;
     }
 
@@ -88,8 +90,7 @@ bool Game::initialize()
     window_->getSFMLWindow().setFramerateLimit(config_.window.frameRateLimit);
     window_->getSFMLWindow().setVerticalSyncEnabled(config_.window.vsync);
 
-    std::cout << "[GAME] Window created: " << config_.window.width << "x" 
-              << config_.window.height << std::endl;
+    LOG_INFO("GAME", "Window created: " + std::to_string(config_.window.width) + "x" + std::to_string(config_.window.height));
 
     // Create renderer (SFMLRenderer takes sf::RenderWindow*, get it from SFMLWindow)
     renderer_ = std::make_unique<eng::engine::rendering::sfml::SFMLRenderer>(&window_->getSFMLWindow());
@@ -97,7 +98,7 @@ bool Game::initialize()
     // Create ECS Coordinator
     coordinator_ = std::make_unique<ECS::Coordinator>();
     coordinator_->Init();
-    std::cout << "[GAME] ECS initialized" << std::endl;
+    LOG_INFO("GAME", "ECS initialized");
 
     // Setup ECS (register components and systems)
     setupECS();
@@ -105,7 +106,7 @@ bool Game::initialize()
     // Initialize Lua
     Scripting::LuaState::Instance().Init();
     setupLuaBindings();
-    std::cout << "[GAME] Lua initialized" << std::endl;
+    LOG_INFO("GAME", "Lua initialized");
 
     // Load configurations from Lua
     loadConfigurations();
@@ -117,18 +118,63 @@ bool Game::initialize()
     networkManager_ = std::make_unique<NetworkManager>();
     networkManager_->initialize();
 
+    // Create music manager
+    musicManager_ = std::make_unique<MusicManager>();
+    musicManager_->setMusicVolume(config_.audio.musicVolume);
+    musicManager_->setMasterVolume(100.0f);
+    LOG_INFO("GAME", "Music manager initialized");
+
+    // Create SFX manager and preload sounds
+    sfxManager_ = std::make_unique<SFXManager>();
+    sfxManager_->setSFXVolume(config_.audio.sfxVolume);
+    sfxManager_->setMasterVolume(100.0f);
+    sfxManager_->preload("shoot", "assets/vfx/shoot.ogg");
+    sfxManager_->preload("laser_bot", "assets/vfx/laser_bot.ogg");
+    sfxManager_->preload("multi_laser_bot", "assets/vfx/multi_laser_bot.ogg");
+    sfxManager_->preload("damage", "assets/vfx/damage.ogg");
+    sfxManager_->preload("boom", "assets/vfx/Boom.ogg");
+    LOG_INFO("GAME", "SFX manager initialized");
+
+    // Load saved audio settings from user_settings.json
+    {
+        std::ifstream settingsFile("assets/config/user_settings.json");
+        if (settingsFile.is_open()) {
+            std::string line;
+            float masterVol = 100.0f, musicVol = 70.0f, sfxVol = 80.0f;
+            while (std::getline(settingsFile, line)) {
+                if (line.find("\"master_volume\"") != std::string::npos) {
+                    size_t pos = line.find(":");
+                    if (pos != std::string::npos) masterVol = std::stof(line.substr(pos + 1));
+                } else if (line.find("\"music_volume\"") != std::string::npos) {
+                    size_t pos = line.find(":");
+                    if (pos != std::string::npos) musicVol = std::stof(line.substr(pos + 1));
+                } else if (line.find("\"sfx_volume\"") != std::string::npos) {
+                    size_t pos = line.find(":");
+                    if (pos != std::string::npos) sfxVol = std::stof(line.substr(pos + 1));
+                }
+            }
+            settingsFile.close();
+            musicManager_->setMasterVolume(masterVol);
+            musicManager_->setMusicVolume(musicVol);
+            sfxManager_->setMasterVolume(masterVol);
+            sfxManager_->setSFXVolume(sfxVol);
+            LOG_INFO("GAME", "Loaded audio settings: master=" + std::to_string(masterVol)
+                      + "%, music=" + std::to_string(musicVol) + "%, sfx=" + std::to_string(sfxVol) + "%");
+        }
+    }
+
     // Push initial state (Main Menu)
     stateManager_->pushState(std::make_unique<MainMenuState>(this));
 
     isRunning_ = true;
-    std::cout << "[GAME] Initialization complete!" << std::endl;
+    LOG_INFO("GAME", "Initialization complete!");
 
     return true;
 }
 
 void Game::run()
 {
-    std::cout << "[GAME] Starting game loop..." << std::endl;
+    LOG_INFO("GAME", "Starting game loop...");
 
     eng::engine::Clock clock;
     
@@ -157,12 +203,12 @@ void Game::run()
         }
     }
 
-    std::cout << "[GAME] Game loop ended" << std::endl;
+    LOG_INFO("GAME", "Game loop ended");
 }
 
 void Game::shutdown()
 {
-    std::cout << "[GAME] Shutting down..." << std::endl;
+    LOG_INFO("GAME", "Shutting down...");
 
     stateManager_->clearStates();
     
@@ -173,7 +219,7 @@ void Game::shutdown()
 
     Scripting::LuaState::Instance().Shutdown();
 
-    std::cout << "[GAME] Shutdown complete" << std::endl;
+    LOG_INFO("GAME", "Shutdown complete");
 }
 
 void Game::handleEvents()
@@ -218,6 +264,12 @@ void Game::update(float deltaTime)
         uiSystem_->Update(deltaTime);
     }
 
+    // Update SFX manager (cleanup finished sounds)
+    if (sfxManager_)
+    {
+        sfxManager_->update(deltaTime);
+    }
+
     // Update current state
     if (stateManager_->hasStates())
     {
@@ -246,7 +298,7 @@ void Game::render()
 
 void Game::setupECS()
 {
-    std::cout << "[GAME] Registering ECS components..." << std::endl;
+    LOG_INFO("GAME", "Registering ECS components...");
 
     // Register essential components from engine (NO namespace)
     coordinator_->RegisterComponent<Position>();
@@ -278,10 +330,10 @@ void Game::setupECS()
     coordinator_->RegisterComponent<UIInputField>();
     coordinator_->RegisterComponent<UIDropdown>();
 
-    std::cout << "[GAME] " << 25 << " components registered (17 gameplay + 8 UI)" << std::endl;
+    LOG_INFO("GAME", "25 components registered (17 gameplay + 8 UI)");
 
     // === Register and configure Systems (Phase 4) ===
-    std::cout << "[GAME] Registering ECS systems..." << std::endl;
+    LOG_INFO("GAME", "Registering ECS systems...");
     
     // Register UISystem with coordinator (it returns the shared_ptr)
     uiSystem_ = coordinator_->RegisterSystem<UISystem>(coordinator_.get());
@@ -300,20 +352,20 @@ void Game::setupECS()
     // Load default font
     uiSystem_->LoadFont("default", "assets/fonts/main_font.ttf");
     
-    std::cout << "[GAME] ✅ UISystem registered and configured" << std::endl;
-    std::cout << "[GAME] Systems setup complete" << std::endl;
+    LOG_INFO("GAME", "UISystem registered and configured");
+    LOG_INFO("GAME", "Systems setup complete");
 }
 
 void Game::setupLuaBindings()
 {
-    std::cout << "[GAME] Setting up Lua bindings..." << std::endl;
+    LOG_INFO("GAME", "Setting up Lua bindings...");
     
     auto& lua = Scripting::LuaState::Instance().GetState();
     
     // Configure UISystem with LuaState
     if (uiSystem_) {
         uiSystem_->SetLuaState(&lua);
-        std::cout << "[GAME] UISystem connected to Lua" << std::endl;
+        LOG_INFO("GAME", "UISystem connected to Lua");
     }
 
     // Expose ECS Coordinator
@@ -527,61 +579,61 @@ void Game::setupLuaBindings()
         coordinator_->AddComponent(entity, tag);
     };
     
-    std::cout << "[GAME] ✅ Lua bindings registered (ECS + UI exposed to Lua)" << std::endl;
+    LOG_INFO("GAME", "Lua bindings registered (ECS + UI exposed to Lua)");
 }
 
 void Game::loadConfigurations()
 {
-    std::cout << "[GAME] Loading configurations from Lua..." << std::endl;
+    LOG_INFO("GAME", "Loading configurations from Lua...");
     
     auto& lua = Scripting::LuaState::Instance().GetState();
     
     // Load init.lua which loads all other configs
     try {
         lua.script_file("assets/scripts/init.lua");
-        std::cout << "[GAME] ✅ init.lua loaded successfully" << std::endl;
+        LOG_INFO("GAME", "init.lua loaded successfully");
         
         // Access loaded configurations
         sol::optional<sol::table> gameConfig = lua["Game"];
         if (gameConfig) {
-            std::cout << "[GAME] ✅ Game configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Game configuration accessible from Lua");
         }
         
         sol::optional<sol::table> playerConfig = lua["Player"];
         if (playerConfig) {
-            std::cout << "[GAME] ✅ Player configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Player configuration accessible from Lua");
         }
         
         sol::optional<sol::table> weaponsConfig = lua["Weapons"];
         if (weaponsConfig) {
-            std::cout << "[GAME] ✅ Weapons configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Weapons configuration accessible from Lua");
         }
         
         sol::optional<sol::table> enemiesConfig = lua["Enemies"];
         if (enemiesConfig) {
-            std::cout << "[GAME] ✅ Enemies configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Enemies configuration accessible from Lua");
         }
         
         sol::optional<sol::table> bossesConfig = lua["Bosses"];
         if (bossesConfig) {
-            std::cout << "[GAME] ✅ Bosses configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Bosses configuration accessible from Lua");
         }
         
         sol::optional<sol::table> assetsConfig = lua["Assets"];
         if (assetsConfig) {
-            std::cout << "[GAME] ✅ Assets configuration accessible from Lua" << std::endl;
+            LOG_INFO("GAME", "Assets configuration accessible from Lua");
         }
         
         // Test ECS-Lua integration
-        std::cout << "[GAME] Testing Lua-ECS integration..." << std::endl;
+        LOG_DEBUG("GAME", "Testing Lua-ECS integration...");
         lua.script_file("assets/scripts/test_entity.lua");
-        std::cout << "[GAME] ✅ Lua-ECS integration test complete" << std::endl;
+        LOG_INFO("GAME", "Lua-ECS integration test complete");
         
     } catch (const sol::error& e) {
-        std::cerr << "[GAME] ❌ Error loading Lua configurations: " << e.what() << std::endl;
+        LOG_ERROR("GAME", std::string("Error loading Lua configurations: ") + e.what());
     }
     
-    std::cout << "[GAME] Configurations loaded from Lua" << std::endl;
+    LOG_INFO("GAME", "Configurations loaded from Lua");
 }
 
 void Game::resetCoordinator()
@@ -600,6 +652,6 @@ void Game::resetCoordinator()
     // Re-bind Lua (sol2 usertype bindings reference coordinator pointers)
     setupLuaBindings();
 
-    std::cout << "[GAME] ECS coordinator reset" << std::endl;
+    LOG_INFO("GAME", "ECS coordinator reset");
 }
 

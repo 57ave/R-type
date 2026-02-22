@@ -12,7 +12,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wno-template-body)
 endif()
 
-message(STATUS "🎮 R-Type Game - Configuring...")
+message(STATUS " R-Type Game - Configuring...")
 
 # Collect all source files
 file(GLOB_RECURSE GAME_SOURCES
@@ -138,6 +138,6 @@ if(WIN32)
     endforeach()
 endif()
 
-message(STATUS "✅ R-Type Game configured successfully")
+message(STATUS " R-Type Game configured successfully")
 message(STATUS "   Sources: ${CMAKE_CURRENT_SOURCE_DIR}/src")
 message(STATUS "   Assets: ${CMAKE_CURRENT_SOURCE_DIR}/assets")

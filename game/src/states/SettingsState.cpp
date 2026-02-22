@@ -5,6 +5,8 @@
 #include "states/SettingsState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
+#include "managers/MusicManager.hpp"
+#include "managers/SFXManager.hpp"
 #include <components/Position.hpp>
 #include <components/UIElement.hpp>
 #include <components/UIText.hpp>
@@ -16,8 +18,7 @@
 #include <SFML/Graphics.hpp>
 #include <fstream>
 #include <sstream>
-#include <iostream>
-#include <iostream>
+#include "core/Logger.hpp"
 
 SettingsState::SettingsState(Game* game)
 {
@@ -26,7 +27,7 @@ SettingsState::SettingsState(Game* game)
 
 void SettingsState::onEnter()
 {
-    std::cout << "[SettingsState] Entering settings menu" << std::endl;
+    LOG_INFO("SETTINGS", "Entering settings menu");
     
     auto& lua = Scripting::LuaState::Instance().GetState();
     
@@ -183,19 +184,19 @@ void SettingsState::onEnter()
             menuEntities_.push_back(btnEntity);
         }
         
-        std::cout << "[SettingsState] ✅ Created " << menuEntities_.size() << " UI entities" << std::endl;
+        LOG_INFO("SETTINGS", "Created " + std::to_string(menuEntities_.size()) + " UI entities");
         
         // Load saved settings from JSON
         loadSettings();
         
     } catch (const sol::error& e) {
-        std::cerr << "[SettingsState] ❌ Error loading settings UI: " << e.what() << std::endl;
+        LOG_ERROR("SETTINGS", std::string("Error loading settings UI: ") + e.what());
     }
 }
 
 void SettingsState::onExit()
 {
-    std::cout << "[SettingsState] Exiting settings menu" << std::endl;
+    LOG_INFO("SETTINGS", "Exiting settings menu");
     
     auto coordinator = game_->getCoordinator();
     for (auto entity : menuEntities_) {
@@ -263,11 +264,11 @@ void SettingsState::handleEvent(const eng::engine::InputEvent& event)
                     if (coordinator->HasComponent<Components::UIButton>(entity))
                     {
                         auto& button = coordinator->GetComponent<Components::UIButton>(entity);
-                        std::cout << "[SettingsState] Button clicked: " << button.text << std::endl;
+                        LOG_DEBUG("SETTINGS", "Button clicked: " + button.text);
                         
                         if (button.text == "Back")
                         {
-                            std::cout << "[SettingsState] Going back to main menu" << std::endl;
+                            LOG_INFO("SETTINGS", "Going back to main menu");
                             game_->getStateManager()->popState();
                         }
                         else if (button.text == "Apply")
@@ -282,8 +283,8 @@ void SettingsState::handleEvent(const eng::engine::InputEvent& event)
                     {
                         auto& checkbox = coordinator->GetComponent<Components::UICheckbox>(entity);
                         checkbox.checked = !checkbox.checked;
-                        std::cout << "[SettingsState] Checkbox '" << checkbox.label << "' toggled: " 
-                                  << (checkbox.checked ? "ON" : "OFF") << std::endl;
+                        LOG_DEBUG("SETTINGS", "Checkbox '" + checkbox.label + "' toggled: "
+                                  + (checkbox.checked ? "ON" : "OFF"));
                         break;
                     }
                 }
@@ -296,7 +297,7 @@ void SettingsState::handleEvent(const eng::engine::InputEvent& event)
     {
         if (event.key.code == eng::engine::Key::Escape)
         {
-            std::cout << "[SettingsState] ESC pressed - going back" << std::endl;
+            LOG_INFO("SETTINGS", "ESC pressed - going back");
             game_->getStateManager()->popState();
         }
     }
@@ -529,7 +530,7 @@ void SettingsState::saveSettings()
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
     
-    std::cout << "[SettingsState] 💾 Saving user settings..." << std::endl;
+    LOG_INFO("SETTINGS", "Saving user settings...");
     
     // Read current values from UI components
     auto& masterVol = coordinator->GetComponent<Components::UISlider>(masterVolumeSlider_);
@@ -559,16 +560,29 @@ void SettingsState::saveSettings()
     if (file.is_open()) {
         file << json.str();
         file.close();
-        std::cout << "[SettingsState] ✅ Settings saved successfully!" << std::endl;
-        std::cout << "  Master Volume: " << static_cast<int>(masterVol.currentValue) << "%" << std::endl;
-        std::cout << "  Music Volume: " << static_cast<int>(musicVol.currentValue) << "%" << std::endl;
-        std::cout << "  SFX Volume: " << static_cast<int>(sfxVol.currentValue) << "%" << std::endl;
-        std::cout << "  VSync: " << (vsync.checked ? "ON" : "OFF") << std::endl;
-        std::cout << "  Fullscreen: " << (fullscreen.checked ? "ON" : "OFF") << std::endl;
-        std::cout << "  Show FPS: " << (showFps.checked ? "ON" : "OFF") << std::endl;
+        LOG_INFO("SETTINGS", "Settings saved successfully! Master=" + std::to_string(static_cast<int>(masterVol.currentValue))
+            + "% Music=" + std::to_string(static_cast<int>(musicVol.currentValue))
+            + "% SFX=" + std::to_string(static_cast<int>(sfxVol.currentValue))
+            + "% VSync=" + (vsync.checked ? "ON" : "OFF")
+            + " Fullscreen=" + (fullscreen.checked ? "ON" : "OFF")
+            + " ShowFPS=" + (showFps.checked ? "ON" : "OFF"));
     } else {
-        std::cerr << "[SettingsState] ❌ Failed to open settings file for writing!" << std::endl;
+        LOG_ERROR("SETTINGS", "Failed to open settings file for writing!");
     }
+
+    // Apply audio volumes to MusicManager and SFXManager in real-time
+    if (auto* musicMgr = game_->getMusicManager()) {
+        musicMgr->setMasterVolume(masterVol.currentValue);
+        musicMgr->setMusicVolume(musicVol.currentValue);
+    }
+    if (auto* sfxMgr = game_->getSFXManager()) {
+        sfxMgr->setMasterVolume(masterVol.currentValue);
+        sfxMgr->setSFXVolume(sfxVol.currentValue);
+    }
+
+    // Update GameConfig too
+    game_->getConfig().audio.musicVolume = musicVol.currentValue;
+    game_->getConfig().audio.sfxVolume = sfxVol.currentValue;
 }
 
 void SettingsState::loadSettings()
@@ -576,11 +590,11 @@ void SettingsState::loadSettings()
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
     
-    std::cout << "[SettingsState] 📂 Loading user settings..." << std::endl;
+    LOG_INFO("SETTINGS", "Loading user settings...");
     
     std::ifstream file("assets/config/user_settings.json");
     if (!file.is_open()) {
-        std::cerr << "[SettingsState] ⚠️ Settings file not found, using defaults" << std::endl;
+        LOG_WARNING("SETTINGS", "Settings file not found, using defaults");
         return;
     }
     
@@ -644,11 +658,20 @@ void SettingsState::loadSettings()
     fullscreenCheck.checked = fullscreen;
     showFpsCheck.checked = showFps;
     
-    std::cout << "[SettingsState] ✅ Settings loaded successfully!" << std::endl;
-    std::cout << "  Master Volume: " << masterVol << "%" << std::endl;
-    std::cout << "  Music Volume: " << musicVol << "%" << std::endl;
-    std::cout << "  SFX Volume: " << sfxVol << "%" << std::endl;
-    std::cout << "  VSync: " << (vsync ? "ON" : "OFF") << std::endl;
-    std::cout << "  Fullscreen: " << (fullscreen ? "ON" : "OFF") << std::endl;
-    std::cout << "  Show FPS: " << (showFps ? "ON" : "OFF") << std::endl;
+    LOG_INFO("SETTINGS", "Settings loaded: Master=" + std::to_string(masterVol)
+        + "% Music=" + std::to_string(musicVol)
+        + "% SFX=" + std::to_string(sfxVol)
+        + "% VSync=" + (vsync ? "ON" : "OFF")
+        + " Fullscreen=" + (fullscreen ? "ON" : "OFF")
+        + " ShowFPS=" + (showFps ? "ON" : "OFF"));
+
+    // Apply loaded audio volumes to MusicManager and SFXManager
+    if (auto* musicMgr = game_->getMusicManager()) {
+        musicMgr->setMasterVolume(static_cast<float>(masterVol));
+        musicMgr->setMusicVolume(static_cast<float>(musicVol));
+    }
+    if (auto* sfxMgr = game_->getSFXManager()) {
+        sfxMgr->setMasterVolume(static_cast<float>(masterVol));
+        sfxMgr->setSFXVolume(static_cast<float>(sfxVol));
+    }
 }

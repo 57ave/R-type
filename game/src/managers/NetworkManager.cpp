@@ -9,7 +9,8 @@
 #include "network/RTypeProtocol.hpp"
 #include <scripting/LuaState.hpp>
 #include <sol/sol.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
+#include <sstream>
 #include <cstring>
 #include <thread>
 #include <chrono>
@@ -19,7 +20,7 @@ NetworkManager::~NetworkManager() {
 }
 
 bool NetworkManager::initialize() {
-    std::cout << "[NetworkManager] Initialized" << std::endl;
+    LOG_INFO("NetworkManager", "Initialized");
     return true;
 }
 
@@ -33,7 +34,7 @@ void NetworkManager::shutdown() {
 bool NetworkManager::connectToServer(const std::string& address, uint16_t port, const std::string& playerName) {
     // Disconnect existing connection if any
     if (client_ && connected_) {
-        std::cout << "[NetworkManager] Disconnecting existing connection..." << std::endl;
+        LOG_INFO("NetworkManager", "Disconnecting existing connection...");
         disconnect();
     }
 
@@ -50,11 +51,11 @@ bool NetworkManager::connectToServer(const std::string& address, uint16_t port, 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         
         // Send CLIENT_HELLO packet (uses CLIENT_CONNECT = 0x01 = CLIENT_HELLO)
-        std::cout << "[NetworkManager] Sending CLIENT_HELLO to " << address << ":" << port << std::endl;
+        LOG_INFO("NetworkManager", (std::ostringstream{} << "Sending CLIENT_HELLO to " << address << ":" << port).str());
         client_->sendHello();
         
         connected_ = true;
-        std::cout << "[NetworkManager] Connected to " << address << ":" << port << " as " << playerName << std::endl;
+        LOG_INFO("NetworkManager", (std::ostringstream{} << "Connected to " << address << ":" << port << " as " << playerName).str());
         
         if (onConnection_) {
             onConnection_(true, "Connected successfully");
@@ -62,7 +63,7 @@ bool NetworkManager::connectToServer(const std::string& address, uint16_t port, 
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "[NetworkManager] Connection error: " << e.what() << std::endl;
+        LOG_ERROR("NetworkManager", (std::ostringstream{} << "Connection error: " << e.what()).str());
         client_.reset();
         connected_ = false;
         
@@ -75,13 +76,13 @@ bool NetworkManager::connectToServer(const std::string& address, uint16_t port, 
 
 void NetworkManager::disconnect() {
     // Debug: Print stack trace to find who called disconnect
-    std::cout << "[NetworkManager] disconnect() called!" << std::endl;
+    LOG_INFO("NetworkManager", "disconnect() called!");
     
     if (client_ && connected_) {
         // NetworkClient::disconnect() already sends CLIENT_DISCONNECT packet
         // So we just need to call it, not send our own packet
         client_->disconnect();
-        std::cout << "[NetworkManager] Disconnected from server" << std::endl;
+        LOG_INFO("NetworkManager", "Disconnected from server");
     }
     
     client_.reset();
@@ -91,7 +92,7 @@ void NetworkManager::disconnect() {
 }
 
 bool NetworkManager::startServer(uint16_t port, uint8_t maxPlayers) {
-    std::cout << "[NetworkManager] Server should be started separately" << std::endl;
+    LOG_INFO("NetworkManager", "Server should be started separately");
 
     // Read server_ip from game_config.lua (single source of truth)
     std::string connectIp = "127.0.0.1";
@@ -106,10 +107,10 @@ bool NetworkManager::startServer(uint16_t port, uint8_t maxPlayers) {
             }
         }
     } catch (...) {
-        std::cerr << "[NetworkManager] ⚠️ Could not read server_ip from game_config.lua, defaulting to 127.0.0.1" << std::endl;
+        LOG_WARNING("NetworkManager", "Could not read server_ip from game_config.lua, defaulting to 127.0.0.1");
     }
 
-    std::cout << "[NetworkManager] Connecting to " << connectIp << ":" << port << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Connecting to " << connectIp << ":" << port).str());
     hosting_ = connectToServer(connectIp, port, playerName_);
     return hosting_;
 }
@@ -122,21 +123,21 @@ void NetworkManager::stopServer() {
 
 void NetworkManager::requestRoomList() {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
     // Send LOBBY_LIST_REQUEST packet (0x22 = ROOM_LIST)
-    std::cout << "[NetworkManager] Sending ROOM_LIST request (0x22)" << std::endl;
+    LOG_INFO("NetworkManager", "Sending ROOM_LIST request (0x22)");
     NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::LOBBY_LIST_REQUEST));
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] Requested room list" << std::endl;
+    LOG_INFO("NetworkManager", "Requested room list");
 }
 
 void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers) {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
@@ -145,7 +146,7 @@ void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers)
     currentMaxPlayers_ = maxPlayers;
 
     // Send ROOM_CREATE packet (0x20 = CREATE_ROOM)
-    std::cout << "[NetworkManager] Sending CREATE_ROOM (0x20): " << roomName << ", max " << (int)maxPlayers << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Sending CREATE_ROOM (0x20): " << roomName << ", max " << (int)maxPlayers).str());
     NetworkPacket packet(static_cast<uint16_t>(Network::PacketType::ROOM_CREATE));
     
     // Use Network::Serializer for proper format
@@ -154,15 +155,15 @@ void NetworkManager::createRoom(const std::string& roomName, uint8_t maxPlayers)
     serializer.write(maxPlayers);
     
     packet.payload = serializer.getBuffer();
-    std::cout << "[NetworkManager] Packet payload size: " << packet.payload.size() << " bytes" << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Packet payload size: " << packet.payload.size() << " bytes").str());
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] Creating room: " << roomName << " (max " << (int)maxPlayers << " players)" << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Creating room: " << roomName << " (max " << (int)maxPlayers << " players)").str());
 }
 
 void NetworkManager::joinRoom(uint32_t roomId) {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
@@ -179,18 +180,18 @@ void NetworkManager::joinRoom(uint32_t roomId) {
     // Set room ID immediately (will be confirmed by ROOM_JOINED response)
     currentRoomId_ = roomId;
     
-    std::cout << "[NetworkManager] Joining room " << roomId << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Joining room " << roomId).str());
 }
 
 void NetworkManager::leaveRoom() {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
     // If we're not in a room (no confirmation received), just reset state locally
     if (currentRoomId_ == 0) {
-        std::cout << "[NetworkManager] Not in a confirmed room, resetting local state only" << std::endl;
+        LOG_INFO("NetworkManager", "Not in a confirmed room, resetting local state only");
         hosting_ = false;
         roomPlayers_.clear();
         return;
@@ -205,7 +206,7 @@ void NetworkManager::leaveRoom() {
     
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] Leaving room " << currentRoomId_ << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Leaving room " << currentRoomId_).str());
     
     // Reset local state
     currentRoomId_ = 0;
@@ -219,12 +220,12 @@ void NetworkManager::leaveRoom() {
 
 void NetworkManager::setReady(bool ready) {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
     if (currentRoomId_ == 0) {
-        std::cerr << "[NetworkManager] Not in a room" << std::endl;
+        LOG_ERROR("NetworkManager", "Not in a room");
         return;
     }
 
@@ -237,22 +238,22 @@ void NetworkManager::setReady(bool ready) {
     
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] Set ready: " << (ready ? "true" : "false") << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Set ready: " << (ready ? "true" : "false")).str());
 }
 
 void NetworkManager::startGame() {
     if (!connected_ || !client_) {
-        std::cerr << "[NetworkManager] Not connected to server" << std::endl;
+        LOG_ERROR("NetworkManager", "Not connected to server");
         return;
     }
 
     if (currentRoomId_ == 0) {
-        std::cerr << "[NetworkManager] Not in a room" << std::endl;
+        LOG_ERROR("NetworkManager", "Not in a room");
         return;
     }
 
     if (!hosting_) {
-        std::cerr << "[NetworkManager] Only host can start game" << std::endl;
+        LOG_ERROR("NetworkManager", "Only host can start game");
         return;
     }
 
@@ -266,7 +267,7 @@ void NetworkManager::startGame() {
     
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] 🚀 Sending GAME_START for room " << currentRoomId_ << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Sending GAME_START for room " << currentRoomId_).str());
 }
 
 void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool fire, uint8_t chargeLevel) {
@@ -288,7 +289,7 @@ void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool f
 
 void NetworkManager::sendChatMessage(const std::string& message) {
     if (!connected_ || !client_ || currentRoomId_ == 0) {
-        std::cerr << "[NetworkManager] Cannot send chat: not connected or not in a room" << std::endl;
+        LOG_ERROR("NetworkManager", "Cannot send chat: not connected or not in a room");
         return;
     }
 
@@ -304,7 +305,7 @@ void NetworkManager::sendChatMessage(const std::string& message) {
     packet.payload = serializer.getBuffer();
 
     client_->sendPacket(packet);
-    std::cout << "[NetworkManager] 💬 Chat sent: " << message << std::endl;
+    LOG_INFO("NetworkManager", (std::ostringstream{} << "Chat sent: " << message).str());
 }
 
 void NetworkManager::update(float deltaTime) {
@@ -369,9 +370,9 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             // Extract player ID from payload
             if (payloadSize >= 1) {
                 clientId_ = static_cast<uint32_t>(static_cast<uint8_t>(payload[0]));
-                std::cout << "[NetworkManager] Server accepted connection, assigned Player ID: " << clientId_ << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "Server accepted connection, assigned Player ID: " << clientId_).str());
             } else {
-                std::cout << "[NetworkManager] Server accepted connection (no ID in payload)" << std::endl;
+                LOG_INFO("NetworkManager", "Server accepted connection (no ID in payload)");
             }
             break;
         }
@@ -431,17 +432,15 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << "[NetworkManager] Error parsing room list: " << e.what() << std::endl;
+                LOG_ERROR("NetworkManager", (std::ostringstream{} << "Error parsing room list: " << e.what()).str());
                 break;
             }
 
             roomList_ = rooms;
             roomListVersion_++;
-            std::cout << "[NetworkManager] Received " << rooms.size() << " rooms (version " << roomListVersion_ << ")" << std::endl;
+            LOG_INFO("NetworkManager", (std::ostringstream{} << "Received " << rooms.size() << " rooms (version " << roomListVersion_ << ")").str());
             for (const auto& r : rooms) {
-                std::cout << "[NetworkManager]   Room '" << r.roomName << "' (" 
-                          << (int)r.currentPlayers << "/" << (int)r.maxPlayers 
-                          << ") inGame=" << r.inGame << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "Room '" << r.roomName << "' (" << (int)r.currentPlayers << "/" << (int)r.maxPlayers << ") inGame=" << r.inGame).str());
             }
             
             if (onRoomList_) {
@@ -452,7 +451,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
 
         case Network::PacketType::ROOM_CREATE: {
             // This is the request packet type we send, not what we receive
-            std::cout << "[NetworkManager] Warning: Received ROOM_CREATE request packet (should only send these)" << std::endl;
+            LOG_INFO("NetworkManager", "Warning: Received ROOM_CREATE request packet (should only send these)");
             break;
         }
 
@@ -464,14 +463,14 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 currentRoomId_ = roomId;
                 hosting_ = true;
 
-                std::cout << "[NetworkManager] ✅ Room created with ID " << roomId << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "Room created with ID " << roomId).str());
             }
             break;
         }
 
         case Network::PacketType::ROOM_JOIN: {
             // This is the request packet type we send, not what we receive
-            std::cout << "[NetworkManager] Warning: Received ROOM_JOIN request packet (should only send these)" << std::endl;
+            LOG_INFO("NetworkManager", "Warning: Received ROOM_JOIN request packet (should only send these)");
             break;
         }
 
@@ -489,11 +488,10 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 currentRoomName_ = roomName;
                 currentMaxPlayers_ = maxPlayers;
 
-                std::cout << "[NetworkManager] ✅ Joined room " << roomId << " (" << roomName 
-                          << ", " << (int)maxPlayers << " max players, host: " << hostPlayerId << ")" << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "Joined room " << roomId << " (" << roomName << ", " << (int)maxPlayers << " max players, host: " << hostPlayerId << ")").str());
             }
             catch (const std::exception& e) {
-                std::cerr << "[NetworkManager] Error parsing ROOM_JOINED: " << e.what() << std::endl;
+                LOG_ERROR("NetworkManager", (std::ostringstream{} << "Error parsing ROOM_JOINED: " << e.what()).str());
             }
             break;
         }
@@ -516,15 +514,13 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                     roomPlayers_.push_back(player);
                 }
                 
-                std::cout << "[NetworkManager] Room " << roomId << " update: " << playerCount << " players" << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "Room " << roomId << " update: " << playerCount << " players").str());
                 for (const auto& player : roomPlayers_) {
-                    std::cout << "  - " << player.playerName << " (ID:" << player.playerId 
-                              << ", Host:" << (player.isHost ? "Yes" : "No")
-                              << ", Ready:" << (player.isReady ? "Yes" : "No") << ")" << std::endl;
+                    LOG_INFO("NetworkManager", (std::ostringstream{} << "  - " << player.playerName << " (ID:" << player.playerId << ", Host:" << (player.isHost ? "Yes" : "No") << ", Ready:" << (player.isReady ? "Yes" : "No") << ")").str());
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << "[NetworkManager] Error parsing ROOM_UPDATE: " << e.what() << std::endl;
+                LOG_ERROR("NetworkManager", (std::ostringstream{} << "Error parsing ROOM_UPDATE: " << e.what()).str());
             }
             break;
         }
@@ -537,12 +533,12 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             hosting_ = false;
             inGame_ = false;
 
-            std::cout << "[NetworkManager] Left room" << std::endl;
+            LOG_INFO("NetworkManager", "Left room");
             break;
         }
 
         case Network::PacketType::GAME_START: {
-            std::cout << "[NetworkManager] 🎮 Game starting!" << std::endl;
+            LOG_INFO("NetworkManager", "Game starting!");
             inGame_ = true;  // Mark as in game
             if (gameStartCallback_) {
                 gameStartCallback_();
@@ -575,7 +571,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << "[NetworkManager] Error parsing WORLD_SNAPSHOT: " << e.what() << std::endl;
+                LOG_ERROR("NetworkManager", (std::ostringstream{} << "Error parsing WORLD_SNAPSHOT: " << e.what()).str());
             }
             break;
         }
@@ -585,7 +581,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 // Extract level ID from payload (first byte after header)
                 const char* payloadStart = data + sizeof(PacketHeader);
                 uint8_t newLevel = static_cast<uint8_t>(*payloadStart);
-                std::cout << "[NetworkManager] 🎮 LEVEL_CHANGE received: Level " << (int)newLevel << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "LEVEL_CHANGE received: Level " << (int)newLevel).str());
                 if (onLevelChange_) {
                     onLevelChange_(newLevel);
                 }
@@ -598,7 +594,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             if (payloadSize >= sizeof(uint32_t)) {
                 std::memcpy(&totalScore, payload, sizeof(uint32_t));
             }
-            std::cout << "[NetworkManager] 💀 GAME_OVER received! Score: " << totalScore << std::endl;
+            LOG_INFO("NetworkManager", (std::ostringstream{} << "GAME_OVER received! Score: " << totalScore).str());
             if (onGameOver_) {
                 onGameOver_(totalScore);
             }
@@ -610,7 +606,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             if (payloadSize >= sizeof(uint32_t)) {
                 std::memcpy(&totalScore, payload, sizeof(uint32_t));
             }
-            std::cout << "[NetworkManager] 🏆 GAME_VICTORY received! Score: " << totalScore << std::endl;
+            LOG_INFO("NetworkManager", (std::ostringstream{} << "GAME_VICTORY received! Score: " << totalScore).str());
             if (onVictory_) {
                 onVictory_(totalScore);
             }
@@ -636,9 +632,9 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                     chatMessages_.erase(chatMessages_.begin());
                 }
 
-                std::cout << "[NetworkManager] 💬 [" << senderName << "]: " << message << std::endl;
+                LOG_INFO("NetworkManager", (std::ostringstream{} << "[" << senderName << "]: " << message).str());
             } catch (const std::exception& e) {
-                std::cerr << "[NetworkManager] Error parsing CHAT_MESSAGE: " << e.what() << std::endl;
+                LOG_ERROR("NetworkManager", (std::ostringstream{} << "Error parsing CHAT_MESSAGE: " << e.what()).str());
             }
             break;
         }

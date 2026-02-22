@@ -1,7 +1,7 @@
 #include <scripting/UIBindings.hpp>
 #include <systems/UISystem.hpp>
 #include <core/GameStateCallbacks.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace Scripting {
 
@@ -16,7 +16,7 @@ namespace Scripting {
     void UIBindings::SetGameStateCallbacks(const eng::engine::core::GameStateCallbacks& callbacks)
     {
         s_gameStateCallbacks = callbacks;
-        std::cout << "[UIBindings] Game state callbacks set" << std::endl;
+        LOG_INFO("UIBINDINGS", "Game state callbacks set");
     }
 
     void UIBindings::RegisterAll(sol::state& lua, UISystem* uiSystem)
@@ -35,7 +35,7 @@ namespace Scripting {
         // CreateButton({ x, y, width, height, text, onClick, menuGroup })
         ui["CreateButton"] = [](sol::table config) -> ECS::Entity {
             if (!s_uiSystem) {
-                std::cerr << "[UIBindings] UISystem not set!" << std::endl;
+                LOG_ERROR("UIBINDINGS", "UISystem not set!");
                 return 0;
             }
 
@@ -272,7 +272,7 @@ namespace Scripting {
         // Register GameState bindings
         RegisterGameState(lua);
 
-        std::cout << "[UIBindings] UI bindings registered" << std::endl;
+        LOG_INFO("UIBINDINGS", "UI bindings registered");
     }
 
     void UIBindings::RegisterGameState(sol::state& lua)
@@ -284,11 +284,11 @@ namespace Scripting {
         // This keeps the engine fully abstract - no knowledge of specific game states
         
         gameState["Set"] = [](const std::string& state) {
-            std::cout << "[GameState] Set called with: " << state << std::endl;
+            LOG_INFO("GAMESTATE", "Set called with: " + std::to_string(state));
             if (s_gameStateCallbacks.setState) {
                 s_gameStateCallbacks.setState(state);
             } else {
-                std::cerr << "[GameState] Warning: setState callback not set" << std::endl;
+                LOG_WARNING("GAMESTATE", "Warning: setState callback not set");
             }
         };
 
@@ -296,7 +296,7 @@ namespace Scripting {
             if (s_gameStateCallbacks.getState) {
                 return s_gameStateCallbacks.getState();
             }
-            std::cerr << "[GameState] Warning: getState callback not set" << std::endl;
+            LOG_WARNING("GAMESTATE", "Warning: getState callback not set");
             return "Unknown";
         };
 
@@ -326,7 +326,7 @@ namespace Scripting {
             }
         };
 
-        std::cout << "[UIBindings] GameState bindings registered" << std::endl;
+        LOG_INFO("UIBINDINGS", "GameState bindings registered");
     }
 
 } // namespace Scripting

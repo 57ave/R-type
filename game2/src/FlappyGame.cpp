@@ -83,7 +83,7 @@ void FlappyGame::ProcessDestroyedEntities() {
 }
 
 FlappyGame::FlappyGame() : serverAddress("127.0.0.1"), serverPort(12345), basePath("") {
-    std::cout << "🐦 FlappyGame instance created" << std::endl;
+    std::cout << " FlappyGame instance created" << std::endl;
 }
 
 FlappyGame::~FlappyGame() {
@@ -92,11 +92,11 @@ FlappyGame::~FlappyGame() {
         delete sprite;
     }
     allSprites.clear();
-    std::cout << "🐦 FlappyGame instance destroyed" << std::endl;
+    std::cout << " FlappyGame instance destroyed" << std::endl;
 }
 
 void FlappyGame::InitECS() {
-    std::cout << "🔧 Initializing ECS..." << std::endl;
+    std::cout << " Initializing ECS..." << std::endl;
     
     gCoordinator.Init();
 
@@ -142,7 +142,7 @@ void FlappyGame::InitECS() {
 }
 
 void FlappyGame::InitSystems() {
-    std::cout << "🔧 Initializing Systems..." << std::endl;
+    std::cout << " Initializing Systems..." << std::endl;
 
     // Movement System - uses Position and ::Velocity from components/
     movementSystem = gCoordinator.RegisterSystem<MovementSystem>(&gCoordinator);
@@ -200,7 +200,7 @@ void FlappyGame::InitSystems() {
 }
 
 void FlappyGame::InitLua() {
-    std::cout << "🌙 Initializing Lua Scripting..." << std::endl;
+    std::cout << " Initializing Lua Scripting..." << std::endl;
 
     auto& luaState = Scripting::LuaState::Instance();
     luaState.Init();
@@ -239,10 +239,10 @@ void FlappyGame::InitLua() {
                 // Now register the real network bindings
                 auto& luaState = Scripting::LuaState::Instance().GetState();
                 NetworkBindings::RegisterNetworkClient(luaState, networkClient.get());
-                std::cout << "[FlappyGame] ✅ NetworkClient created and bindings registered" << std::endl;
+                std::cout << "[FlappyGame]  NetworkClient created and bindings registered" << std::endl;
                 return true;
             } catch (const std::exception& e) {
-                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what() << std::endl;
+                std::cerr << "[FlappyGame]  Failed to create NetworkClient: " << e.what() << std::endl;
                 return false;
             }
         };
@@ -422,43 +422,43 @@ void FlappyGame::InitLua() {
     
     try {
         luaState.GetState().script_file(luaPath);
-        std::cout << "[FlappyGame] ✅ Lua script loaded successfully!" << std::endl;
+        std::cout << "[FlappyGame]  Lua script loaded successfully!" << std::endl;
     } catch (const sol::error& e) {
-        std::cerr << "[FlappyGame] ❌ Lua error: " << e.what() << std::endl;
+        std::cerr << "[FlappyGame]  Lua error: " << e.what() << std::endl;
     }
 }
 
 void FlappyGame::LoadAssets() {
-    std::cout << "🎨 Loading Assets..." << std::endl;
+    std::cout << " Loading Assets..." << std::endl;
 
     birdTexture = std::make_unique<SFMLTexture>();
     if (!birdTexture->loadFromFile(ResolveAssetPath("game2/assets/sprites/bird.png"))) {
         std::cerr << "Warning: Could not load bird.png" << std::endl;
     } else {
-        std::cout << "[FlappyGame] ✅ Bird texture loaded" << std::endl;
+        std::cout << "[FlappyGame]  Bird texture loaded" << std::endl;
     }
 
     pipeTexture = std::make_unique<SFMLTexture>();
     if (!pipeTexture->loadFromFile(ResolveAssetPath("game2/assets/sprites/pipe.png"))) {
         std::cerr << "Warning: Could not load pipe.png" << std::endl;
     } else {
-        std::cout << "[FlappyGame] ✅ Pipe texture loaded" << std::endl;
+        std::cout << "[FlappyGame]  Pipe texture loaded" << std::endl;
     }
 
     backgroundTexture = std::make_unique<SFMLTexture>();
     if (!backgroundTexture->loadFromFile(ResolveAssetPath("game2/assets/sprites/background.png"))) {
         std::cerr << "Warning: Could not load background.png" << std::endl;
     } else {
-        std::cout << "[FlappyGame] ✅ Background texture loaded" << std::endl;
+        std::cout << "[FlappyGame]  Background texture loaded" << std::endl;
     }
 
     // Load UI font for simple drawing
     uiFont = std::make_unique<sf::Font>();
     std::string fontPath = ResolveAssetPath("game2/assets/fonts/Arial.ttf");
     if (!uiFont->loadFromFile(fontPath)) {
-        std::cerr << "[FlappyGame] ⚠️ Warning: Could not load UI font: " << fontPath << std::endl;
+        std::cerr << "[FlappyGame]  Warning: Could not load UI font: " << fontPath << std::endl;
     } else {
-        std::cout << "[FlappyGame] ✅ UI font loaded for simple drawing" << std::endl;
+        std::cout << "[FlappyGame]  UI font loaded for simple drawing" << std::endl;
     }
 }
 
@@ -623,7 +623,7 @@ void FlappyGame::Render(SFMLRenderer& /*renderer*/) {
 }
 
 int FlappyGame::Run(int argc, char* argv[]) {
-    std::cout << "🐦 Flappy Bird Battle Royale Starting..." << std::endl;
+    std::cout << " Flappy Bird Battle Royale Starting..." << std::endl;
 
     // Parse command line arguments for network mode
     for (int i = 1; i < argc; ++i) {
@@ -636,9 +636,9 @@ int FlappyGame::Run(int argc, char* argv[]) {
             // Create network client
             try {
                 networkClient = std::make_unique<NetworkClient>(serverAddress, serverPort);
-                std::cout << "[FlappyGame] ✅ NetworkClient created" << std::endl;
+                std::cout << "[FlappyGame]  NetworkClient created" << std::endl;
             } catch (const std::exception& e) {
-                std::cerr << "[FlappyGame] ❌ Failed to create NetworkClient: " << e.what() << std::endl;
+                std::cerr << "[FlappyGame]  Failed to create NetworkClient: " << e.what() << std::endl;
                 networkClient = nullptr;
             }
             
@@ -673,7 +673,7 @@ int FlappyGame::Run(int argc, char* argv[]) {
     if (luaInit.valid()) {
         try {
             luaInit();
-            std::cout << "[FlappyGame] ✅ Lua Init() called" << std::endl;
+            std::cout << "[FlappyGame]  Lua Init() called" << std::endl;
         } catch (const sol::error& e) {
             std::cerr << "[Lua] Init error: " << e.what() << std::endl;
         }
@@ -682,7 +682,7 @@ int FlappyGame::Run(int argc, char* argv[]) {
     // Game clock
     eng::engine::Clock clock;
 
-    std::cout << "[FlappyGame] 🎮 Entering main game loop..." << std::endl;
+    std::cout << "[FlappyGame]  Entering main game loop..." << std::endl;
 
     // Main game loop
     while (window.isOpen() && !shouldQuit) {
@@ -718,7 +718,7 @@ int FlappyGame::Run(int argc, char* argv[]) {
         window.display();
     }
 
-    std::cout << "[FlappyGame] 👋 Game ended" << std::endl;
+    std::cout << "[FlappyGame]  Game ended" << std::endl;
     return 0;
 }
 

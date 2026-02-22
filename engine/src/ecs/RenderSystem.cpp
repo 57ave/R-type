@@ -1,5 +1,5 @@
 #include <ecs/RenderSystem.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace ECS {
 
@@ -8,7 +8,7 @@ namespace ECS {
     }
 
     void RenderSystem::Init() {
-        std::cout << "[RenderSystem] Initialized" << std::endl;
+        LOG_INFO("RENDERSYSTEM", "Initialized");
     }
 
     void RenderSystem::Update(float deltaTime) {
@@ -46,7 +46,7 @@ namespace ECS {
     }
 
     void RenderSystem::Shutdown() {
-        std::cout << "[RenderSystem] Shutdown" << std::endl;
+        LOG_INFO("RENDERSYSTEM", "Shutdown");
     }
 
     void RenderSystem::SetRenderer(eng::engine::rendering::IRenderer* renderer) {
@@ -77,8 +77,7 @@ namespace ECS {
         
         // If no resource manager, can't load
         if (!m_ResourceManager) {
-            std::cerr << "[RenderSystem] Error: No ResourceManager set, cannot load sprite: " 
-                      << sprite.texturePath << std::endl;
+            LOG_ERROR("RENDERSYSTEM", "Error: No ResourceManager set, cannot load sprite: " + sprite.texturePath);
             return;
         }
         
@@ -91,12 +90,10 @@ namespace ECS {
         try {
             sprite.sprite = m_ResourceManager->getSprite(sprite.texturePath);
             if (!sprite.sprite) {
-                std::cerr << "[RenderSystem] Warning: Failed to load sprite: " 
-                          << sprite.texturePath << std::endl;
+                LOG_WARNING("RENDERSYSTEM", "Warning: Failed to load sprite: " + sprite.texturePath);
             }
         } catch (const std::exception& e) {
-            std::cerr << "[RenderSystem] Error loading sprite '" << sprite.texturePath 
-                      << "': " << e.what() << std::endl;
+            LOG_ERROR("RENDERSYSTEM", "Error loading sprite '" + sprite.texturePath + "': " + std::string(e.what()));
         }
     }
 

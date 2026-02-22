@@ -1,6 +1,6 @@
 #include <systems/AttachmentSystem.hpp>
 #include <cmath>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <algorithm>
 
 namespace ShootEmUp {
@@ -39,7 +39,7 @@ void ForcePodSystem::Update(float dt) {
 
 void ForcePodSystem::CreateForcePod(ECS::Entity owner) {
     if (forcePodEntity_ != 0) {
-        std::cout << "[ForcePodSystem] Force pod already exists!" << std::endl;
+        LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force pod already exists!");
         return;
     }
     
@@ -64,7 +64,7 @@ void ForcePodSystem::CreateForcePod(ECS::Entity owner) {
     force.level = 1;
     coordinator_->AddComponent(forcePodEntity_, force);
     
-    std::cout << "[ForcePodSystem] Force pod created!" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force pod created!");
 }
 
 void ForcePodSystem::DestroyForcePod() {
@@ -73,7 +73,7 @@ void ForcePodSystem::DestroyForcePod() {
     coordinator_->DestroyEntity(forcePodEntity_);
     forcePodEntity_ = 0;
     
-    std::cout << "[ForcePodSystem] Force pod destroyed" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force pod destroyed");
 }
 
 void ForcePodSystem::AttachToFront() {
@@ -82,7 +82,7 @@ void ForcePodSystem::AttachToFront() {
     auto& force = coordinator_->GetComponent<Components::ForcePod>(forcePodEntity_);
     force.state = Components::ForcePod::State::AttachedFront;
     
-    std::cout << "[ForcePodSystem] Force attached to FRONT" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force attached to FRONT");
 }
 
 void ForcePodSystem::AttachToBack() {
@@ -91,7 +91,7 @@ void ForcePodSystem::AttachToBack() {
     auto& force = coordinator_->GetComponent<Components::ForcePod>(forcePodEntity_);
     force.state = Components::ForcePod::State::AttachedBack;
     
-    std::cout << "[ForcePodSystem] Force attached to BACK" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force attached to BACK");
 }
 
 void ForcePodSystem::Detach() {
@@ -100,7 +100,7 @@ void ForcePodSystem::Detach() {
     auto& force = coordinator_->GetComponent<Components::ForcePod>(forcePodEntity_);
     force.state = Components::ForcePod::State::Detached;
     
-    std::cout << "[ForcePodSystem] Force DETACHED" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force DETACHED");
 }
 
 void ForcePodSystem::Launch() {
@@ -123,7 +123,7 @@ void ForcePodSystem::Launch() {
         }
         vel.dy = 0;
         
-        std::cout << "[ForcePodSystem] Force LAUNCHED!" << std::endl;
+        LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force LAUNCHED!");
     }
 }
 
@@ -137,7 +137,7 @@ void ForcePodSystem::Recall() {
         
         force.state = Components::ForcePod::State::Returning;
         
-        std::cout << "[ForcePodSystem] Force RECALLED" << std::endl;
+        LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force RECALLED");
     }
 }
 
@@ -168,7 +168,7 @@ void ForcePodSystem::UpgradeForce() {
     
     if (force.level < 3) {
         force.level++;
-        std::cout << "[ForcePodSystem] Force upgraded to level " << force.level << std::endl;
+        LOG_INFO("ATTACHMENTSYSTEM", "[ForcePodSystem] Force upgraded to level " + std::to_string(force.level));
     }
 }
 
@@ -318,7 +318,7 @@ void OptionSystem::Update(float dt) {
 
 void OptionSystem::AddOption() {
     if (static_cast<int>(optionEntities_.size()) >= maxOptions_) {
-        std::cout << "[OptionSystem] Max options reached!" << std::endl;
+        LOG_INFO("ATTACHMENTSYSTEM", "[OptionSystem] Max options reached!");
         return;
     }
     
@@ -341,7 +341,7 @@ void OptionSystem::AddOption() {
     
     optionEntities_.push_back(option);
     
-    std::cout << "[OptionSystem] Option added! Total: " << optionEntities_.size() << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[OptionSystem] Option added! Total: " + std::to_string(optionEntities_.size()));
 }
 
 void OptionSystem::RemoveOption() {
@@ -352,7 +352,7 @@ void OptionSystem::RemoveOption() {
     
     coordinator_->DestroyEntity(option);
     
-    std::cout << "[OptionSystem] Option removed. Total: " << optionEntities_.size() << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[OptionSystem] Option removed. Total: " + std::to_string(optionEntities_.size()));
 }
 
 void OptionSystem::RemoveAllOptions() {
@@ -361,7 +361,7 @@ void OptionSystem::RemoveAllOptions() {
     }
     optionEntities_.clear();
     
-    std::cout << "[OptionSystem] All options removed" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[OptionSystem] All options removed");
 }
 
 void OptionSystem::SetOwner(ECS::Entity owner) {
@@ -377,7 +377,7 @@ void OptionSystem::SetOwner(ECS::Entity owner) {
 
 void OptionSystem::SetFormation(const std::string& formation) {
     currentFormation_ = formation;
-    std::cout << "[OptionSystem] Formation set to: " << formation << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[OptionSystem] Formation set to: " + formation);
 }
 
 void OptionSystem::CycleFormation() {
@@ -559,8 +559,8 @@ void ShieldSystem::ActivateShield(ECS::Entity owner, float duration, int hitPoin
     coordinator_->AddComponent(owner, shield);
     activeShields_.push_back(owner);
     
-    std::cout << "[ShieldSystem] Shield activated! Duration: " << duration 
-              << "s, HP: " << hitPoints << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ShieldSystem] Shield activated! Duration: " + std::to_string(duration)
+              + "s, HP: " + std::to_string(hitPoints));
 }
 
 void ShieldSystem::DeactivateShield(ECS::Entity owner) {
@@ -573,7 +573,7 @@ void ShieldSystem::DeactivateShield(ECS::Entity owner) {
         coordinator_->RemoveComponent<Components::Shield>(owner);
     }
     
-    std::cout << "[ShieldSystem] Shield deactivated" << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ShieldSystem] Shield deactivated");
 }
 
 bool ShieldSystem::HasShield(ECS::Entity owner) const {
@@ -592,7 +592,7 @@ void ShieldSystem::OnShieldHit(ECS::Entity owner, int damage) {
     shield.hitPoints -= 1;  // Each hit reduces by 1
     shield.flashTimer = 0.2f;
     
-    std::cout << "[ShieldSystem] Shield hit! Remaining: " << shield.hitPoints << std::endl;
+    LOG_INFO("ATTACHMENTSYSTEM", "[ShieldSystem] Shield hit! Remaining: " + std::to_string(shield.hitPoints));
     
     if (shield.hitPoints <= 0) {
         if (shieldBreakCb_) {

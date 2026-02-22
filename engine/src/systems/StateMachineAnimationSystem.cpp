@@ -1,13 +1,13 @@
 #include "systems/StateMachineAnimationSystem.hpp"
 #include <components/Position.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 StateMachineAnimationSystem::StateMachineAnimationSystem(ECS::Coordinator* coordinator)
     : m_Coordinator(coordinator) {
 }
 
 void StateMachineAnimationSystem::Init() {
-    std::cout << "[StateMachineAnimationSystem] Initialized" << std::endl;
+    LOG_INFO("STATEMACHINEANIMATIONSYSTEM", "Initialized");
 }
 
 void StateMachineAnimationSystem::Update(float dt) {
@@ -55,7 +55,7 @@ void StateMachineAnimationSystem::Update(float dt) {
 }
 
 void StateMachineAnimationSystem::Shutdown() {
-    std::cout << "[StateMachineAnimationSystem] Shutdown" << std::endl;
+    LOG_INFO("STATEMACHINEANIMATIONSYSTEM", "Shutdown");
 }
 
 // C API implementation

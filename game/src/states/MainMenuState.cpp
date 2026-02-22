@@ -8,13 +8,14 @@
 #include "states/MultiplayerMenuState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
+#include "managers/MusicManager.hpp"
+#include "core/Logger.hpp"
 #include <components/Position.hpp>
 #include <components/UIElement.hpp>
 #include <components/UIText.hpp>
 #include <components/UIButton.hpp>
 #include <components/UIPanel.hpp>
 #include <scripting/LuaState.hpp>
-#include <iostream>
 
 MainMenuState::MainMenuState(Game* game)
 {
@@ -23,7 +24,7 @@ MainMenuState::MainMenuState(Game* game)
 
 void MainMenuState::onEnter()
 {
-    std::cout << "[MainMenuState] Entering main menu" << std::endl;
+    LOG_INFO("MAINMENU", "Entering main menu");
     
     // Load Main Menu UI from Lua
     auto& lua = Scripting::LuaState::Instance().GetState();
@@ -33,7 +34,7 @@ void MainMenuState::onEnter()
         lua.script_file("assets/scripts/ui/menu_main.lua");
         sol::table menuConfig = lua["MainMenu"];
         
-        std::cout << "[MainMenuState] Creating UI entities from Lua..." << std::endl;
+        LOG_DEBUG("MAINMENU", "Creating UI entities from Lua...");
         
         // Get ECS coordinator
         auto coordinator = game_->getCoordinator();
@@ -83,19 +84,24 @@ void MainMenuState::onEnter()
                                        btn["callback"].get<std::string>());
             menuEntities_.push_back(btnEntity);
             
-            std::cout << "[MainMenuState] Created button: " << btn["text"].get<std::string>() << std::endl;
+            LOG_DEBUG("MAINMENU", "Created button: " + btn["text"].get<std::string>());
         }
         
-        std::cout << "[MainMenuState] ✅ Created " << menuEntities_.size() << " UI entities" << std::endl;
+        LOG_INFO("MAINMENU", "Created " + std::to_string(menuEntities_.size()) + " UI entities");
         
     } catch (const sol::error& e) {
-        std::cerr << "[MainMenuState] ❌ Error loading menu UI: " << e.what() << std::endl;
+        LOG_ERROR("MAINMENU", std::string("Error loading menu UI: ") + e.what());
+    }
+
+    // Play title music in loop
+    if (auto* music = game_->getMusicManager()) {
+        music->play("assets/sounds/Title.ogg", true);
     }
 }
 
 void MainMenuState::onExit()
 {
-    std::cout << "[MainMenuState] Exiting main menu" << std::endl;
+    LOG_INFO("MAINMENU", "Exiting main menu");
     
     // Destroy all menu entities
     auto coordinator = game_->getCoordinator();
@@ -104,7 +110,7 @@ void MainMenuState::onExit()
     }
     menuEntities_.clear();
     
-    std::cout << "[MainMenuState] ✅ Cleaned up menu entities" << std::endl;
+    LOG_DEBUG("MAINMENU", "Cleaned up menu entities");
 }
 
 void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
@@ -171,7 +177,7 @@ void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
                 {
                     button.state = Components::UIButton::State::Pressed;
                     
-                    std::cout << "[MainMenuState] Button clicked: " << button.text << std::endl;
+                    LOG_DEBUG("MAINMENU", "Button clicked: " + button.text);
                     
                     // Call Lua callback
                     if (!button.onClickCallback.empty())
@@ -179,31 +185,31 @@ void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
                         auto& lua = Scripting::LuaState::Instance().GetState();
                         try {
                             lua[button.onClickCallback]();
-                            std::cout << "[MainMenuState] ✅ Callback executed: " << button.onClickCallback << std::endl;
+                            LOG_DEBUG("MAINMENU", "Callback executed: " + button.onClickCallback);
                         } catch (const sol::error& e) {
-                            std::cerr << "[MainMenuState] ❌ Error calling callback: " << e.what() << std::endl;
+                            LOG_ERROR("MAINMENU", std::string("Error calling callback: ") + e.what());
                         }
                     }
                     
                     // Handle specific actions based on button text
                     if (button.text == "Quit")
                     {
-                        std::cout << "[MainMenuState] Closing game..." << std::endl;
+                        LOG_INFO("MAINMENU", "Closing game...");
                         game_->getWindow()->close();
                     }
                     else if (button.text == "Solo Play")
                     {
-                        std::cout << "[MainMenuState] Launching Solo Play..." << std::endl;
+                        LOG_INFO("MAINMENU", "Launching Solo Play...");
                         game_->getStateManager()->pushState(std::make_unique<PlayState>(game_));
                     }
                     else if (button.text == "Multiplayer")
                     {
-                        std::cout << "[MainMenuState] Opening Multiplayer Menu..." << std::endl;
+                        LOG_INFO("MAINMENU", "Opening Multiplayer Menu...");
                         game_->getStateManager()->pushState(std::make_unique<MultiplayerMenuState>(game_));
                     }
                     else if (button.text == "Settings")
                     {
-                        std::cout << "[MainMenuState] Opening Settings..." << std::endl;
+                        LOG_INFO("MAINMENU", "Opening Settings...");
                         game_->getStateManager()->pushState(std::make_unique<SettingsState>(game_));
                     }
                     
@@ -218,7 +224,7 @@ void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
     {
         if (event.key.code == eng::engine::Key::Escape)
         {
-            std::cout << "[MainMenuState] ESC pressed - closing game" << std::endl;
+            LOG_INFO("MAINMENU", "ESC pressed - closing game");
             game_->getWindow()->close();
         }
     }
