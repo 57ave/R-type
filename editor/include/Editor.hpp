@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Canvas.hpp"
+#include "FolderBrowser.hpp"
 #include "SpawnTable.hpp"
 #include "StageData.hpp"
 #include "WavePanel.hpp"
@@ -27,6 +28,8 @@ private:
     bool wantsToQuit_ = false;
     std::string errorMessage_;
     bool showError_ = false;
+
+    FolderBrowser folderBrowser_;
 
     void RenderMenuBar();
     void RenderLevelSelector();
