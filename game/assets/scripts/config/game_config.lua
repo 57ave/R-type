@@ -2,6 +2,9 @@
 -- R-Type Game - Configuration Générale
 -- ==========================================
 
+-- Le port et l'IP sont définis une seule fois dans server_config.lua
+local _srv = dofile("assets/scripts/config/server_config.lua")
+
 Game = {
     name = "R-Type Remake",
     version = "1.0.0",
@@ -44,9 +47,11 @@ Game = {
     },
     
     network = {
-        server_ip = "127.0.0.1",
-        server_port = 4242,
-        timeout_ms = 5000,
+        -- ⚠️  SEUL ENDROIT à modifier : server_config.lua → server.port et server.server_ip
+        -- Ces valeurs sont lues automatiquement depuis server_config.lua
+        server_ip   = _srv.server.server_ip  or "127.0.0.1",
+        server_port = _srv.server.port,
+        timeout_ms  = 5000,
         max_players = 4
     },
     

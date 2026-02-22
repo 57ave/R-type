@@ -1,6 +1,16 @@
 -- ==========================================
 -- R-Type Game - Host Game Menu
+-- IP and port are read from game_config.lua (network section)
 -- ==========================================
+
+-- Load network defaults from game_config.lua
+local _defaultPort = "12345"
+local _ok, _cfg = pcall(function()
+    return dofile("assets/scripts/config/game_config.lua")
+end)
+if _ok and _cfg and _cfg.network then
+    _defaultPort = tostring(_cfg.network.server_port or 12345)
+end
 
 HostMenu = {
     title = {
@@ -61,7 +71,7 @@ HostMenu = {
         y = 545,
         width = 400,
         height = 40,
-        placeholder = "12345",
+        placeholder = _defaultPort,
         maxLength = 5
     },
     

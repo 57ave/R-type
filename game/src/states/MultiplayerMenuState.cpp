@@ -29,6 +29,9 @@ void MultiplayerMenuState::onEnter()
 {
     std::cout << "[MultiplayerMenuState] 🌐 Entering multiplayer menu" << std::endl;
     
+    // Load ip/port from game_config.lua (single source of truth)
+    loadNetworkConfig();
+
     // Setup network callback for game start
     auto networkMgr = game_->getNetworkManager();
     if (networkMgr) {
@@ -773,7 +776,8 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                                         int val = std::stoi(field.text);
                                         if (val >= 2 && val <= 4) maxPlayers = static_cast<uint8_t>(val);
                                     } catch (...) {}
-                                } else if (field.placeholder == "12345" && !field.text.empty()) {
+                                } else if (field.placeholder == std::to_string(serverPort_) && !field.text.empty()) {
+                                    // Port field: placeholder matches the port from config
                                     try {
                                         int val = std::stoi(field.text);
                                         if (val > 0 && val <= 65535) port = static_cast<uint16_t>(val);
@@ -1273,5 +1277,26 @@ void MultiplayerMenuState::render()
                 sfmlWindow.draw(cursor);
             }
         }
+    }
+}
+
+void MultiplayerMenuState::loadNetworkConfig()
+{
+    try {
+        auto& lua = Scripting::LuaState::Instance().GetState();
+        lua.script_file("assets/scripts/config/game_config.lua");
+        sol::table gameConfig = lua["Game"];
+        if (gameConfig.valid()) {
+            sol::optional<sol::table> netT = gameConfig["network"];
+            if (netT) {
+                serverAddress_ = netT.value().get_or<std::string>("server_ip", serverAddress_);
+                serverPort_    = static_cast<uint16_t>(netT.value().get_or("server_port", (int)serverPort_));
+            }
+        }
+        std::cout << "[MultiplayerMenuState] Network config: " 
+                  << serverAddress_ << ":" << serverPort_ << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[MultiplayerMenuState] ⚠️ Could not load network config, using defaults: " 
+                  << e.what() << std::endl;
     }
 }
