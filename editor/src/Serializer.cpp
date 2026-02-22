@@ -1,6 +1,8 @@
 #include "Serializer.hpp"
 
 #include <cmath>
+#include <fstream>
+#include <iostream>
 #include <sstream>
 
 namespace Editor {
@@ -12,139 +14,118 @@ std::string Serializer::FormatFloat(float value) {
         return ss.str();
     }
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%.1f", value);
-    return buf;
-}
-
-std::string Serializer::SerializeSpawn(const SpawnData& spawn) {
-    std::string line = "{ time = " + FormatFloat(spawn.time) + ",  enemy = \"" + spawn.enemy +
-                       "\", y = " + FormatFloat(spawn.y) + ", pattern = \"" + spawn.pattern + "\"";
-    if (spawn.count > 1) {
-        line += ", count = " + std::to_string(spawn.count) + ", spacing = " +
-                FormatFloat(spawn.spacing);
-    }
-    line += " }";
-    return line;
-}
-
-std::string Serializer::SerializeWave(const WaveData& wave, const std::string& indent) {
-    std::ostringstream ss;
-    std::string i2 = indent + "    ";
-    std::string i3 = i2 + "    ";
-
-    ss << indent << "{\n";
-    ss << i2 << "name = \"" << wave.name << "\",\n";
-    ss << i2 << "startTime = " << FormatFloat(wave.startTime) << ",\n";
-    ss << i2 << "duration = " << FormatFloat(wave.duration) << ",\n";
-
-    if (wave.isBossWave) {
-        ss << i2 << "isBossWave = true,\n";
-        if (!wave.boss.empty()) {
-            ss << i2 << "boss = \"" << wave.boss << "\",\n";
+    std::snprintf(buf, sizeof(buf), "%.2f", value);
+    std::string s = buf;
+    size_t dot = s.find('.');
+    if (dot != std::string::npos) {
+        size_t last = s.find_last_not_of('0');
+        if (last != std::string::npos && last > dot) {
+            s = s.substr(0, last + 1);
         }
     }
-
-    ss << i2 << "\n";
-    ss << i2 << "spawns = {\n";
-    for (size_t j = 0; j < wave.spawns.size(); j++) {
-        ss << i3 << SerializeSpawn(wave.spawns[j]);
-        if (j + 1 < wave.spawns.size()) {
-            ss << ",";
-        }
-        ss << "\n";
-    }
-    ss << i2 << "}";
-
-    if (wave.reward) {
-        ss << ",\n";
-        ss << i2 << "\n";
-        ss << i2 << "reward = { type = \"" << wave.reward->type << "\", y = "
-           << FormatFloat(wave.reward->y) << " }";
-    }
-
-    ss << "\n" << indent << "}";
-    return ss.str();
+    return s;
 }
 
-std::string Serializer::SerializeStage(const StageData& stage, const std::string& indent) {
+std::string Serializer::SerializeLevel(const LevelData& level) {
     std::ostringstream ss;
-    std::string i2 = indent + "    ";
-    std::string i3 = i2 + "    ";
+    std::string varName = "Level" + std::to_string(level.id);
+    std::string i1 = "    ";
+    std::string i2 = "        ";
+    std::string i3 = "            ";
 
-    ss << indent << stage.key << " = {\n";
-    ss << i2 << "name = \"" << stage.name << "\",\n";
-    ss << i2 << "description = \"" << stage.description << "\",\n";
-    ss << i2 << "stageNumber = " << stage.stageNumber << ",\n";
-    ss << i2 << "\n";
-
-    ss << i2 << "background = {\n";
-    ss << i3 << "texture = \"" << stage.background.texture << "\",\n";
-    ss << i3 << "scrollSpeed = " << FormatFloat(stage.background.scrollSpeed) << "\n";
-    ss << i2 << "},\n";
-    ss << i2 << "\n";
-
-    ss << i2 << "music = \"" << stage.music << "\",\n";
-    if (!stage.bossMusic.empty()) {
-        ss << i2 << "bossMusic = \"" << stage.bossMusic << "\",\n";
-    }
-    ss << i2 << "\n";
-
-    ss << i2 << "duration = " << FormatFloat(stage.duration) << ",\n";
-    ss << i2 << "\n";
-
-    ss << i2 << "waves = {\n";
-    for (size_t w = 0; w < stage.waves.size(); w++) {
-        ss << SerializeWave(stage.waves[w], i3);
-        if (w + 1 < stage.waves.size()) {
-            ss << ",";
-        }
-        ss << "\n";
-    }
-    ss << i2 << "},\n";
-    ss << i2 << "\n";
-
-    ss << i2 << "completionBonus = " << stage.completionBonus << ",\n";
-    ss << i2 << "perfectBonus = " << stage.perfectBonus << ",\n";
-    ss << i2 << "speedBonusTime = " << FormatFloat(stage.speedBonusTime) << ",\n";
-    ss << i2 << "speedBonus = " << stage.speedBonus << "\n";
-
-    ss << indent << "}";
-    return ss.str();
-}
-
-std::string Serializer::SerializeStages(const std::vector<StageData>& stages,
-                                        const std::string& helperBlock) {
-    std::ostringstream ss;
-
-    ss << "-- ============================================================================\n";
-    ss << "-- STAGES AND WAVES CONFIGURATION\n";
-    ss << "-- Complete level/wave definitions - data-driven level design\n";
-    ss << "-- ============================================================================\n";
+    ss << "-- ==========================================\n";
+    ss << "-- R-Type Game - Level " << level.id << ": " << level.name << "\n";
+    ss << "-- ==========================================\n";
     ss << "\n";
-    ss << "StagesConfig = {\n";
+    ss << varName << " = {\n";
+    ss << i1 << "id = " << level.id << ",\n";
+    ss << i1 << "name = \"" << level.name << "\",\n";
+    ss << "\n";
 
-    for (size_t i = 0; i < stages.size(); i++) {
-        if (i > 0) {
-            ss << ",\n    \n";
+    ss << i1 << "enemy_types = {";
+    for (size_t i = 0; i < level.enemyTypes.size(); i++) {
+        if (i > 0) ss << ", ";
+        ss << level.enemyTypes[i];
+    }
+    ss << "},\n";
+
+    ss << i1 << "module_types = {";
+    for (size_t i = 0; i < level.moduleTypes.size(); i++) {
+        if (i > 0) ss << ", ";
+        ss << level.moduleTypes[i];
+    }
+    ss << "},\n";
+    ss << "\n";
+
+    ss << i1 << "spawn = {\n";
+    ss << i2 << "enemy_interval = " << FormatFloat(level.spawn.enemyInterval) << ",\n";
+    ss << i2 << "powerup_interval = " << FormatFloat(level.spawn.powerupInterval) << ",\n";
+    ss << i2 << "module_interval = " << FormatFloat(level.spawn.moduleInterval) << ",\n";
+    ss << i2 << "max_enemies = " << level.spawn.maxEnemies << ",\n";
+    ss << i1 << "},\n";
+    ss << "\n";
+
+    ss << i1 << "waves = {\n";
+    for (size_t w = 0; w < level.waves.size(); w++) {
+        const auto& wave = level.waves[w];
+        ss << i2 << "{\n";
+        ss << i3 << "time = " << FormatFloat(wave.time) << ",\n";
+        ss << i3 << "enemies = {\n";
+        for (size_t e = 0; e < wave.enemies.size(); e++) {
+            const auto& enemy = wave.enemies[e];
+            ss << i3 << "    {type = " << enemy.type
+               << ", count = " << enemy.count
+               << ", interval = " << FormatFloat(enemy.interval) << "},\n";
         }
-
-        ss << "    -- ========================================================================\n";
-        ss << "    -- STAGE " << stages[i].stageNumber << " - ";
-        std::string upper = stages[i].name;
-        for (auto& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        ss << upper << "\n";
-        ss << "    -- ========================================================================\n";
-
-        ss << SerializeStage(stages[i], "    ");
+        ss << i3 << "}\n";
+        ss << i2 << "},\n";
     }
+    ss << i1 << "},\n";
+    ss << "\n";
 
-    ss << "\n}\n";
+    ss << i1 << "boss = {\n";
+    ss << i2 << "spawn_time = " << FormatFloat(level.boss.spawnTime) << ",\n";
+    ss << i2 << "type = " << level.boss.type << ",\n";
+    ss << i2 << "name = \"" << level.boss.name << "\",\n";
+    ss << i2 << "health = " << level.boss.health << ",\n";
+    ss << i2 << "speed = " << FormatFloat(level.boss.speed) << ",\n";
+    ss << i2 << "fire_rate = " << FormatFloat(level.boss.fireRate) << ",\n";
+    ss << i2 << "fire_pattern = " << level.boss.firePattern << ",\n";
+    ss << i2 << "sprite = {\n";
+    ss << i3 << "path = \"" << level.boss.sprite.path << "\",\n";
+    ss << i3 << "frame_width = " << level.boss.sprite.frameWidth << ",\n";
+    ss << i3 << "frame_height = " << level.boss.sprite.frameHeight << ",\n";
+    ss << i3 << "frame_count = " << level.boss.sprite.frameCount << ",\n";
+    ss << i3 << "frame_time = " << FormatFloat(level.boss.sprite.frameTime) << ",\n";
+    ss << i3 << "scale = " << FormatFloat(level.boss.sprite.scale) << ",\n";
+    ss << i3 << "vertical = " << (level.boss.sprite.vertical ? "true" : "false") << ",\n";
+    ss << i2 << "},\n";
+    ss << i1 << "},\n";
+    ss << "\n";
 
-    if (!helperBlock.empty()) {
-        ss << helperBlock;
-    }
+    ss << i1 << "stop_spawning_at_boss = " << (level.stopSpawningAtBoss ? "true" : "false") << ",\n";
+    ss << "}\n";
+    ss << "\n";
+    ss << "print(\"[LUA] Level " << level.id << " loaded\")\n";
+    ss << "return " << varName << "\n";
 
     return ss.str();
+}
+
+bool Serializer::SaveLevel(const LevelData& level, const std::string& path) {
+    std::string content = SerializeLevel(level);
+
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "[Serializer] Cannot write to: " << path << std::endl;
+        return false;
+    }
+
+    file << content;
+    file.close();
+
+    std::cout << "[Serializer] Saved level " << level.id << " to " << path << std::endl;
+    return true;
 }
 
 }

@@ -12,7 +12,7 @@ namespace Editor {
 
 class EditorApp {
 public:
-    void Init(const std::string& stagesPath, const std::string& enemiesPath);
+    void Init(const std::string& levelsDir, const std::string& enemiesPath);
     void Update(sf::RenderWindow& window);
 
     bool WantsToQuit() const { return wantsToQuit_; }
@@ -24,23 +24,20 @@ private:
     SpawnTable spawnTable_;
     Canvas canvas_;
 
-    std::string helperFunctionsBlock_;
     bool wantsToQuit_ = false;
-    bool showSaveConfirm_ = false;
     std::string errorMessage_;
     bool showError_ = false;
 
     void RenderMenuBar();
-    void RenderStageSelector();
-    void RenderStageProperties();
+    void RenderLevelSelector();
+    void RenderLevelProperties();
+    void RenderBossProperties();
     void RenderStatusBar();
     void RenderErrorPopup();
 
     void Save();
-    void SaveAs(const std::string& path);
     void Reload();
-
-    void AssignSpawnIds();
+    void CopyLevelsToBuildDirs();
 };
 
 }
