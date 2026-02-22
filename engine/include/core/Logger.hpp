@@ -21,6 +21,11 @@
 namespace rtype {
 namespace core {
 
+// Windows headers (winsock2.h via asio) define ERROR as a macro — undefine it
+#ifdef ERROR
+#undef ERROR
+#endif
+
 enum class LogLevel {
     DEBUG = 0,
     INFO = 1,
