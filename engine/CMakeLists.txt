@@ -311,7 +311,7 @@ target_include_directories(InputSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(InputSystem PUBLIC ecs)
+target_link_libraries(InputSystem PUBLIC ecs core)
 
 # Lifetime System
 add_library(LifetimeSystem SHARED
@@ -326,7 +326,7 @@ target_include_directories(LifetimeSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(LifetimeSystem PUBLIC ecs)
+target_link_libraries(LifetimeSystem PUBLIC ecs core)
 
 # Animation System
 add_library(AnimationSystem SHARED
@@ -341,7 +341,7 @@ target_include_directories(AnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(AnimationSystem PUBLIC ecs rendering)
+target_link_libraries(AnimationSystem PUBLIC ecs rendering core)
 
 # StateMachine Animation System (for player ship animations)
 add_library(StateMachineAnimationSystem SHARED
@@ -356,7 +356,7 @@ target_include_directories(StateMachineAnimationSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering)
+target_link_libraries(StateMachineAnimationSystem PUBLIC ecs rendering core)
 
 # NOTE: Weapon, Enemy Spawn, and Movement Pattern systems moved to shootemup module
 # See engine/modules/shootemup/
@@ -374,7 +374,7 @@ target_include_directories(ScrollingBackgroundSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(ScrollingBackgroundSystem PUBLIC ecs rendering)
+target_link_libraries(ScrollingBackgroundSystem PUBLIC ecs rendering core)
 
 # Boundary System
 add_library(BoundarySystem SHARED
@@ -425,7 +425,7 @@ if(LUA_FOUND)
     )
 
     # Link Lua library - use the detected library from architecture-aware detection
-    target_link_libraries(UISystem PUBLIC ecs rendering scripting ${LUA_LIBRARIES})
+    target_link_libraries(UISystem PUBLIC ecs rendering scripting ${LUA_LIBRARIES} core)
 
     # Add to engine interface
     target_link_libraries(engine INTERFACE UISystem)
