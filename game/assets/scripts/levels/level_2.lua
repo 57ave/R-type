@@ -90,5 +90,5 @@ Level2 = {
     stop_spawning_at_boss = true,
 }
 
-print("[LUA] ✅ Level 2 loaded")
+print("[LUA]  Level 2 loaded")
 return Level2

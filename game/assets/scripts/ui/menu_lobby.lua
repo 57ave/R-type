@@ -99,6 +99,6 @@ function on_leave_room()
     print("[LUA] Leave Room clicked!")
 end
 
-print("[LUA] ✅ Lobby Menu UI loaded")
+print("[LUA]  Lobby Menu UI loaded")
 
 return LobbyMenu

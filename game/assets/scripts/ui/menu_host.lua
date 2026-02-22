@@ -104,6 +104,6 @@ function on_cancel()
     print("[LUA] Cancel clicked!")
 end
 
-print("[LUA] ✅ Host Menu UI loaded")
+print("[LUA]  Host Menu UI loaded")
 
 return HostMenu

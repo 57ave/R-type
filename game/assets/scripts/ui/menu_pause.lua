@@ -80,6 +80,6 @@ function on_quit_to_menu()
     -- Pop all states, push MainMenuState
 end
 
-print("[LUA] ✅ Pause Menu UI loaded")
+print("[LUA]  Pause Menu UI loaded")
 
 return PauseMenu

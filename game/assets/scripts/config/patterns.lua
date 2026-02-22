@@ -97,6 +97,6 @@ Patterns = {
     }
 }
 
-print("[LUA] ✅ Patterns config loaded")
+print("[LUA]  Patterns config loaded")
 
 return Patterns

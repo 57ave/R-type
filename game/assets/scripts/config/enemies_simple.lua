@@ -179,6 +179,6 @@ EnemiesSimple = {
     }
 }
 
-print("[LUA] ✅ Enemies (simplified) config loaded")
+print("[LUA]  Enemies (simplified) config loaded")
 
 return EnemiesSimple

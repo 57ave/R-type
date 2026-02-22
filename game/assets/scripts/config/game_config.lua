@@ -85,6 +85,6 @@ Game = {
     }
 }
 
-print("[LUA] ✅ Game config loaded")
+print("[LUA]  Game config loaded")
 
 return Game

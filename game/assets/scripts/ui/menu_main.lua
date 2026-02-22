@@ -96,6 +96,6 @@ function on_quit()
     -- Will close the game
 end
 
-print("[LUA] ✅ Main Menu UI loaded")
+print("[LUA]  Main Menu UI loaded")
 
 return MainMenu

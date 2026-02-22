@@ -273,6 +273,6 @@ Enemies = {
     }
 }
 
-print("[LUA] ✅ Enemies config loaded")
+print("[LUA]  Enemies config loaded")
 
 return Enemies
