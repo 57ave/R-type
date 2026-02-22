@@ -76,7 +76,12 @@ add_custom_command(TARGET r-type_server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/game/assets/scripts/config
         $<TARGET_FILE_DIR:r-type_server>/assets/scripts/config
-    COMMENT "Copying Lua config files to server build directory"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:r-type_server>/assets/scripts/levels
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/game/assets/scripts/levels
+        $<TARGET_FILE_DIR:r-type_server>/assets/scripts/levels
+    COMMENT "Copying Lua config and level files to server build directory"
 )
 
 if(WIN32)

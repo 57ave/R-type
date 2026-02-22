@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_ATTACHMENTSYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_ATTACHMENTSYSTEM_HPP
+#ifndef SHOOTEMUP_SYSTEMS_ATTACHMENTSYSTEM_HPP
+#define SHOOTEMUP_SYSTEMS_ATTACHMENTSYSTEM_HPP
 
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
@@ -14,7 +14,7 @@ namespace ShootEmUp {
 namespace Systems {
 
 /**
- * @brief Force Pod System - Manages the iconic R-Type Force attachment
+ * @brief Force Pod System - Manages force-pod style attachments
  * 
  * The Force is an indestructible pod that can:
  * - Attach to front or back of ship
@@ -178,4 +178,4 @@ private:
 } // namespace Systems
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_SYSTEMS_ATTACHMENTSYSTEM_HPP
+#endif // SHOOTEMUP_SYSTEMS_ATTACHMENTSYSTEM_HPP

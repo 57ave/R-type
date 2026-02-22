@@ -160,6 +160,9 @@ private:
     float levelTransitionTimer_ = 0.0f;
     bool showLevelText_ = false;
     void onLevelChange(uint8_t level);
+    void loadLevelNamesFromLua();
+    std::unordered_map<int, std::string> levelNames_;   // level id -> name
+    std::unordered_map<int, std::string> bossNames_;    // boss enemy_type -> boss name
 
     // Game end states (deferred from network callbacks)
     bool gameEndTriggered_ = false;

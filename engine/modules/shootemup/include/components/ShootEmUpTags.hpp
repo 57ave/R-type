@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SHOOTEMUP_COMPONENTS_TAGS_HPP
-#define RTYPE_ENGINE_SHOOTEMUP_COMPONENTS_TAGS_HPP
+#ifndef SHOOTEMUP_COMPONENTS_TAGS_HPP
+#define SHOOTEMUP_COMPONENTS_TAGS_HPP
 
 #include <string>
 
@@ -8,7 +8,7 @@
  * @brief Shoot'em up specific tag components (reusable module)
  * 
  * These are GENERIC shoot'em up tag components that can be used
- * in ANY shoot'em up game, not just R-Type.
+ * in ANY shoot'em up game.
  */
 
 namespace ShootEmUp {
@@ -78,4 +78,4 @@ using ShootEmUpPlayerTag = ShootEmUp::Components::PlayerTag;
 using ShootEmUpEnemyTag = ShootEmUp::Components::EnemyTag;
 using ShootEmUpProjectileTag = ShootEmUp::Components::ProjectileTag;
 
-#endif // RTYPE_ENGINE_SHOOTEMUP_COMPONENTS_TAGS_HPP
+#endif // SHOOTEMUP_COMPONENTS_TAGS_HPP

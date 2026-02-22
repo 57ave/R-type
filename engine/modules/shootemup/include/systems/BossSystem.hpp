@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_BOSSSYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_BOSSSYSTEM_HPP
+#ifndef SHOOTEMUP_SYSTEMS_BOSSSYSTEM_HPP
+#define SHOOTEMUP_SYSTEMS_BOSSSYSTEM_HPP
 
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
@@ -127,4 +127,4 @@ private:
 } // namespace Systems
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_SYSTEMS_BOSSSYSTEM_HPP
+#endif // SHOOTEMUP_SYSTEMS_BOSSSYSTEM_HPP

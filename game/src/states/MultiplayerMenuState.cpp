@@ -158,15 +158,6 @@ void MultiplayerMenuState::createHostMenu()
                                  playersLabel["fontSize"].get<int>());
         menuEntities_.push_back(playersLabelEntity);
         
-        auto portLabel = menuConfig["port_label"];
-        ECS::Entity portLabelEntity = coordinator->CreateEntity();
-        lua["ECS"]["AddUIText"](portLabelEntity,
-                                 portLabel["x"].get<float>(),
-                                 portLabel["y"].get<float>(),
-                                 portLabel["text"].get<std::string>(),
-                                 portLabel["fontSize"].get<int>());
-        menuEntities_.push_back(portLabelEntity);
-        
         // Create input fields
         auto roomInput = menuConfig["room_input"];
         ECS::Entity roomInputEntity = coordinator->CreateEntity();
@@ -189,17 +180,6 @@ void MultiplayerMenuState::createHostMenu()
                                        playersInput["placeholder"].get<std::string>(),
                                        playersInput["maxLength"].get<int>());
         menuEntities_.push_back(playersInputEntity);
-        
-        auto portInput = menuConfig["port_input"];
-        ECS::Entity portInputEntity = coordinator->CreateEntity();
-        lua["ECS"]["AddUIInputField"](portInputEntity,
-                                       portInput["x"].get<float>(),
-                                       portInput["y"].get<float>(),
-                                       portInput["width"].get<float>(),
-                                       portInput["height"].get<float>(),
-                                       portInput["placeholder"].get<std::string>(),
-                                       portInput["maxLength"].get<int>());
-        menuEntities_.push_back(portInputEntity);
         
         // Create buttons
         sol::table buttons = menuConfig["buttons"];
@@ -601,6 +581,18 @@ void MultiplayerMenuState::createLobbyMenu()
                 continue;
             }
             
+            // Grey out "Start Game" if not all players are ready
+            if (btnText == "Start Game" && networkMgr) {
+                const auto& roomPlayers = networkMgr->getRoomPlayers();
+                bool allReady = !roomPlayers.empty();
+                for (const auto& p : roomPlayers) {
+                    if (!p.isReady) { allReady = false; break; }
+                }
+                if (!allReady) {
+                    btnText = "Waiting for players...";
+                }
+            }
+            
             // Update Ready button text based on current state
             if (btnText == "Ready") {
                 btnText = isReady_ ? "Not Ready" : "Ready";
@@ -763,7 +755,6 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                             // Read values from input fields
                             std::string roomName = playerName_ + "'s Room";
                             uint8_t maxPlayers = 4; // Default
-                            uint16_t port = serverPort_;
                             
                             for (auto inputEntity : menuEntities_) {
                                 if (!coordinator->HasComponent<Components::UIInputField>(inputEntity)) continue;
@@ -776,19 +767,13 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                                         int val = std::stoi(field.text);
                                         if (val >= 2 && val <= 4) maxPlayers = static_cast<uint8_t>(val);
                                     } catch (...) {}
-                                } else if (field.placeholder == std::to_string(serverPort_) && !field.text.empty()) {
-                                    // Port field: placeholder matches the port from config
-                                    try {
-                                        int val = std::stoi(field.text);
-                                        if (val > 0 && val <= 65535) port = static_cast<uint16_t>(val);
-                                    } catch (...) {}
                                 }
                             }
                             
-                            networkMgr->startServer(port, maxPlayers);
+                            networkMgr->startServer(serverPort_, maxPlayers);
                             networkMgr->createRoom(roomName, maxPlayers);
                             std::cout << "[MultiplayerMenuState] ✅ Server started! Room: '" << roomName 
-                                      << "', Max players: " << (int)maxPlayers << ", Port: " << port << std::endl;
+                                      << "', Max players: " << (int)maxPlayers << ", Port: " << serverPort_ << std::endl;
                             createLobbyMenu();
                         }
                     }
@@ -879,12 +864,24 @@ void MultiplayerMenuState::handleEvent(const eng::engine::InputEvent& event)
                     }
                     else if (button.text == "Start Game")
                     {
-                        std::cout << "[MultiplayerMenuState] 🚀 Starting game..." << std::endl;
                         auto networkMgr = game_->getNetworkManager();
                         if (networkMgr && networkMgr->isHosting()) {
-                            networkMgr->startGame();
-                            std::cout << "[MultiplayerMenuState] ✅ Host sent GAME_START packet" << std::endl;
-                            // TODO Phase 6: Transition to PlayState when GAME_START is received
+                            // Check that all players in the room are ready
+                            const auto& roomPlayers = networkMgr->getRoomPlayers();
+                            bool allReady = !roomPlayers.empty();
+                            for (const auto& p : roomPlayers) {
+                                if (!p.isReady) {
+                                    allReady = false;
+                                    break;
+                                }
+                            }
+                            if (allReady) {
+                                std::cout << "[MultiplayerMenuState] 🚀 All players ready — starting game!" << std::endl;
+                                networkMgr->startGame();
+                                std::cout << "[MultiplayerMenuState] ✅ Host sent GAME_START packet" << std::endl;
+                            } else {
+                                std::cout << "[MultiplayerMenuState] ⚠️ Cannot start: not all players are ready" << std::endl;
+                            }
                         }
                     }
                     else if (button.text == "Leave Room")

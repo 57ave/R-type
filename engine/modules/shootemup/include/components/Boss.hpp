@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_BOSS_HPP
-#define RTYPE_ENGINE_COMPONENTS_BOSS_HPP
+#ifndef SHOOTEMUP_COMPONENTS_BOSS_HPP
+#define SHOOTEMUP_COMPONENTS_BOSS_HPP
 
 #include <string>
 #include <vector>
@@ -15,8 +15,8 @@ namespace Components {
  */
 struct Boss {
     // Boss identifier
-    std::string bossType = "stage1_boss";
-    std::string bossName = "Unknown Boss";
+    std::string bossType = "";
+    std::string bossName = "Boss";
     
     // Phase system
     int currentPhase = 1;
@@ -111,4 +111,4 @@ struct BossPart {
 } // namespace Components
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_COMPONENTS_BOSS_HPP
+#endif // SHOOTEMUP_COMPONENTS_BOSS_HPP

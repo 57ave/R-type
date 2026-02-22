@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_SYSTEMS_WAVESYSTEM_HPP
-#define RTYPE_ENGINE_SYSTEMS_WAVESYSTEM_HPP
+#ifndef SHOOTEMUP_SYSTEMS_WAVESYSTEM_HPP
+#define SHOOTEMUP_SYSTEMS_WAVESYSTEM_HPP
 
 #include <ecs/System.hpp>
 #include <ecs/Coordinator.hpp>
@@ -26,6 +26,7 @@ public:
     
     // Stage management
     void LoadStage(int stageNumber);
+    void SetStage(const Components::Stage& stage);
     void StartStage();
     void EndStage();
     bool IsStageComplete() const { return currentStage_.isCompleted; }
@@ -58,11 +59,6 @@ public:
     Components::GameProgress& GetProgress() { return gameProgress_; }
     const Components::Stage& GetCurrentStage() const { return currentStage_; }
     
-    // Predefined stages
-    void CreateStage1();
-    void CreateStage2();
-    void CreateStage3();
-    
 private:
     ECS::Coordinator* coordinator_ = nullptr;
     
@@ -84,4 +80,4 @@ private:
 } // namespace Systems
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_SYSTEMS_WAVESYSTEM_HPP
+#endif // SHOOTEMUP_SYSTEMS_WAVESYSTEM_HPP

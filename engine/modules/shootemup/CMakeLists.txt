@@ -1,4 +1,4 @@
-# Shoot'em Up Module for R-Type Engine
+# Shoot'em Up Module for Shoot'em Up games
 # Reusable components, systems, and utilities for shoot'em up games
 
 cmake_minimum_required(VERSION 3.20)

@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_ATTACHMENT_HPP
-#define RTYPE_ENGINE_COMPONENTS_ATTACHMENT_HPP
+#ifndef SHOOTEMUP_COMPONENTS_ATTACHMENT_HPP
+#define SHOOTEMUP_COMPONENTS_ATTACHMENT_HPP
 
 #include <ecs/ECS.hpp>
 #include <string>
@@ -60,4 +60,4 @@ struct VisualAttachment {
 } // namespace Components
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_COMPONENTS_ATTACHMENT_HPP
+#endif // SHOOTEMUP_COMPONENTS_ATTACHMENT_HPP

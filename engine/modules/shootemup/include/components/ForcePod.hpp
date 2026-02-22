@@ -1,5 +1,5 @@
-#ifndef RTYPE_ENGINE_COMPONENTS_FORCEPOD_HPP
-#define RTYPE_ENGINE_COMPONENTS_FORCEPOD_HPP
+#ifndef SHOOTEMUP_COMPONENTS_FORCEPOD_HPP
+#define SHOOTEMUP_COMPONENTS_FORCEPOD_HPP
 
 #include <ecs/ECS.hpp>
 #include <string>
@@ -8,7 +8,7 @@ namespace ShootEmUp {
 namespace Components {
 
 /**
- * @brief Force Pod component - the iconic R-Type force attachment
+ * @brief Force Pod component - a force-pod style attachment
  * 
  * The Force is an indestructible pod that can:
  * - Attach to front or back of ship
@@ -161,4 +161,4 @@ struct SpeedBoost {
 } // namespace Components
 } // namespace ShootEmUp
 
-#endif // RTYPE_ENGINE_COMPONENTS_FORCEPOD_HPP
+#endif // SHOOTEMUP_COMPONENTS_FORCEPOD_HPP
