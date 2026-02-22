@@ -1,5 +1,5 @@
 #include <core/SystemLoader.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <stdexcept>
 
 #ifdef _WIN32
@@ -31,7 +31,7 @@ SystemLoader::~SystemLoader() {
 
 std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath, const std::string& systemName) {
     if (IsLoaded(systemName)) {
-        std::cout << "[SystemLoader] System already loaded: " << systemName << std::endl;
+        LOG_INFO("SYSTEMLOADER", "System already loaded: " + systemName);
         return m_LoadedSystems[systemName].system;
     }
     
@@ -75,14 +75,14 @@ std::shared_ptr<ECS::System> SystemLoader::LoadSystem(const std::string& libPath
     
     m_LoadedSystems[systemName] = sysHandle;
     
-    std::cout << "[SystemLoader] Loaded system '" << systemName << "' from: " << libPath << std::endl;
+    LOG_INFO("SYSTEMLOADER", "Loaded system '" + systemName + "' from: " + libPath);
     return system;
 }
 
 void SystemLoader::UnloadSystem(const std::string& systemName) {
     auto it = m_LoadedSystems.find(systemName);
     if (it == m_LoadedSystems.end()) {
-        std::cerr << "[SystemLoader] System not loaded: " << systemName << std::endl;
+        LOG_ERROR("SYSTEMLOADER", "System not loaded: " + systemName);
         return;
     }
     
@@ -90,7 +90,7 @@ void SystemLoader::UnloadSystem(const std::string& systemName) {
     m_LoadedSystems.erase(it);
     DL_CLOSE(handle);
     
-    std::cout << "[SystemLoader] Unloaded system: " << systemName << std::endl;
+    LOG_INFO("SYSTEMLOADER", "Unloaded system: " + systemName);
 }
 
 std::shared_ptr<ECS::System> SystemLoader::ReloadSystem(const std::string& systemName) {
@@ -99,7 +99,7 @@ std::shared_ptr<ECS::System> SystemLoader::ReloadSystem(const std::string& syste
         throw std::runtime_error("[SystemLoader] Cannot reload unknown system: " + systemName);
     }
     
-    std::cout << "[SystemLoader] Reloading system: " << systemName << std::endl;
+    LOG_INFO("SYSTEMLOADER", "Reloading system: " + systemName);
     
     std::string libPath = it->second.libPath;
     ECS::Signature signature = it->second.signature;

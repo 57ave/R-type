@@ -2,11 +2,12 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/MusicManager.hpp"
 #include "states/MainMenuState.hpp"
 #include <rendering/IRenderer.hpp>
 #include <rendering/sfml/SFMLText.hpp>
 #include <engine/Input.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 GameOverState::GameOverState(Game* game, int finalScore)
     : finalScore_(finalScore)
@@ -24,7 +25,7 @@ void GameOverState::onEnter()
 
     font_ = std::make_unique<eng::engine::rendering::sfml::SFMLFont>();
     if (!font_->loadFromFile("assets/fonts/arial.ttf")) {
-        std::cerr << "[GameOverState] Failed to load font" << std::endl;
+        LOG_ERROR("GAMEOVER", "Failed to load font");
     }
 
     // "GAME OVER" title
@@ -53,6 +54,11 @@ void GameOverState::onEnter()
 
     timer_ = 0.0f;
     inputBlocked_ = true;
+
+    // Play game over music
+    if (auto* music = game_->getMusicManager()) {
+        music->play("assets/sounds/THE END OF WAR (GAME OVER).ogg", false);
+    }
 }
 
 void GameOverState::onExit()

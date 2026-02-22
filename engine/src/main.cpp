@@ -1,7 +1,7 @@
-#include <iostream>
+#include "core/Logger.hpp"
 
 int main(void)
 {
-    std::cout << "Hello World !" << std::endl;
+    LOG_INFO("MAIN", "Hello World !");
     return 0;
 }

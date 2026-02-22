@@ -1,4 +1,4 @@
-#include <iostream>
+#include "core/Logger.hpp"
 #include <thread>
 #include <chrono>
 #include <vector>
@@ -112,14 +112,14 @@ public:
         
         // Load configuration from Lua
         if (!ServerConfig::loadFromLua(cfg_, "assets/scripts/config/server_config.lua")) {
-            std::cout << "[GameServer] ⚠️ Using default config values" << std::endl;
+            LOG_INFO("GAMESERVER", " Using default config values");
         }
     }
 
     void start() {
         server_.start();
         gameRunning_ = true;
-        std::cout << "[GameServer] Started on port " << cfg_.server.port << std::endl;
+        LOG_INFO("GAMESERVER", "Started on port " + std::to_string(cfg_.server.port));
     }
 
     void run() {
@@ -247,8 +247,7 @@ private:
         }
         
         // Fallback: level Lua file was empty or missing — nothing spawns
-        std::cerr << "[GameServer] ⚠️ No Lua config for level " << level 
-                  << " — level_*.lua file may be empty or missing. Nothing will spawn." << std::endl;
+        LOG_ERROR("GAMESERVER", " No Lua config for level " + std::to_string(level) + " — level_*.lua file may be empty or missing. Nothing will spawn.");
         config.id = level;
         config.name = "Empty Level";
         config.enemyTypes = {};
@@ -278,7 +277,7 @@ private:
         gs.waveSpawnState = RoomGameState::WaveSpawnState{};
         
         auto config = getLevelConfig(level);
-        std::cout << "[GameServer] 🎮 === LEVEL " << level << ": " << config.name << " === (room " << gs.roomId << ")" << std::endl;
+        LOG_INFO("GAMESERVER", " === LEVEL " + std::to_string(level) + ": " + config.name + " === (room " + std::to_string(gs.roomId) + ")");
         
         // Broadcast level change to this room only
         broadcastLevelChange(level, gs.roomId);
@@ -306,7 +305,7 @@ private:
         if (gs.bossSpawned && gs.bossAlive) {
             if (gs.entities.find(gs.bossEntityId) == gs.entities.end()) {
                 gs.bossAlive = false;
-                std::cout << "[GameServer] 🏆 Boss defeated! Level " << gs.currentLevel << " complete! (room " << gs.roomId << ")" << std::endl;
+                LOG_INFO("GAMESERVER", " Boss defeated! Level " + std::to_string(gs.currentLevel) + " complete! (room " + std::to_string(gs.roomId) + ")");
                 
                 // Clear remaining enemies
                 std::vector<uint32_t> toRemove;
@@ -325,9 +324,9 @@ private:
                     // Advance to next level after a short delay
                     gs.currentLevel++;
                     gs.levelActive = false; // Will restart on next tick
-                    std::cout << "[GameServer] ⏭️ Advancing to Level " << gs.currentLevel << "... (room " << gs.roomId << ")" << std::endl;
+                    LOG_INFO("GAMESERVER", "⏭ Advancing to Level " + std::to_string(gs.currentLevel) + "... (room " + std::to_string(gs.roomId) + ")");
                 } else {
-                    std::cout << "[GameServer] 🎉 ALL LEVELS COMPLETE! Game Won! (room " << gs.roomId << ")" << std::endl;
+                    LOG_INFO("GAMESERVER", " ALL LEVELS COMPLETE! Game Won! (room " + std::to_string(gs.roomId) + ")");
                     // Calculate total score from all players
                     uint32_t totalScore = 0;
                     for (const auto& [eid, e] : gs.entities) {
@@ -355,8 +354,7 @@ private:
                 gs.waveSpawnState.enemyIdx = 0;
                 gs.waveSpawnState.spawnedCount = 0;
                 gs.waveSpawnState.spawnTimer = 0.0f;
-                std::cout << "[GameServer] 🌊 Wave " << (gs.currentWaveIndex + 1) 
-                          << " triggered at " << gs.levelTimer << "s (room " << gs.roomId << ")" << std::endl;
+                LOG_INFO("GAMESERVER", " Wave " + std::to_string((gs.currentWaveIndex + 1)) + " triggered at " + std::to_string(gs.levelTimer) + "s (room " + std::to_string(gs.roomId) + ")");
             }
         }
         
@@ -365,7 +363,7 @@ private:
             spawnBoss(config.boss, gs);
             gs.bossSpawned = true;
             gs.bossAlive = true;
-            std::cout << "[GameServer] 👹 BOSS SPAWNED! (Level " << gs.currentLevel << ", room " << gs.roomId << ")" << std::endl;
+            LOG_INFO("GAMESERVER", " BOSS SPAWNED! (Level " + std::to_string(gs.currentLevel) + ", room " + std::to_string(gs.roomId) + ")");
         }
         
         // Regular spawning between waves (only if boss hasn't spawned or stopSpawningAtBoss is false)
@@ -536,8 +534,7 @@ private:
         gs.entities[boss.id] = boss;
         broadcastEntitySpawn(boss, gs.roomId);
         
-        std::cout << "[GameServer] 👹 Boss " << (int)bossConfig.type 
-                  << " spawned (HP=" << (int)boss.hp << ") in room " << gs.roomId << std::endl;
+        LOG_INFO("GAMESERVER", " Boss " + std::to_string((int)bossConfig.type) + " spawned (HP=" + std::to_string((int)boss.hp) + ") in room " + std::to_string(gs.roomId));
     }
     
     void broadcastLevelChange(int level, uint32_t roomId) {
@@ -547,7 +544,7 @@ private:
         
         broadcastToRoom(roomId, packet);
         
-        std::cout << "[GameServer] 📡 Broadcast LEVEL_CHANGE: Level " << level << " (room " << roomId << ")" << std::endl;
+        LOG_INFO("GAMESERVER", " Broadcast LEVEL_CHANGE: Level " + std::to_string(level) + " (room " + std::to_string(roomId) + ")");
     }
 
     void broadcastGameOver(uint32_t totalScore, uint32_t roomId) {
@@ -558,7 +555,7 @@ private:
         packet.setPayload(payload);
 
         broadcastToRoom(roomId, packet);
-        std::cout << "[GameServer] 💀 Broadcast GAME_OVER (score: " << totalScore << ") to room " << roomId << std::endl;
+        LOG_INFO("GAMESERVER", " Broadcast GAME_OVER (score: " + std::to_string(totalScore) + ") to room " + std::to_string(roomId));
     }
 
     void broadcastGameVictory(uint32_t totalScore, uint32_t roomId) {
@@ -569,7 +566,7 @@ private:
         packet.setPayload(payload);
 
         broadcastToRoom(roomId, packet);
-        std::cout << "[GameServer] 🏆 Broadcast GAME_VICTORY (score: " << totalScore << ") to room " << roomId << std::endl;
+        LOG_INFO("GAMESERVER", " Broadcast GAME_VICTORY (score: " + std::to_string(totalScore) + ") to room " + std::to_string(roomId));
     }
 
     void processPackets() {
@@ -620,8 +617,7 @@ private:
         
         endpointToPlayerId_[sender] = playerId; // Map endpoint to playerId
         
-        std::cout << "[GameServer] Client connected. Assigned Player ID: " << (int)playerId 
-                  << " (entity will be created when game starts)" << std::endl;
+        LOG_INFO("GAMESERVER", "Client connected. Assigned Player ID: " + std::to_string((int)playerId) + " (entity will be created when game starts)");
         
         // Send SERVER_WELCOME
         NetworkPacket welcome(static_cast<uint16_t>(GamePacketType::SERVER_WELCOME));
@@ -629,15 +625,14 @@ private:
         welcome.payload.push_back(playerId);
         
         server_.sendTo(welcome, sender);
-        std::cout << "[Network] Welcome sent to " << sender.address().to_string() 
-                  << ":" << sender.port() << " (Player ID: " << (int)playerId << ")" << std::endl;
+        LOG_INFO("NETWORK", "Welcome sent to " + sender.address().to_string() + ":" + std::to_string(sender.port()) + " (Player ID: " + std::to_string((int)playerId) + ")");
         
         // Don't create entity or broadcast yet - wait for game to start
     }
 
     void handleClientInput(const NetworkPacket& packet, const asio::ip::udp::endpoint&) {
         if (packet.payload.size() < sizeof(ClientInput)) {
-            std::cerr << "[GameServer] INPUT: payload too small" << std::endl;
+            LOG_ERROR("GAMESERVER", "INPUT: payload too small");
             return;
         }
         
@@ -646,13 +641,13 @@ private:
         // Find which room this player belongs to
         auto roomIt = playerToRoom_.find(input.playerId);
         if (roomIt == playerToRoom_.end()) {
-            std::cerr << "[GameServer] INPUT: player " << (int)input.playerId << " not in playerToRoom_ (map size: " << playerToRoom_.size() << ")" << std::endl;
+            LOG_ERROR("GAMESERVER", "INPUT: player " + std::to_string((int)input.playerId) + " not in playerToRoom_ (map size: " + std::to_string(playerToRoom_.size()) + ")");
             return;
         }
         
         auto gsIt = roomStates_.find(roomIt->second);
         if (gsIt == roomStates_.end()) {
-            std::cerr << "[GameServer] INPUT: room " << roomIt->second << " not in roomStates_ (map size: " << roomStates_.size() << ")" << std::endl;
+            LOG_ERROR("GAMESERVER", "INPUT: room " + std::to_string(roomIt->second) + " not in roomStates_ (map size: " + std::to_string(roomStates_.size()) + ")");
             return;
         }
         RoomGameState& gs = gsIt->second;
@@ -712,7 +707,7 @@ private:
         gs.playerPrevFire[input.playerId] = firePressed;
     }
 
-    // ✅ NOUVEAU: Handler pour CLIENT_PING
+    //  NOUVEAU: Handler pour CLIENT_PING
     void handleClientPing(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (session) {
@@ -731,7 +726,7 @@ private:
     }
 
     void handleClientDisconnect(const asio::ip::udp::endpoint& sender) {
-        std::cout << "[GameServer] Client disconnected: " << sender << std::endl;
+        LOG_INFO("GAMESERVER", "Client disconnected: " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
         
         // Try to get session first (from room-system-improvements)
         auto session = server_.getSession(sender);
@@ -742,19 +737,19 @@ private:
             // Use session-based approach (preferred method from room-system-improvements)
             playerId = session->playerId;
             roomId = session->roomId;
-            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from session (room: " << roomId << ")" << std::endl;
+            LOG_INFO("GAMESERVER", "Cleaning up player " + std::to_string((int)playerId) + " from session (room: " + std::to_string(roomId) + ")");
         } else {
             // Fallback to endpoint mapping (from game_menu)
             auto epIt = endpointToPlayerId_.find(sender);
             if (epIt == endpointToPlayerId_.end()) {
-                std::cout << "[GameServer] Unknown endpoint, cannot cleanup" << std::endl;
+                LOG_INFO("GAMESERVER", "Unknown endpoint, cannot cleanup");
                 return; // Unknown endpoint
             }
             playerId = epIt->second;
-            std::cout << "[GameServer] Cleaning up player " << (int)playerId << " from endpoint mapping" << std::endl;
+            LOG_INFO("GAMESERVER", "Cleaning up player " + std::to_string((int)playerId) + " from endpoint mapping");
         }
         
-        // ✅ NOUVEAU: Remove player entity with explosion
+        //  NOUVEAU: Remove player entity with explosion
         auto roomIt = playerToRoom_.find(playerId);
         if (roomIt != playerToRoom_.end()) {
             auto gsIt = roomStates_.find(roomIt->second);
@@ -768,14 +763,13 @@ private:
                     auto entityIt = gs.entities.find(entityId);
                     if (entityIt != gs.entities.end()) {
                         spawnExplosion(entityIt->second.x, entityIt->second.y, gs);
-                        std::cout << "[GameServer] Created explosion at player " << (int)playerId << " position (" 
-                                  << entityIt->second.x << ", " << entityIt->second.y << ")" << std::endl;
+                        LOG_INFO("GAMESERVER", "Created explosion at player " + std::to_string((int)playerId) + " position (" + std::to_string(entityIt->second.x) + ", " + std::to_string(entityIt->second.y) + ")");
                     }
                     
                     // Remove from entities map
                     if (gs.entities.erase(entityId)) {
                         broadcastEntityDestroy(entityId, gs.roomId);
-                        std::cout << "[GameServer] Removed player " << (int)playerId << " entity " << entityId << std::endl;
+                        LOG_INFO("GAMESERVER", "Removed player " + std::to_string((int)playerId) + " entity " + std::to_string(entityId));
                     }
                     
                     gs.playerEntities.erase(playerIt);
@@ -785,19 +779,18 @@ private:
             }
         }
         
-        // ✅ NOUVEAU: Clean up room membership and transfer ownership if needed
+        //  NOUVEAU: Clean up room membership and transfer ownership if needed
         if (roomId != 0) {
             auto& roomManager = server_.getRoomManager();
             auto room = roomManager.getRoom(roomId);
             if (room) {
                 room->removePlayer(playerId);
-                std::cout << "[GameServer] Removed player " << (int)playerId << " from room " << roomId << std::endl;
+                LOG_INFO("GAMESERVER", "Removed player " + std::to_string((int)playerId) + " from room " + std::to_string(roomId));
                 
-                // ✅ If this was the host, transfer ownership to another player
+                //  If this was the host, transfer ownership to another player
                 if (room->hostPlayerId == playerId && !room->playerIds.empty()) {
                     room->hostPlayerId = *room->playerIds.begin();
-                    std::cout << "[GameServer] ⚡ Transferred host ownership of room " << roomId 
-                              << " to player " << (int)room->hostPlayerId << std::endl;
+                    LOG_INFO("GAMESERVER", " Transferred host ownership of room " + std::to_string(roomId) + " to player " + std::to_string((int)room->hostPlayerId));
                 }
                 
                 // Broadcast updated player list
@@ -806,7 +799,7 @@ private:
                 // If room is now empty, clean up room game state
                 if (room->playerIds.empty()) {
                     roomStates_.erase(roomId);
-                    std::cout << "[GameServer] Cleaned up empty room state for room " << roomId << std::endl;
+                    LOG_INFO("GAMESERVER", "Cleaned up empty room state for room " + std::to_string(roomId));
                 }
             }
         }
@@ -822,17 +815,17 @@ private:
         std::vector<uint32_t> toRemove;
         
         for (auto& [id, entity] : gs.entities) {
-            // ✅ Update lifetime for temporary entities (explosions, etc.)
+            //  Update lifetime for temporary entities (explosions, etc.)
             if (entity.lifetime > 0.0f) {
                 entity.lifetime -= deltaTime;
                 if (entity.lifetime <= 0.0f) {
                     toRemove.push_back(id);
-                    std::cout << "[GameServer] Entity " << id << " (type: " << (int)entity.type << ") lifetime expired" << std::endl;
+                    LOG_INFO("GAMESERVER", "Entity " + std::to_string(id) + " (type: " + std::to_string((int)entity.type) + ") lifetime expired");
                     continue; // Skip rest of update for this entity
                 }
             }
             
-            // ✅ Explosions don't move, skip movement logic
+            //  Explosions don't move, skip movement logic
             if (entity.type == EntityType::ENTITY_EXPLOSION) {
                 continue;
             }
@@ -959,7 +952,7 @@ private:
                     if (entity.shieldTimer <= 0.0f) {
                         entity.shieldTimer = 0.0f;
                         entity.chargeLevel = 0; // Shield expired
-                        std::cout << "[GameServer] 🛡️ Shield expired for player " << (int)entity.playerId << std::endl;
+                        LOG_INFO("GAMESERVER", " Shield expired for player " + std::to_string((int)entity.playerId));
                     }
                 }
             }
@@ -1071,7 +1064,7 @@ private:
                             
                             if (entity.enemyType == 0) {
                                 // ORANGE BOMB: destroy all visible enemies, but only deal fraction HP to boss
-                                std::cout << "[GameServer] 💥 Player " << (int)player.playerId << " picked up BOMB!" << std::endl;
+                                LOG_INFO("GAMESERVER", " Player " + std::to_string((int)player.playerId) + " picked up BOMB!");
                                 float margin = cfg_.collisions.oobMargin;
                                 for (auto& [eid, e] : gs.entities) {
                                     if (e.type == EntityType::ENTITY_MONSTER) {
@@ -1082,7 +1075,7 @@ private:
                                                 auto bossConfig = getLevelConfig(gs.currentLevel).boss;
                                                 int bossDamage = static_cast<int>(bossConfig.health * cfg_.powerups.orange.bossDamageFraction);
                                                 e.hp -= bossDamage;
-                                                std::cout << "[GameServer] 💥 Bomb dealt " << bossDamage << " to boss (HP: " << e.hp << ")" << std::endl;
+                                                LOG_INFO("GAMESERVER", " Bomb dealt " + std::to_string(bossDamage) + " to boss (HP: " + std::to_string(e.hp) + ")");
                                                 if (e.hp <= 0) {
                                                     spawnExplosion(e.x, e.y, gs);
                                                     toRemove.push_back(eid);
@@ -1096,7 +1089,7 @@ private:
                                 }
                             } else if (entity.enemyType == 1) {
                                 // BLUE SHIELD: make player invulnerable
-                                std::cout << "[GameServer] 🛡️ Player " << (int)player.playerId << " picked up SHIELD!" << std::endl;
+                                LOG_INFO("GAMESERVER", " Player " + std::to_string((int)player.playerId) + " picked up SHIELD!");
                                 player.shieldTimer = cfg_.powerups.blue.duration;
                                 player.chargeLevel = 99; // Signal to client that shield is active
                             }
@@ -1114,8 +1107,7 @@ private:
                             toRemove.push_back(id); // Remove module from world
                             player.moduleType = entity.enemyType; // 1=laser(homing), 3=spread, 4=wave
                             const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
-                            std::cout << "[GameServer] 🔧 Player " << (int)player.playerId 
-                                      << " picked up module: " << names[entity.enemyType] << std::endl;
+                            LOG_INFO("GAMESERVER", " Player " + std::to_string((int)player.playerId) + " picked up module: " + names[entity.enemyType]);
                             break;
                         }
                     }
@@ -1135,7 +1127,7 @@ private:
         for (uint32_t id : toRemove) {
             auto it = gs.entities.find(id);
             if (it != gs.entities.end()) {
-                std::cout << "[GameServer] 🗑️  Destroying entity " << id << " (type: " << (int)it->second.type << ") in room " << gs.roomId << std::endl;
+                LOG_INFO("GAMESERVER", "  Destroying entity " + std::to_string(id) + " (type: " + std::to_string((int)it->second.type) + ") in room " + std::to_string(gs.roomId));
                 gs.entities.erase(it);
                 broadcastEntityDestroy(id, gs.roomId);
             }
@@ -1160,7 +1152,7 @@ private:
                     }
                 }
                 if (!foundAny) {
-                    std::cout << "[GameServer] 💀 All players dead! Game Over! Score: " << preRemoveTotalScore << " (room " << gs.roomId << ")" << std::endl;
+                    LOG_INFO("GAMESERVER", " All players dead! Game Over! Score: " + std::to_string(preRemoveTotalScore) + " (room " + std::to_string(gs.roomId) + ")");
                     broadcastGameOver(preRemoveTotalScore, gs.roomId);
                     gs.levelActive = false;
                 }
@@ -1194,8 +1186,7 @@ private:
         gs.entities[missile.id] = missile;
         broadcastEntitySpawn(missile, gs.roomId);
         
-        std::cout << "[GameServer] Player " << (int)player.playerId << " fired missile " << missile.id 
-                  << (chargeLevel > 0 ? " (CHARGED level " + std::to_string(chargeLevel) + ")" : "") << std::endl;
+        LOG_INFO("GAMESERVER", "Player " + std::to_string((int)player.playerId) + " fired missile " + std::to_string(missile.id) + (chargeLevel > 0 ? " (CHARGED level " + std::to_string(chargeLevel) + ")" : ""));
     }
     
     void fireModuleMissile(const ServerEntity& player, RoomGameState& gs) {
@@ -1270,8 +1261,7 @@ private:
         }
         
         const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
-        std::cout << "[GameServer] 🔧 Player " << (int)player.playerId 
-                  << " fired with module: " << names[player.moduleType] << std::endl;
+        LOG_INFO("GAMESERVER", " Player " + std::to_string((int)player.playerId) + " fired with module: " + names[player.moduleType]);
     }
     
     void spawnPowerup(RoomGameState& gs) {
@@ -1294,9 +1284,7 @@ private:
         gs.entities[powerup.id] = powerup;
         broadcastEntitySpawn(powerup, gs.roomId);
         
-        std::cout << "[GameServer] ⭐ Spawned powerup " << powerup.id 
-                  << " (" << (powerup.enemyType == 0 ? "orange/bomb" : "blue/shield") 
-                  << ") at (" << powerup.x << ", " << powerup.y << ") in room " << gs.roomId << std::endl;
+        LOG_INFO("GAMESERVER", " Spawned powerup " + std::to_string(powerup.id) + " (" + std::string((powerup.enemyType == 0 ? "orange/bomb" : "blue/shield")) + ") at (" + std::to_string(powerup.x) + ", " + std::to_string(powerup.y) + ") in room " + std::to_string(gs.roomId));
     }
 
     // moduleType: 1=laser(homing), 3=spread, 4=wave
@@ -1319,9 +1307,7 @@ private:
         broadcastEntitySpawn(mod, gs.roomId);
         
         const char* names[] = {"", "laser(homing)", "", "spread", "wave"};
-        std::cout << "[GameServer] 🔧 Spawned module " << mod.id 
-                  << " (" << names[modType] 
-                  << ") at (" << mod.x << ", " << mod.y << ") in room " << gs.roomId << std::endl;
+        LOG_INFO("GAMESERVER", " Spawned module " + std::to_string(mod.id) + " (" + names[modType] + ") at (" + std::to_string(mod.x) + ", " + std::to_string(mod.y) + ") in room " + std::to_string(gs.roomId));
     }
 
     void spawnEnemyMissile(const ServerEntity& enemy, RoomGameState& gs) {
@@ -1414,7 +1400,7 @@ private:
         gs.entities[explosion.id] = explosion;
         broadcastEntitySpawn(explosion, gs.roomId);
         
-        std::cout << "[GameServer] Created explosion " << explosion.id << " at (" << x << ", " << y << ") with lifetime " << explosion.lifetime << "s" << std::endl;
+        LOG_INFO("GAMESERVER", "Created explosion " + std::to_string(explosion.id) + " at (" + std::to_string(x) + ", " + std::to_string(y) + ") with lifetime " + std::to_string(explosion.lifetime) + "s");
     }
 
     void sendWorldSnapshot() {
@@ -1545,8 +1531,7 @@ private:
         
         server_.sendTo(reply, sender);
         
-        std::cout << "[GameServer] Sent room list (" << rooms.size() << " rooms) to " 
-                  << sender << std::endl;
+        LOG_INFO("GAMESERVER", "Sent room list (" + std::to_string(rooms.size()) + " rooms) to " + (sender.address().to_string() + ":" + std::to_string(sender.port())));
     }
     
     void handleCreateRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
@@ -1556,7 +1541,7 @@ private:
             // Find player ID from session
             auto session = server_.getSession(sender);
             if (!session) {
-                std::cerr << "[GameServer] CREATE_ROOM from unknown client" << std::endl;
+                LOG_ERROR("GAMESERVER", "CREATE_ROOM from unknown client");
                 return;
             }
             
@@ -1574,8 +1559,7 @@ private:
                 playerToRoom_[playerId] = roomId;
             }
             
-            std::cout << "[GameServer] Room '" << payload.name << "' created (ID: " 
-                      << roomId << ") by player " << static_cast<int>(playerId) << std::endl;
+            LOG_INFO("GAMESERVER", "Room '" + payload.name + "' created (ID: " + std::to_string(roomId) + ") by player " + std::to_string(static_cast<int>(playerId)));
             
             // Send ROOM_CREATED confirmation
             NetworkPacket createdReply(static_cast<uint16_t>(GamePacketType::ROOM_CREATED));
@@ -1611,7 +1595,7 @@ private:
             // Note: Pas de broadcast de room list ici - les clients font REFRESH manuellement
             
         } catch (const std::exception& e) {
-            std::cerr << "[GameServer] Error creating room: " << e.what() << std::endl;
+            LOG_ERROR("GAMESERVER", "Error creating room: " + std::string(e.what()));
         }
     }
     
@@ -1621,7 +1605,7 @@ private:
             
             auto session = server_.getSession(sender);
             if (!session) {
-                std::cerr << "[GameServer] JOIN_ROOM from unknown client" << std::endl;
+                LOG_ERROR("GAMESERVER", "JOIN_ROOM from unknown client");
                 return;
             }
             
@@ -1632,8 +1616,7 @@ private:
                 session->roomId = payload.roomId;
                 playerToRoom_[playerId] = payload.roomId;
                 
-                std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
-                          << " joined room " << payload.roomId << std::endl;
+                LOG_INFO("GAMESERVER", "Player " + std::to_string(static_cast<int>(playerId)) + " joined room " + std::to_string(payload.roomId));
                 
                 // Send confirmation to client
                 NetworkPacket reply(static_cast<uint16_t>(GamePacketType::ROOM_JOINED));
@@ -1661,33 +1644,30 @@ private:
                 // Note: Pas de broadcast de room list ici - les clients font REFRESH manuellement
                 
             } else {
-                std::cerr << "[GameServer] Failed to join room " << payload.roomId 
-                          << " (room full or not found)" << std::endl;
+                LOG_ERROR("GAMESERVER", "Failed to join room " + std::to_string(payload.roomId) + " (room full or not found)");
             }
             
         } catch (const std::exception& e) {
-            std::cerr << "[GameServer] Error joining room: " << e.what() << std::endl;
+            LOG_ERROR("GAMESERVER", "Error joining room: " + std::string(e.what()));
         }
     }
     
     void handleLeaveRoom(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (!session) {
-            std::cerr << "[GameServer] ROOM_LEAVE from unknown client" << std::endl;
+            LOG_ERROR("GAMESERVER", "ROOM_LEAVE from unknown client");
             return;
         }
         
         uint32_t roomId = session->roomId;
         if (roomId == 0) {
-            std::cout << "[GameServer] Player " << static_cast<int>(session->playerId) 
-                      << " tried to leave but not in a room" << std::endl;
+            LOG_INFO("GAMESERVER", "Player " + std::to_string(static_cast<int>(session->playerId)) + " tried to leave but not in a room");
             return;
         }
         
         uint8_t playerId = session->playerId;
         
-        std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
-                  << " leaving room " << roomId << std::endl;
+        LOG_INFO("GAMESERVER", "Player " + std::to_string(static_cast<int>(playerId)) + " leaving room " + std::to_string(roomId));
         
         // Remove player from room (void return, always succeeds)
         server_.getRoomManager().leaveRoom(roomId, playerId);
@@ -1714,7 +1694,7 @@ private:
             auto room = server_.getRoomManager().getRoom(roomId);
             if (!room || room->playerIds.empty()) {
                 roomStates_.erase(gsIt);
-                std::cout << "[GameServer] Cleaned up empty room state for room " << roomId << std::endl;
+                LOG_INFO("GAMESERVER", "Cleaned up empty room state for room " + std::to_string(roomId));
             }
         }
         
@@ -1731,7 +1711,7 @@ private:
     void handlePlayerReady(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (!session || session->roomId == 0) {
-            std::cerr << "[GameServer] PLAYER_READY from player not in a room" << std::endl;
+            LOG_ERROR("GAMESERVER", "PLAYER_READY from player not in a room");
             return;
         }
         
@@ -1748,59 +1728,51 @@ private:
         bool success = server_.getRoomManager().setPlayerReady(roomId, playerId, ready);
         
         if (success) {
-            std::cout << "[GameServer] Player " << static_cast<int>(playerId) 
-                      << " in room " << roomId 
-                      << " set ready: " << (ready ? "true" : "false") << std::endl;
+            LOG_INFO("GAMESERVER", "Player " + std::to_string(static_cast<int>(playerId)) + " in room " + std::to_string(roomId) + " set ready: " + std::string((ready ? "true" : "false")));
             
             // Broadcast updated player list to all room members
             broadcastRoomPlayers(roomId);
         } else {
-            std::cerr << "[GameServer] Failed to set ready state for player " 
-                      << static_cast<int>(playerId) << " in room " << roomId << std::endl;
+            LOG_ERROR("GAMESERVER", "Failed to set ready state for player " + std::to_string(static_cast<int>(playerId)) + " in room " + std::to_string(roomId));
         }
     }
     
     void handleGameStart(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (!session || session->roomId == 0) {
-            std::cerr << "[GameServer] GAME_START from player not in a room" << std::endl;
+            LOG_ERROR("GAMESERVER", "GAME_START from player not in a room");
             return;
         }
         
         auto room = server_.getRoomManager().getRoom(session->roomId);
         if (!room) {
-            std::cerr << "[GameServer] GAME_START: room not found" << std::endl;
+            LOG_WARNING("GAMESERVER", "GAME_START: room not found");
             return;
         }
         
         // Verify that the sender is the host
         if (room->hostPlayerId != session->playerId) {
-            std::cerr << "[GameServer] Non-host player " << static_cast<int>(session->playerId) 
-                      << " tried to start game in room " << session->roomId << std::endl;
+            LOG_ERROR("GAMESERVER", "Non-host player " + std::to_string(static_cast<int>(session->playerId)) + " tried to start game in room " + std::to_string(session->roomId));
             return;
         }
         
         // Prevent double-start: check if game already started
         if (room->state == RoomState::PLAYING) {
-            std::cout << "[GameServer] Game already started in room " << session->roomId 
-                      << ", ignoring duplicate GAME_START" << std::endl;
+            LOG_INFO("GAMESERVER", "Game already started in room " + std::to_string(session->roomId) + ", ignoring duplicate GAME_START");
             return;
         }
         
         // Check minimum player count
         if (room->playerIds.size() < static_cast<size_t>(cfg_.server.minPlayersToStart)) {
-            std::cerr << "[GameServer] Cannot start game: only " << room->playerIds.size() 
-                      << " player(s) in room (need at least " << cfg_.server.minPlayersToStart << ")" << std::endl;
+            LOG_ERROR("GAMESERVER", "Cannot start game: only " + std::to_string(room->playerIds.size()) + " player(s) in room (need at least " + std::to_string(cfg_.server.minPlayersToStart) + ")");
             return;
         }
         
         // Change room state to PLAYING
         room->state = RoomState::PLAYING;
         
-        std::cout << "[GameServer] ========== GAME STARTING in room " << session->roomId 
-                  << " ==========" << std::endl;
-        std::cout << "[GameServer] Creating player entities for " << room->playerIds.size() 
-                  << " players..." << std::endl;
+        LOG_INFO("GAMESERVER", "========== GAME STARTING in room " + std::to_string(session->roomId) + " ==========");
+        LOG_INFO("GAMESERVER", "Creating player entities for " + std::to_string(room->playerIds.size()) + " players...");
         
         // Create a new RoomGameState for this room
         RoomGameState& gs = roomStates_[session->roomId];
@@ -1829,10 +1801,7 @@ private:
             gs.entities[player.id] = player;
             gs.playerEntities[playerId] = player.id;
             
-            std::cout << "[GameServer]   Created player entity " << player.id 
-                      << " for player " << (int)playerId 
-                      << " (line " << (int)player.playerLine << ") at (" 
-                      << player.x << ", " << player.y << ")" << std::endl;
+            LOG_INFO("GAMESERVER", "  Created player entity " + std::to_string(player.id) + " for player " + std::to_string((int)playerId) + " (line " + std::to_string((int)player.playerLine) + ") at (" + std::to_string(player.x) + ", " + std::to_string(player.y) + ")");
             
             playerIndex++;
         }
@@ -1845,7 +1814,7 @@ private:
         
         // Send initial world snapshot to all players in the room
         // This ensures all players see each other from the start
-        std::cout << "[GameServer] Sending initial world snapshot to all players..." << std::endl;
+        LOG_INFO("GAMESERVER", "Sending initial world snapshot to all players...");
         sendWorldSnapshot();
         
         // Mark server as running game logic
@@ -1855,7 +1824,7 @@ private:
     void handleClientTogglePause(const NetworkPacket& /*packet*/, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (!session || session->roomId == 0) {
-            std::cerr << "[GameServer] CLIENT_TOGGLE_PAUSE from player not in a room" << std::endl;
+            LOG_ERROR("GAMESERVER", "CLIENT_TOGGLE_PAUSE from player not in a room");
             return;
         }
 
@@ -1864,20 +1833,20 @@ private:
 
         // Only host can toggle pause
         if (room->hostPlayerId != session->playerId) {
-            std::cerr << "[GameServer] Non-host player " << (int)session->playerId << " tried to toggle pause" << std::endl;
+            LOG_ERROR("GAMESERVER", "Non-host player " + std::to_string((int)session->playerId) + " tried to toggle pause");
             return;
         }
 
         // Toggle between PLAYING and PAUSED
         if (room->state == RoomState::PLAYING) {
             room->state = RoomState::PAUSED;
-            std::cout << "[GameServer] Room " << room->id << " paused by host " << (int)session->playerId << std::endl;
+            LOG_INFO("GAMESERVER", "Room " + std::to_string(room->id) + " paused by host " + std::to_string((int)session->playerId));
         } else if (room->state == RoomState::PAUSED) {
             room->state = RoomState::PLAYING;
-            std::cout << "[GameServer] Room " << room->id << " resumed by host " << (int)session->playerId << std::endl;
+            LOG_INFO("GAMESERVER", "Room " + std::to_string(room->id) + " resumed by host " + std::to_string((int)session->playerId));
         } else {
             // If not playing, ignore
-            std::cout << "[GameServer] TogglePause ignored - room not playing" << std::endl;
+            LOG_INFO("GAMESERVER", "TogglePause ignored - room not playing");
             return;
         }
 
@@ -1894,7 +1863,7 @@ private:
     void broadcastToRoom(uint32_t roomId, const NetworkPacket& packet) {
         auto room = server_.getRoomManager().getRoom(roomId);
         if (!room) {
-            std::cerr << "[GameServer] broadcastToRoom: room " << roomId << " not found" << std::endl;
+            LOG_WARNING("GAMESERVER", "broadcastToRoom: room " + std::to_string(roomId) + " not found");
             return;
         }
         
@@ -1909,8 +1878,7 @@ private:
             }
         }
         
-        std::cout << "[GameServer] Broadcast to room " << roomId << ": sent to " 
-                  << sentCount << "/" << room->playerIds.size() << " players" << std::endl;
+        LOG_INFO("GAMESERVER", "Broadcast to room " + std::to_string(roomId) + ": sent to " + std::to_string(sentCount) + "/" + std::to_string(room->playerIds.size()) + " players");
     }
     
     // NOUVEAU: Broadcast la liste des joueurs dans une room (Problème 2)
@@ -1938,8 +1906,7 @@ private:
         
         broadcastToRoom(roomId, packet);
         
-        std::cout << "[GameServer] Broadcasted player list to room " << roomId 
-                  << " (" << payload.players.size() << " players)" << std::endl;
+        LOG_INFO("GAMESERVER", "Broadcasted player list to room " + std::to_string(roomId) + " (" + std::to_string(payload.players.size()) + " players)");
     }
     
     // NOUVEAU: Handler pour les messages de chat (Problème 4)
@@ -1947,7 +1914,7 @@ private:
         try {
             auto session = server_.getSession(sender);
             if (!session || session->roomId == 0) {
-                std::cerr << "[GameServer] CHAT_MESSAGE from player not in a room" << std::endl;
+                LOG_ERROR("GAMESERVER", "CHAT_MESSAGE from player not in a room");
                 return;
             }
             
@@ -1956,8 +1923,7 @@ private:
             payload.senderName = "Player " + std::to_string(session->playerId);
             payload.roomId = session->roomId;
             
-            std::cout << "[GameServer] Chat message from Player " << static_cast<int>(session->playerId) 
-                      << " in room " << session->roomId << ": " << payload.message << std::endl;
+            LOG_INFO("GAMESERVER", "Chat message from Player " + std::to_string(static_cast<int>(session->playerId)) + " in room " + std::to_string(session->roomId) + ": " + payload.message);
             
             // Broadcast to all players in the room
             NetworkPacket broadcastPacket(static_cast<uint16_t>(GamePacketType::CHAT_MESSAGE));
@@ -1966,7 +1932,7 @@ private:
             broadcastToRoom(session->roomId, broadcastPacket);
             
         } catch (const std::exception& e) {
-            std::cerr << "[GameServer] Error handling chat message: " << e.what() << std::endl;
+            LOG_ERROR("GAMESERVER", "Error handling chat message: " + std::string(e.what()));
         }
     }
 
@@ -1993,7 +1959,7 @@ private:
 };
 
 int main() {
-    std::cout << "R-Type Server Starting..." << std::endl;
+    LOG_INFO("MAIN_IMPROVED", "R-Type Server Starting...");
 
     try {
         // Load config first to get port
@@ -2004,7 +1970,7 @@ int main() {
         server.start();
         server.run();
     } catch (const std::exception& e) {
-        std::cerr << "Server Exception: " << e.what() << std::endl;
+        LOG_ERROR("MAIN_IMPROVED", "Server Exception: " + std::string(e.what()));
         return 1;
     }
 

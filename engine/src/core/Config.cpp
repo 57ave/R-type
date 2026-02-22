@@ -8,7 +8,7 @@
 #include "core/Config.hpp"
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace eng {
 namespace core {
@@ -34,11 +34,11 @@ void Config::scanDirectory(const std::string& path, const std::string& category)
 {
     try {
         if (!std::filesystem::exists(path)) {
-            std::cerr << "Directory does not exist: " << path << std::endl;
+            LOG_ERROR("CONFIG", "Directory does not exist: " + path);
             return;
         }
 
-        std::cout << "Scanning " << category << ": " << path << std::endl;
+        LOG_INFO("CONFIG", "Scanning " + std::to_string(category) + ": " + path);
 
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             if (entry.is_regular_file()) {
@@ -49,21 +49,21 @@ void Config::scanDirectory(const std::string& path, const std::string& category)
                     std::string key = category + "." + filename;
                     std::string value = entry.path().string();
                     _data[key] = value;
-                    std::cout << "  + " << key << " -> " << value << std::endl;
+                    LOG_INFO("CONFIG", "  + " + key + " -> " + std::to_string(value));
                 }
             }
         }
     } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Error scanning directory: " << e.what() << std::endl;
+        LOG_ERROR("CONFIG", "Error scanning directory: " + std::string(e.what()));
     }
 }
 
 // Charge la configuration depuis un dossier d'assets
 void Config::load(const std::string& filepath)
 {
-    std::cout << "========================================" << std::endl;
-    std::cout << "Loading assets from: " << filepath << std::endl;
-    std::cout << "========================================" << std::endl;
+    LOG_INFO("CONFIG", "========================================");
+    LOG_INFO("CONFIG", "Loading assets from: " + filepath);
+    LOG_INFO("CONFIG", "========================================");
 
     // Scanne le dossier players
     std::string playersPath = filepath + "/players";
@@ -73,8 +73,8 @@ void Config::load(const std::string& filepath)
     std::string enemiesPath = filepath + "/enemies";
     scanDirectory(enemiesPath, "enemies");
 
-    std::cout << "\n[Success] Total assets loaded: " << _data.size() << std::endl;
-    std::cout << "========================================\n" << std::endl;
+    LOG_INFO("CONFIG", "\n[Success] Total assets loaded: " + std::to_string(_data.size()));
+    LOG_INFO("CONFIG", "========================================\n");
 }
 
 // Sauvegarde la configuration dans un fichier
@@ -82,7 +82,7 @@ void Config::save(const std::string& filepath) const
 {
     std::ofstream file(filepath);
     if (!file.is_open()) {
-        std::cerr << "Failed to save config to: " << filepath << std::endl;
+        LOG_ERROR("CONFIG", "Failed to save config to: " + filepath);
         return;
     }
     
@@ -95,7 +95,7 @@ void Config::save(const std::string& filepath) const
     }
     
     file.close();
-    std::cout << "Config saved to: " << filepath << std::endl;
+    LOG_INFO("CONFIG", "Config saved to: " + filepath);
 }
 
 } // namespace core

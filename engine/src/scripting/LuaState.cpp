@@ -1,5 +1,5 @@
 #include <scripting/LuaState.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace Scripting {
 
@@ -18,16 +18,15 @@ void LuaState::Init() {
 
     // Set default error handler
     mErrorCallback = [](const std::string& error) {
-        std::cerr << "[Lua Error] " << error << std::endl;
+        LOG_ERROR("LUA_ERROR", "" + error);
     };
 
-    std::cout << "[LuaState] Initialized (Lua " << LUA_VERSION_MAJOR << "." 
-              << LUA_VERSION_MINOR << ")" << std::endl;
+    LOG_INFO("LUASTATE", std::string("Initialized (Lua ") + LUA_VERSION_MAJOR + "." + LUA_VERSION_MINOR + ")");
 }
 
 void LuaState::Shutdown() {
     mLoadedScripts.clear();
-    std::cout << "[LuaState] Shutdown" << std::endl;
+    LOG_INFO("LUASTATE", "Shutdown");
 }
 
 bool LuaState::LoadScript(const std::string& path) {
@@ -55,7 +54,7 @@ bool LuaState::LoadScript(const std::string& path) {
         info.lastModified = fs::last_write_time(info.path);
         mLoadedScripts[path] = info;
 
-        std::cout << "[LuaState] Loaded: " << path << std::endl;
+        LOG_INFO("LUASTATE", "Loaded: " + path);
         return true;
 
     } catch (const std::exception& e) {
@@ -67,7 +66,7 @@ bool LuaState::LoadScript(const std::string& path) {
 }
 
 bool LuaState::ReloadScript(const std::string& path) {
-    std::cout << "[LuaState] Reloading: " << path << std::endl;
+    LOG_INFO("LUASTATE", "Reloading: " + path);
     return LoadScript(path);
 }
 
@@ -88,7 +87,7 @@ void LuaState::CheckForChanges() {
 
             auto currentModified = fs::last_write_time(info.path);
             if (currentModified > info.lastModified) {
-                std::cout << "[LuaState] Hot-reload detected: " << path << std::endl;
+                LOG_INFO("LUASTATE", "Hot-reload detected: " + path);
                 ReloadScript(path);
                 info.lastModified = currentModified;
             }

@@ -5,7 +5,7 @@
 #include <ecs/Coordinator.hpp>
 #include <rendering/Types.hpp>
 #include <rendering/IRenderer.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <vector>
 #include <algorithm>
 
@@ -59,10 +59,10 @@ void RenderSystem::Update(float /*dt*/)
                 }
             }
         }
-        std::cout << "[RenderSystem] Rendering " << renderableEntities.size() 
-                  << " entities (" << enemyCount << " enemies, " 
-                  << playerBulletCount << " player bullets, " 
-                  << enemyBulletCount << " enemy bullets)" << std::endl;
+        LOG_INFO("RENDERSYSTEM", "Rendering " + std::to_string(renderableEntities.size())
+                  + " entities (" + std::to_string(enemyCount) + " enemies, "
+                  + std::to_string(playerBulletCount) + " player bullets, "
+                  + std::to_string(enemyBulletCount) + " enemy bullets)");
     }
 
     // Sort by layer (lower layer = drawn first = background)

@@ -3,7 +3,7 @@
 #include <components/ScrollingBackground.hpp>
 #include <components/Sprite.hpp>
 #include <ecs/Coordinator.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinator)
     : coordinator_(coordinator)
@@ -12,7 +12,7 @@ ScrollingBackgroundSystem::ScrollingBackgroundSystem(ECS::Coordinator* coordinat
 
 void ScrollingBackgroundSystem::Init()
 {
-    std::cout << "[ScrollingBackgroundSystem] Initialized" << std::endl;
+    LOG_INFO("SCROLLINGBACKGROUNDSYSTEM", "Initialized");
 }
 
 void ScrollingBackgroundSystem::Shutdown()

@@ -4,7 +4,8 @@
 
 #include "managers/StateManager.hpp"
 #include "states/GameState.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
+#include <sstream>
 
 StateManager::StateManager(Game* game)
     : game_(game)
@@ -31,7 +32,7 @@ void StateManager::pushState(std::unique_ptr<GameState> state)
         states_.push_back(std::move(state));
         states_.back()->onEnter();
         
-        std::cout << "[StateManager] Pushed state: " << states_.back()->getName() << std::endl;
+        LOG_INFO("StateManager", (std::ostringstream{} << "Pushed state: " << states_.back()->getName()).str());
     }
 }
 
@@ -39,7 +40,7 @@ void StateManager::popState()
 {
     if (!states_.empty())
     {
-        std::cout << "[StateManager] Popping state: " << states_.back()->getName() << std::endl;
+        LOG_INFO("StateManager", (std::ostringstream{} << "Popping state: " << states_.back()->getName()).str());
         states_.back()->onExit();
         states_.pop_back();
         
@@ -65,7 +66,7 @@ void StateManager::changeState(std::unique_ptr<GameState> state)
         states_.push_back(std::move(state));
         states_.back()->onEnter();
         
-        std::cout << "[StateManager] Changed to state: " << states_.back()->getName() << std::endl;
+        LOG_INFO("StateManager", (std::ostringstream{} << "Changed to state: " << states_.back()->getName()).str());
     }
 }
 
@@ -76,7 +77,7 @@ void StateManager::clearStates()
         states_.back()->onExit();
         states_.pop_back();
     }
-    std::cout << "[StateManager] All states cleared" << std::endl;
+    LOG_INFO("StateManager", "All states cleared");
 }
 
 void StateManager::handleEvent(const eng::engine::InputEvent& event)

@@ -3,7 +3,7 @@
 // ============================================
 
 #include <systems/AudioSystem.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <algorithm>
 
 namespace eng {
@@ -12,7 +12,7 @@ namespace systems {
 
 void AudioSystem::Init(const std::string& sfxPath) {
     m_baseSFXPath = sfxPath;
-    std::cout << "[AudioSystem] Initialized with SFX path: " << m_baseSFXPath << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "Initialized with SFX path: " + m_baseSFXPath);
 }
 
 void AudioSystem::Update(float /*deltaTime*/) {
@@ -29,7 +29,7 @@ void AudioSystem::Update(float /*deltaTime*/) {
             // Get or load the sound buffer
             auto* buffer = GetOrLoadBuffer(audioSrc.soundPath);
             if (!buffer) {
-                std::cerr << "[AudioSystem] Failed to load sound: " << audioSrc.soundPath << std::endl;
+                LOG_ERROR("AUDIOSYSTEM", "Failed to load sound: " + audioSrc.soundPath);
                 audioSrc.playOnStart = false; // Don't try again
                 continue;
             }
@@ -47,8 +47,7 @@ void AudioSystem::Update(float /*deltaTime*/) {
             m_entitySounds[entity] = std::move(sound);
             audioSrc.isPlaying = true;
             
-            std::cout << "[AudioSystem] Playing: " << audioSrc.soundPath 
-                      << " (Vol: " << finalVolume << "%)" << std::endl;
+            LOG_INFO("AUDIOSYSTEM", "Playing: " + audioSrc.soundPath + " (Vol: " + std::to_string(finalVolume) + "%)");
         }
 
         // Check if sound has finished (for non-looping sounds)
@@ -75,7 +74,7 @@ void AudioSystem::Update(float /*deltaTime*/) {
 }
 
 void AudioSystem::Shutdown() {
-    std::cout << "[AudioSystem] Shutting down..." << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "Shutting down...");
     
     // Stop and clear all entity sounds
     for (auto& [entity, sound] : m_entitySounds) {
@@ -92,7 +91,7 @@ void AudioSystem::Shutdown() {
     // Clear sound buffers
     m_soundBuffers.clear();
     
-    std::cout << "[AudioSystem] Shutdown complete" << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "Shutdown complete");
 }
 
 void AudioSystem::SetSFXVolume(float volume) {
@@ -112,21 +111,21 @@ void AudioSystem::SetSFXVolume(float volume) {
         sound->setVolume(m_globalSFXVolume);
     }
     
-    std::cout << "[AudioSystem] Global SFX volume set to: " << m_globalSFXVolume << "%" << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "Global SFX volume set to: " + std::to_string(m_globalSFXVolume) + "%");
 }
 
 void AudioSystem::PreloadSound(const std::string& name, const std::string& path) {
     if (m_soundBuffers.find(name) != m_soundBuffers.end()) {
-        std::cout << "[AudioSystem] Sound already preloaded: " << name << std::endl;
+        LOG_INFO("AUDIOSYSTEM", "Sound already preloaded: " + name);
         return;
     }
 
     auto buffer = std::make_unique<eng::engine::SoundBuffer>();
     if (buffer->loadFromFile(path)) {
         m_soundBuffers[name] = std::move(buffer);
-        std::cout << "[AudioSystem] Preloaded sound: " << name << " from " << path << std::endl;
+        LOG_INFO("AUDIOSYSTEM", "Preloaded sound: " + name + " from " + path);
     } else {
-        std::cerr << "[AudioSystem] Failed to preload: " << path << std::endl;
+        LOG_ERROR("AUDIOSYSTEM", "Failed to preload: " + path);
     }
 }
 
@@ -137,7 +136,7 @@ void AudioSystem::PlaySFX(const std::string& name, float volumeMultiplier) {
         std::string fullPath = m_baseSFXPath + name;
         auto buffer = std::make_unique<eng::engine::SoundBuffer>();
         if (!buffer->loadFromFile(fullPath)) {
-            std::cerr << "[AudioSystem] Cannot play SFX, not found: " << name << std::endl;
+            LOG_WARNING("AUDIOSYSTEM", "Cannot play SFX, not found: " + name);
             return;
         }
         m_soundBuffers[name] = std::move(buffer);
@@ -152,8 +151,7 @@ void AudioSystem::PlaySFX(const std::string& name, float volumeMultiplier) {
 
     m_activeSounds.push_back(std::move(sound));
     
-    std::cout << "[AudioSystem] SFX: " << name << " (Vol: " 
-              << (m_globalSFXVolume * volumeMultiplier) << "%)" << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "SFX: " + name + " (Vol: " + std::to_string(m_globalSFXVolume * volumeMultiplier) + "%)");
 }
 
 void AudioSystem::StopAllSounds() {
@@ -167,7 +165,7 @@ void AudioSystem::StopAllSounds() {
     }
     m_activeSounds.clear();
     
-    std::cout << "[AudioSystem] All sounds stopped" << std::endl;
+    LOG_INFO("AUDIOSYSTEM", "All sounds stopped");
 }
 
 SoundBuffer* AudioSystem::GetOrLoadBuffer(const std::string& soundPath) {

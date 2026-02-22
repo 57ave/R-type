@@ -1,5 +1,5 @@
 #include <scripting/ScriptSystem.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace Scripting {
 
@@ -17,13 +17,13 @@ void ScriptSystem::Update(float dt) {
     
     if (!result.valid()) {
         sol::error err = result;
-        std::cerr << "[ScriptSystem] Error: " << err.what() << std::endl;
+        LOG_ERROR("SCRIPTSYSTEM", "Error: " + std::string(err.what()));
     }
 }
 
 void ScriptSystem::Shutdown() {
     mUpdateFunction = sol::protected_function();
-    std::cout << "[ScriptSystem] Shutdown" << std::endl;
+    LOG_INFO("SCRIPTSYSTEM", "Shutdown");
 }
 
 void ScriptSystem::LoadScript(const std::string& scriptPath) {
@@ -32,7 +32,7 @@ void ScriptSystem::LoadScript(const std::string& scriptPath) {
     auto& lua = LuaState::Instance().GetState();
     
     if (!LuaState::Instance().LoadScript(scriptPath)) {
-        std::cerr << "[ScriptSystem] Failed to load: " << scriptPath << std::endl;
+        LOG_ERROR("SCRIPTSYSTEM", "Failed to load: " + scriptPath);
         return;
     }
 
@@ -40,9 +40,9 @@ void ScriptSystem::LoadScript(const std::string& scriptPath) {
     sol::optional<sol::protected_function> updateFunc = lua["update"];
     if (updateFunc) {
         mUpdateFunction = updateFunc.value();
-        std::cout << "[ScriptSystem] Loaded update function from: " << scriptPath << std::endl;
+        LOG_INFO("SCRIPTSYSTEM", "Loaded update function from: " + scriptPath);
     } else {
-        std::cerr << "[ScriptSystem] No 'update' function found in: " << scriptPath << std::endl;
+        LOG_ERROR("SCRIPTSYSTEM", "No 'update' function found in: " + scriptPath);
     }
 }
 
@@ -64,14 +64,14 @@ bool ScriptedSystemLoader::RegisterLuaSystem(
     // Extract signature (required components)
     sol::optional<sol::table> signatureOpt = systemTable["signature"];
     if (!signatureOpt) {
-        std::cerr << "[ScriptedSystemLoader] System missing 'signature' field" << std::endl;
+        LOG_ERROR("SCRIPTEDSYSTEMLOADER", "System missing 'signature' field");
         return false;
     }
 
     // Extract update function
     sol::optional<sol::protected_function> updateOpt = systemTable["update"];
     if (!updateOpt) {
-        std::cerr << "[ScriptedSystemLoader] System missing 'update' function" << std::endl;
+        LOG_ERROR("SCRIPTEDSYSTEMLOADER", "System missing 'update' function");
         return false;
     }
 
@@ -82,7 +82,7 @@ bool ScriptedSystemLoader::RegisterLuaSystem(
     // TODO: Set system signature based on Lua table
     // This requires coordinator API to set signatures programmatically
 
-    std::cout << "[ScriptedSystemLoader] Registered Lua system" << std::endl;
+    LOG_INFO("SCRIPTEDSYSTEMLOADER", "Registered Lua system");
     return true;
 }
 

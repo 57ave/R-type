@@ -6,7 +6,7 @@
  */
 
 #include "core/Game.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 #include <exception>
 
 int main()
@@ -17,7 +17,7 @@ int main()
         
         if (!game.initialize())
         {
-            std::cerr << "[MAIN] Failed to initialize game" << std::endl;
+            LOG_ERROR("MAIN", "[MAIN] Failed to initialize game");
             return EXIT_FAILURE;
         }
         
@@ -28,7 +28,7 @@ int main()
     }
     catch (const std::exception& e)
     {
-        std::cerr << "[MAIN] Fatal error: " << e.what() << std::endl;
+        LOG_ERROR("MAIN", std::string("[MAIN] Fatal error: ") + e.what());
         return EXIT_FAILURE;
     }
 }

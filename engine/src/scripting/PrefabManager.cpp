@@ -1,6 +1,6 @@
 #include <scripting/PrefabManager.hpp>
 #include <ecs/Components.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 namespace Scripting {
 
@@ -26,12 +26,12 @@ bool PrefabManager::LoadPrefab(const std::string& name, const std::string& scrip
     // Expect script to return a table
     sol::optional<sol::table> prefabTable = lua["prefab"];
     if (!prefabTable) {
-        std::cerr << "[PrefabManager] Script must return 'prefab' table: " << scriptPath << std::endl;
+        LOG_ERROR("PREFABMANAGER", "Script must return 'prefab' table: " + scriptPath);
         return false;
     }
 
     mPrefabs[name] = prefabTable.value();
-    std::cout << "[PrefabManager] Loaded prefab '" << name << "' from: " << scriptPath << std::endl;
+    LOG_INFO("PREFABMANAGER", "Loaded prefab '" + name + "' from: " + scriptPath);
     return true;
 }
 
@@ -42,7 +42,7 @@ ECS::Entity PrefabManager::CreateEntity(const std::string& prefabName) {
 ECS::Entity PrefabManager::CreateEntity(const std::string& prefabName, sol::table overrides) {
     auto it = mPrefabs.find(prefabName);
     if (it == mPrefabs.end()) {
-        std::cerr << "[PrefabManager] Prefab not found: " << prefabName << std::endl;
+        LOG_WARNING("PREFABMANAGER", "Prefab not found: " + prefabName);
         return ECS::Entity(-1);
     }
 

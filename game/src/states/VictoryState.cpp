@@ -2,15 +2,16 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/MusicManager.hpp"
 #include "states/MainMenuState.hpp"
 #include <rendering/IRenderer.hpp>
 #include <rendering/sfml/SFMLText.hpp>
 #include <engine/Input.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <cmath>
 
-VictoryState::VictoryState(Game* game, int finalScore)
-    : finalScore_(finalScore)
+VictoryState::VictoryState(Game* game, int finalScore, int currentLevel)
+    : finalScore_(finalScore), currentLevel_(currentLevel)
 {
     game_ = game;
 }
@@ -25,7 +26,7 @@ void VictoryState::onEnter()
 
     font_ = std::make_unique<eng::engine::rendering::sfml::SFMLFont>();
     if (!font_->loadFromFile("assets/fonts/arial.ttf")) {
-        std::cerr << "[VictoryState] Failed to load font" << std::endl;
+        LOG_ERROR("VICTORY", "Failed to load font");
     }
 
     // "VICTORY" title
@@ -54,6 +55,15 @@ void VictoryState::onEnter()
 
     timer_ = 0.0f;
     inputBlocked_ = true;
+
+    // Play victory music based on level
+    if (auto* music = game_->getMusicManager()) {
+        if (currentLevel_ >= 3) {
+            music->play("assets/sounds/LIKE A HERO (ALL STAGE CLEAR).ogg", false);
+        } else {
+            music->play("assets/sounds/RETURN IN TRIUMPH (STAGE CLEAR).ogg", false);
+        }
+    }
 }
 
 void VictoryState::onExit()

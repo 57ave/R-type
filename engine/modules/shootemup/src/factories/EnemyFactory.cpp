@@ -2,7 +2,7 @@
 #include "components/ShootEmUpTags.hpp"
 #include "components/Weapon.hpp"
 #include <rendering/Types.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 using namespace eng::engine::rendering;
 using namespace ShootEmUp::Components;
@@ -38,7 +38,7 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
     using namespace ShootEmUp::Components;
     
     if (!config.valid()) {
-        std::cerr << "[EnemyFactory] Invalid config table!" << std::endl;
+        LOG_ERROR("ENEMYFACTORY", "[EnemyFactory] Invalid config table!");
         return 0;
     }
     
@@ -87,9 +87,9 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
         auto it = textures.find(texPath);
         if (it != textures.end()) {
             texture = it->second;
-            std::cout << "[EnemyFactory] Using texture from config: " << texPath << std::endl;
+            LOG_INFO("ENEMYFACTORY", "[EnemyFactory] Using texture from config: " + texPath);
         } else {
-            std::cout << "[EnemyFactory] Texture '" << texPath << "' not found in cache, falling back to generic 'enemy'" << std::endl;
+            LOG_INFO("ENEMYFACTORY", "[EnemyFactory] Texture '" + texPath + "' not found in cache, falling back to generic 'enemy'");
         }
     }
 
@@ -97,12 +97,12 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
         auto it2 = textures.find("enemy");
         if (it2 != textures.end()) {
             texture = it2->second;
-            std::cout << "[EnemyFactory] Using fallback texture 'enemy'" << std::endl;
+            LOG_INFO("ENEMYFACTORY", "[EnemyFactory] Using fallback texture 'enemy'");
         }
     }
 
     if (!texture) {
-        std::cerr << "[EnemyFactory] No texture available!" << std::endl;
+        LOG_ERROR("ENEMYFACTORY", "[EnemyFactory] No texture available!");
         coordinator.DestroyEntity(enemy);
         return 0;
     }
@@ -215,14 +215,14 @@ ECS::Entity EnemyFactory::CreateEnemyFromLuaConfig(
 
         if (shouldAddWeapon) {
             coordinator.AddComponent(enemy, weaponComp);
-            std::cout << "[EnemyFactory] Added Weapon component to '" << enemyName << "' (proj:" << weaponComp.projectileType << ")" << std::endl;
+            LOG_INFO("ENEMYFACTORY", "[EnemyFactory] Added Weapon component to '" + enemyName + "' (proj:" + weaponComp.projectileType + ")");
         }
     } catch (...) {
         // ignore malformed weapon tables or types
     }
 
-    std::cout << "[EnemyFactory] Created '" << enemyName << "' (type: " << enemyType 
-              << ") at (" << x << ", " << y << ") with " << health << " HP" << std::endl;
+    LOG_INFO("ENEMYFACTORY", "[EnemyFactory] Created '" + enemyName + "' (type: " + enemyType
+              + ") at (" + std::to_string(x) + ", " + std::to_string(y) + ") with " + std::to_string(health) + " HP");
     
     return enemy;
 }

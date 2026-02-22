@@ -1,5 +1,5 @@
 #include "../../include/network/UdpServer.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 #include <sstream>
 
 UdpServer::UdpServer(asio::io_context& io_context, short port)
@@ -11,7 +11,7 @@ UdpServer::~UdpServer() {
 
 void UdpServer::start() {
     startReceive();
-    std::cout << "[Server] Listening on port " << socket_.local_endpoint().port() << std::endl;
+    LOG_INFO("SERVER", "Listening on port " + std::to_string(socket_.local_endpoint().port()));
 }
 
 void UdpServer::startReceive() {
@@ -37,10 +37,10 @@ void UdpServer::handleReceive(const std::error_code& error, std::size_t bytes_tr
             }
 
         } catch (const std::exception& e) {
-            std::cerr << "[Server] Error parsing packet: " << e.what() << std::endl;
+            LOG_ERROR("SERVER", std::string("Error parsing packet: ") + e.what());
         }
     } else {
-        std::cerr << "[Server] Receive error: " << error.message() << std::endl;
+        LOG_ERROR("SERVER", std::string("Receive error: ") + error.message());
     }
 
     // Continue listening
@@ -60,7 +60,7 @@ void UdpServer::handleClientSession(const udp::endpoint& sender, const NetworkPa
         // Only accept if it's a CLIENT_HELLO (strict mode) or just accept implicitely (loose mode)
         // For robustness, usually we wait for HELLO, but for now we auto-add.
         
-        std::cout << "[Server] New session: " << key << " (ID: " << (int)nextPlayerId_ << ")" << std::endl;
+        LOG_INFO("SERVER", "New session: " + key + " (ID: " + std::to_string((int)nextPlayerId_) + ")");
         auto session = std::make_shared<ClientSession>(sender, nextPlayerId_++);
         sessions_[key] = session;
         
@@ -116,7 +116,7 @@ void UdpServer::checkTimeouts() {
 
     for (auto it = sessions_.begin(); it != sessions_.end();) {
         if (it->second->isTimedOut(timeout)) {
-            std::cout << "[Server] Client timed out: " << it->first << std::endl;
+            LOG_INFO("SERVER", "Client timed out: " + it->first);
             // Notify others could happen here (CLIENT_LEFT)
             it = sessions_.erase(it);
         } else {

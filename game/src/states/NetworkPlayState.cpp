@@ -11,6 +11,8 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/MusicManager.hpp"
+#include "managers/SFXManager.hpp"
 #include <ecs/Coordinator.hpp>
 #include <components/Position.hpp>
 #include <components/Velocity.hpp>
@@ -28,7 +30,7 @@
 #include <rendering/sfml/SFMLFont.hpp>
 #include <rendering/IRenderer.hpp>
 #include <unordered_set>
-#include <iostream>
+#include "core/Logger.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -41,13 +43,13 @@ NetworkPlayState::~NetworkPlayState() = default;
 
 void NetworkPlayState::onEnter()
 {
-    std::cout << "[NetworkPlayState] 🌐 Initializing multiplayer gameplay..." << std::endl;
+    LOG_INFO("NETWORKPLAY", " Initializing multiplayer gameplay...");
 
     // Get local player ID from NetworkManager
     auto* networkManager = game_->getNetworkManager();
     if (networkManager) {
         localPlayerId_ = networkManager->getLocalPlayerId();
-        std::cout << "[NetworkPlayState] Local player ID: " << localPlayerId_ << std::endl;
+        LOG_INFO("NETWORKPLAY", "Local player ID: " + std::to_string(localPlayerId_));
     }
 
     // Load game configuration from Lua
@@ -89,9 +91,9 @@ void NetworkPlayState::onEnter()
         showLevelText_ = true;
         levelTransitionTimer_ = 3.0f;
         
-        std::cout << "[NetworkPlayState] Score & Level display initialized" << std::endl;
+        LOG_INFO("NETWORKPLAY", "Score & Level display initialized");
     } else {
-        std::cerr << "[NetworkPlayState] Failed to load font for score display" << std::endl;
+        LOG_ERROR("NETWORKPLAY", "Failed to load font for score display");
     }
 
     // Register world snapshot callback
@@ -118,13 +120,18 @@ void NetworkPlayState::onEnter()
         });
     }
 
-    std::cout << "[NetworkPlayState] ✅ Multiplayer gameplay initialized" << std::endl;
-    std::cout << "[NetworkPlayState] Controls: ZQSD/Arrows=Move, Space=Shoot, ESC=Disconnect" << std::endl;
+    LOG_INFO("NETWORKPLAY", " Multiplayer gameplay initialized");
+    LOG_INFO("NETWORKPLAY", "Controls: ZQSD/Arrows=Move, Space=Shoot, ESC=Disconnect");
+
+    // Play stage 1 music
+    if (auto* music = game_->getMusicManager()) {
+        music->play("assets/sounds/BATTLE THEME (STAGE 1 The Encounter).ogg", true);
+    }
 }
 
 void NetworkPlayState::onExit()
 {
-    std::cout << "[NetworkPlayState] Exiting multiplayer gameplay..." << std::endl;
+    LOG_INFO("NETWORKPLAY", "Exiting multiplayer gameplay...");
 
     // Clear snapshot callback
     auto* networkManager = game_->getNetworkManager();
@@ -162,14 +169,14 @@ void NetworkPlayState::onExit()
     spectatorSubText_.reset();
     isSpectating_ = false;
 
-    std::cout << "[NetworkPlayState] Multiplayer cleanup complete" << std::endl;
+    LOG_INFO("NETWORKPLAY", "Multiplayer cleanup complete");
 }
 
 void NetworkPlayState::setupSystems()
 {
     auto coordinator = game_->getCoordinator();
     if (!coordinator) {
-        std::cerr << "[NetworkPlayState] ERROR: No coordinator!" << std::endl;
+        LOG_ERROR("NETWORKPLAY", "ERROR: No coordinator!");
         return;
     }
 
@@ -217,7 +224,7 @@ void NetworkPlayState::setupSystems()
     if (animationSystem_) animationSystem_->Init();
     if (scrollingSystem_) scrollingSystem_->Init();
 
-    std::cout << "[NetworkPlayState] Systems registered" << std::endl;
+    LOG_INFO("NETWORKPLAY", "Systems registered");
 }
 
 void NetworkPlayState::loadGameConfig()
@@ -241,7 +248,7 @@ void NetworkPlayState::loadGameConfig()
             backgroundScaleToWindow_ = background["scale_to_window"].get_or(true);
         }
     } catch (const std::exception& e) {
-        std::cerr << "[NetworkPlayState] Error loading game config: " << e.what() << std::endl;
+        LOG_ERROR("NETWORKPLAY", "Error loading game config: " + std::string(e.what()));
     }
 }
 
@@ -257,7 +264,7 @@ void NetworkPlayState::loadPlayerConfig()
             playerSpeed_ = playerConfig["speed"].get_or(600.0f);
         }
     } catch (const std::exception& e) {
-        std::cerr << "[NetworkPlayState] Error loading player config: " << e.what() << std::endl;
+        LOG_ERROR("NETWORKPLAY", "Error loading player config: " + std::string(e.what()));
     }
 }
 
@@ -294,15 +301,15 @@ void NetworkPlayState::loadLevelNamesFromLua()
         }
     }
 
-    std::cout << "[NetworkPlayState] Loaded " << levelNames_.size() 
-              << " level names and " << bossNames_.size() << " boss names from Lua" << std::endl;
+    LOG_INFO("NETWORKPLAY", "Loaded " + std::to_string(levelNames_.size())
+              + " level names and " + std::to_string(bossNames_.size()) + " boss names from Lua");
 }
 
 eng::engine::rendering::ISprite* NetworkPlayState::loadSprite(const std::string& texturePath, const eng::engine::rendering::IntRect* rect)
 {
     auto texture = std::make_unique<eng::engine::rendering::sfml::SFMLTexture>();
     if (!texture->loadFromFile(texturePath)) {
-        std::cerr << "[NetworkPlayState] ERROR: Failed to load texture: " << texturePath << std::endl;
+        LOG_ERROR("NETWORKPLAY", "ERROR: Failed to load texture: " + texturePath);
         return nullptr;
     }
 
@@ -374,7 +381,7 @@ void NetworkPlayState::spawnBackground()
         coordinator->AddComponent<Sprite>(bg, bgSprite);
     }
 
-    std::cout << "[NetworkPlayState] Background spawned for level " << (int)currentLevel_ << std::endl;
+    LOG_INFO("NETWORKPLAY", "Background spawned for level " + std::to_string((int)currentLevel_));
 }
 
 NetworkPlayState::SpriteInfo NetworkPlayState::getSpriteInfo(const RType::EntityState& state)
@@ -667,7 +674,7 @@ void NetworkPlayState::syncEntityFromState(const RType::EntityState& state)
         // Track local player entity
         if (state.type == RType::EntityType::ENTITY_PLAYER && state.playerId == localPlayerId_) {
             localPlayerEntity_ = localEntity;
-            std::cout << "[NetworkPlayState] Local player entity created: " << localEntity << std::endl;
+            LOG_INFO("NETWORKPLAY", "Local player entity created: " + std::to_string(localEntity));
         }
     }
 
@@ -763,7 +770,11 @@ void NetworkPlayState::syncEntityFromState(const RType::EntityState& state)
         // Detect hit on local player (HP decreased)
         if (state.playerId == localPlayerId_ && state.hp < lastPlayerHp_ && lastPlayerHp_ != 100) {
             hitBlinkTimer_ = HIT_BLINK_DURATION;
-            std::cout << "[NetworkPlayState] 💥 Player hit! HP: " << (int)lastPlayerHp_ << " → " << (int)state.hp << std::endl;
+            LOG_INFO("NETWORKPLAY", " Player hit! HP: " + std::to_string((int)lastPlayerHp_) + " → " + std::to_string((int)state.hp));
+            // Play damage SFX
+            if (auto* sfx = game_->getSFXManager()) {
+                sfx->play("damage");
+            }
         }
         if (state.playerId == localPlayerId_) {
             lastPlayerHp_ = state.hp;
@@ -798,8 +809,12 @@ void NetworkPlayState::syncEntityFromState(const RType::EntityState& state)
             bossServerId_ = state.id;
             bossMaxHp_ = state.hp;
             bossEnemyType_ = state.enemyType;
-            std::cout << "[NetworkPlayState] 👹 Boss detected (type " << (int)state.enemyType
-                      << ", HP: " << (int)state.hp << ")" << std::endl;
+            LOG_INFO("NETWORKPLAY", " Boss detected (type " + std::to_string((int)state.enemyType)
+                      + ", HP: " + std::to_string((int)state.hp) + ")");
+            // Play boss music
+            if (auto* music = game_->getMusicManager()) {
+                music->play("assets/sounds/BOSS THEME.ogg", true);
+            }
         }
         if (state.id == bossServerId_) {
             bossHp_ = state.hp;
@@ -852,12 +867,12 @@ void NetworkPlayState::removeStaleEntities(const std::vector<RType::EntityState>
                     spectatorSubText_->setPosition(windowWidth_ / 2.0f - 180.0f, windowHeight_ / 2.0f - 20.0f);
                 }
             }
-            std::cout << "[NetworkPlayState] Local player destroyed! Entering spectator mode." << std::endl;
+            LOG_INFO("NETWORKPLAY", "Local player destroyed! Entering spectator mode.");
         }
         if (id == bossServerId_) {
             bossServerId_ = 0;
             bossHp_ = 0;
-            std::cout << "[NetworkPlayState] 👹 Boss destroyed!" << std::endl;
+            LOG_INFO("NETWORKPLAY", " Boss destroyed!");
         }
     }
 }
@@ -901,7 +916,7 @@ void NetworkPlayState::spawnChargeIndicator()
     // Tag
     coordinator->AddComponent<Tag>(chargeIndicatorEntity_, Tag{"charge_indicator"});
 
-    std::cout << "[NetworkPlayState] Charge indicator spawned (Entity ID: " << chargeIndicatorEntity_ << ")" << std::endl;
+    LOG_INFO("NETWORKPLAY", "Charge indicator spawned (Entity ID: " + std::to_string(chargeIndicatorEntity_) + ")");
 }
 
 void NetworkPlayState::updateChargeIndicator(float deltaTime)
@@ -1012,7 +1027,7 @@ void NetworkPlayState::updateAttachedModule(uint8_t moduleType)
             coordinator->AddComponent<Tag>(attachedModuleEntity_, Tag{"attached_module"});
 
             const char* names[] = {"", "laser", "homing", "spread", "wave"};
-            std::cout << "[NetworkPlayState] 🔧 Module attached: " << names[moduleType] << std::endl;
+            LOG_INFO("NETWORKPLAY", std::string(" Module attached: ") + names[moduleType]);
         }
     }
 
@@ -1041,7 +1056,7 @@ void NetworkPlayState::handleEvent(const eng::engine::InputEvent& event)
     if (event.type == eng::engine::EventType::KeyPressed) {
         // ESC = Return to menu
         if (event.key.code == eng::engine::Key::Escape) {
-            std::cout << "[NetworkPlayState] ESC pressed - disconnecting" << std::endl;
+            LOG_INFO("NETWORKPLAY", "ESC pressed - disconnecting");
             auto* networkManager = game_->getNetworkManager();
             if (networkManager) {
                 networkManager->leaveRoom();
@@ -1091,6 +1106,16 @@ void NetworkPlayState::handleEvent(const eng::engine::InputEvent& event)
 
         // Shoot key released
         if (event.key.code == eng::engine::Key::Space) {
+            // Play shooting SFX based on charge level and module
+            if (auto* sfx = game_->getSFXManager()) {
+                if (currentModuleType_ > 0) {
+                    sfx->playPartial("multi_laser_bot", 1.0f);  // Module shot
+                } else if (chargeTime_ > 0.2f) {
+                    sfx->play("laser_bot");  // Charged shot
+                } else {
+                    sfx->play("shoot");      // Basic shot
+                }
+            }
             inputFire_ = false;
             isCharging_ = false;
         }
@@ -1114,7 +1139,7 @@ void NetworkPlayState::update(float deltaTime)
         uint32_t finalScore = (pendingScore_ > 0) ? pendingScore_ : currentScore_;
         game_->resetCoordinator();
         game_->getStateManager()->changeState(
-            std::make_unique<VictoryState>(game_, static_cast<int>(finalScore)));
+            std::make_unique<VictoryState>(game_, static_cast<int>(finalScore), static_cast<int>(currentLevel_)));
         return;
     }
 
@@ -1444,7 +1469,25 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
     // Change background based on level
     spawnBackground();
     
-    std::cout << "[NetworkPlayState] 🎮 Level changed to " << (int)level << ": " << name << std::endl;
+    // Play stage music for the new level
+    if (auto* music = game_->getMusicManager()) {
+        switch (level) {
+            case 1:
+                music->play("assets/sounds/BATTLE THEME (STAGE 1 The Encounter).ogg", true);
+                break;
+            case 2:
+                music->play("assets/sounds/MONSTER BEAT (STAGE 2 Life Forms in a Cave).ogg", true);
+                break;
+            case 3:
+                music->play("assets/sounds/BATTLE PRESSURE (STAGE 3 Giant Warship).ogg", true);
+                break;
+            default:
+                music->play("assets/sounds/BATTLE THEME (STAGE 1 The Encounter).ogg", true);
+                break;
+        }
+    }
+
+    LOG_INFO("NETWORKPLAY", " Level changed to " + std::to_string((int)level) + ": " + name);
 }
 
 // === Client-side prediction ===

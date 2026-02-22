@@ -1,6 +1,6 @@
 #include "systems/LifetimeSystem.hpp"
 #include "components/Lifetime.hpp"
-#include <iostream>
+#include "core/Logger.hpp"
 #include <vector>
 
 LifetimeSystem::LifetimeSystem(ECS::Coordinator* coordinator)
@@ -8,7 +8,7 @@ LifetimeSystem::LifetimeSystem(ECS::Coordinator* coordinator)
 }
 
 void LifetimeSystem::Init() {
-    std::cout << "[LifetimeSystem] Initialized" << std::endl;
+    LOG_INFO("LIFETIMESYSTEM", "Initialized");
 }
 
 void LifetimeSystem::Update(float dt) {
@@ -43,7 +43,7 @@ void LifetimeSystem::Update(float dt) {
 }
 
 void LifetimeSystem::Shutdown() {
-    std::cout << "[LifetimeSystem] Shutdown" << std::endl;
+    LOG_INFO("LIFETIMESYSTEM", "Shutdown");
 }
 
 extern "C" {

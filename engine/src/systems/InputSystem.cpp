@@ -1,14 +1,14 @@
 #include "systems/InputSystem.hpp"
 #include <components/Velocity.hpp>
 #include <components/Tag.hpp>
-#include <iostream>
+#include "core/Logger.hpp"
 
 InputSystem::InputSystem(ECS::Coordinator* coordinator)
     : m_Coordinator(coordinator), m_InputHandler(nullptr) {
 }
 
 void InputSystem::Init() {
-    std::cout << "[InputSystem] Initialized" << std::endl;
+    LOG_INFO("INPUTSYSTEM", "Initialized");
 }
 
 void InputSystem::Update(float dt) {
@@ -54,7 +54,7 @@ void InputSystem::Update(float dt) {
 }
 
 void InputSystem::Shutdown() {
-    std::cout << "[InputSystem] Shutdown" << std::endl;
+    LOG_INFO("INPUTSYSTEM", "Shutdown");
 }
 
 void InputSystem::SetActionState(const std::string& action, bool pressed) {
