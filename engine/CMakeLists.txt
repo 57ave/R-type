@@ -285,7 +285,7 @@ target_include_directories(MovementSystem PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(MovementSystem PUBLIC ecs)
+target_link_libraries(MovementSystem PUBLIC ecs core)
 
 # Collision System - MOVED TO GAME (R-Type specific)
 # add_library(CollisionSystem SHARED
