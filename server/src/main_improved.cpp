@@ -713,7 +713,12 @@ private:
         }
         
         ServerEntity& player = entityIt->second;
-        
+
+        // Track input sequence for lag compensation acks
+        if (input.inputSeq > lastProcessedInputSeq_[input.playerId]) {
+            lastProcessedInputSeq_[input.playerId] = input.inputSeq;
+        }
+
         // Apply input
         const float speed = cfg_.player.speed;
         player.vx = 0.0f;
@@ -751,15 +756,19 @@ private:
     }
 
     // ✅ NOUVEAU: Handler pour CLIENT_PING
-    void handleClientPing(const NetworkPacket&, const asio::ip::udp::endpoint& sender) {
+    void handleClientPing(const NetworkPacket& packet, const asio::ip::udp::endpoint& sender) {
         auto session = server_.getSession(sender);
         if (session) {
             // Update last packet time to prevent timeout
             session->updateLastPacketTime();
-            
-            // Send PING_REPLY
+
+            // Echo the client's timestamp in payload so client can compute RTT
             NetworkPacket reply(static_cast<uint16_t>(GamePacketType::SERVER_PING_REPLY));
             reply.header.timestamp = getCurrentTimestamp();
+            // Payload = client's original timestamp (4 bytes)
+            std::vector<char> payload(sizeof(uint32_t));
+            std::memcpy(payload.data(), &packet.header.timestamp, sizeof(uint32_t));
+            reply.setPayload(payload);
             server_.sendTo(reply, sender);
         }
     }
@@ -1452,27 +1461,50 @@ private:
     }
 
     void sendWorldSnapshot() {
+        ++snapshotSeq_;
+
         // Send one snapshot per room, using each room's own entities
         for (auto& [roomId, gs] : roomStates_) {
             auto room = server_.getRoomManager().getRoom(roomId);
             if (!room || room->state != RoomState::PLAYING) continue;
-            
+
+            // Build player input acks for this room's players
+            std::vector<PlayerInputAck> acks;
+            for (const auto& [playerId, entityId] : gs.playerEntities) {
+                auto ackIt = lastProcessedInputSeq_.find(playerId);
+                if (ackIt != lastProcessedInputSeq_.end() && ackIt->second > 0) {
+                    PlayerInputAck ack;
+                    ack.playerId = playerId;
+                    ack.lastProcessedInputSeq = ackIt->second;
+                    acks.push_back(ack);
+                }
+            }
+
             std::vector<const ServerEntity*> snapshotEntities;
-            
+
             // Add ALL entities from this room's game state
             for (const auto& [id, entity] : gs.entities) {
                 snapshotEntities.push_back(&entity);
             }
-            
-            // Build packet
+
+            // Build packet with new format: header + acks + entities
             SnapshotHeader header;
             header.entityCount = snapshotEntities.size();
+            header.snapshotSeq = snapshotSeq_;
+            header.playerAckCount = static_cast<uint8_t>(acks.size());
+
             NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
             packet.header.timestamp = getCurrentTimestamp();
-            
+
             auto headerData = header.serialize();
             packet.payload.insert(packet.payload.end(), headerData.begin(), headerData.end());
-            
+
+            // Serialize acks between header and entities
+            for (const auto& ack : acks) {
+                auto ackData = ack.serialize();
+                packet.payload.insert(packet.payload.end(), ackData.begin(), ackData.end());
+            }
+
             for (const auto* entity : snapshotEntities) {
                 EntityState state;
                 state.id = entity->id;
@@ -1493,11 +1525,11 @@ private:
                 } else {
                     state.projectileType = entity->projectileType;
                 }
-                
+
                 auto stateData = state.serialize();
                 packet.payload.insert(packet.payload.end(), stateData.begin(), stateData.end());
             }
-            
+
             broadcastToRoom(roomId, packet);
         }
     }
@@ -1997,6 +2029,10 @@ private:
     bool gameRunning_;
     std::mt19937 rng_;
     std::uniform_int_distribution<> dist_;
+
+    // Lag compensation: track last processed input sequence per player
+    std::unordered_map<uint8_t, uint32_t> lastProcessedInputSeq_;
+    uint32_t snapshotSeq_ = 0;
 };
 
 int main() {

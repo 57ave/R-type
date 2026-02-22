@@ -15,6 +15,7 @@
 #include <rendering/Types.hpp>
 #include <memory>
 #include <vector>
+#include <deque>
 #include <unordered_map>
 
 // Forward declarations
@@ -55,9 +56,19 @@ private:
     void spawnBackground();
     
     // Network synchronization
-    void onWorldSnapshot(const std::vector<RType::EntityState>& entities);
+    void onWorldSnapshot(const RType::WorldSnapshotData& snapshot);
     void syncEntityFromState(const RType::EntityState& state);
     void removeStaleEntities(const std::vector<RType::EntityState>& entities);
+
+    // Client-side prediction & reconciliation
+    void applyInputToLocalPlayer(uint8_t inputMask, float dt);
+    void reconcileLocalPlayer(const RType::EntityState& serverState, uint32_t ackedInputSeq);
+    static void applyMovementInput(float& x, float& y, uint8_t inputMask, float speed, float dt,
+                                   float minX, float minY, float maxX, float maxY);
+
+    // Entity interpolation for remote entities
+    void updateInterpolationBuffer(const RType::EntityState& state);
+    void interpolateRemoteEntities(float deltaTime);
     
     // Sprite loading
     eng::engine::rendering::ISprite* loadSprite(const std::string& texturePath, const eng::engine::rendering::IntRect* rect = nullptr);
@@ -172,4 +183,39 @@ private:
 
     // Background entity tracking for level changes
     ECS::Entity backgroundEntity_ = 0;
+
+    // === Client-side prediction ===
+    struct PredictedInput {
+        uint32_t seq;
+        uint8_t inputMask;
+        float dt;
+    };
+    std::deque<PredictedInput> pendingInputs_;   // Unacknowledged inputs (max 120)
+    float predictedX_ = 0.0f;                    // Float accumulator for predicted position
+    float predictedY_ = 0.0f;
+    bool predictionInitialized_ = false;         // First snapshot sets initial position
+
+    // === Entity interpolation for remote entities ===
+    struct InterpolationState {
+        float x, y, vx, vy;
+        uint16_t hp;
+        float timestamp;
+    };
+    struct EntityInterpolation {
+        InterpolationState previous;
+        InterpolationState current;
+        bool hasTwoSnapshots = false;
+    };
+    std::unordered_map<uint32_t, EntityInterpolation> interpolationBuffers_;
+    float localClock_ = 0.0f;
+
+    // Prediction constants
+    static constexpr float PLAYER_SPEED = 500.0f;
+    static constexpr float SCREEN_MIN_X = 0.0f;
+    static constexpr float SCREEN_MIN_Y = 0.0f;
+    static constexpr float SCREEN_MAX_X = 1820.0f;
+    static constexpr float SCREEN_MAX_Y = 1030.0f;
+    static constexpr float SNAPSHOT_INTERVAL = 1.0f / 30.0f;
+    static constexpr float RECONCILIATION_THRESHOLD = 4.0f;
+    static constexpr size_t MAX_PENDING_INPUTS = 120;
 };

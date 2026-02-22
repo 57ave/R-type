@@ -257,11 +257,12 @@ void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool f
         return;  // Silently ignore if not in game
     }
 
-    // Build input packet
+    // Build input packet with monotonic sequence number
     RType::ClientInput input;
     input.playerId = static_cast<uint8_t>(clientId_);
     input.inputMask = RType::ClientInput::buildInputMask(up, down, left, right, fire);
     input.chargeLevel = chargeLevel;
+    input.inputSeq = ++inputSequence_;
 
     // Create and send packet
     NetworkPacket packet = RType::Protocol::createInputPacket(input);
@@ -289,7 +290,7 @@ void NetworkManager::sendChatMessage(const std::string& message) {
     std::cout << "[NetworkManager] 💬 Chat sent: " << message << std::endl;
 }
 
-void NetworkManager::update() {
+void NetworkManager::update(float deltaTime) {
     if (!client_ || !connected_) {
         return;
     }
@@ -297,9 +298,30 @@ void NetworkManager::update() {
     // Update client (handles keep-alive pings)
     client_->update(0.0f);
 
+    // Periodic ping for RTT measurement (every 1 second)
+    if (inGame_) {
+        pingTimer_ += deltaTime;
+        if (pingTimer_ >= 1.0f) {
+            pingTimer_ = 0.0f;
+            sendPing();
+        }
+    }
+
     // Process incoming packets
     client_->process();
     processIncomingPackets();
+}
+
+void NetworkManager::sendPing() {
+    if (!client_ || !connected_) return;
+
+    auto now = std::chrono::steady_clock::now();
+    lastPingTimestamp_ = static_cast<uint32_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
+
+    NetworkPacket packet(static_cast<uint16_t>(RType::GamePacketType::CLIENT_PING));
+    packet.header.timestamp = lastPingTimestamp_;
+    client_->sendPacket(packet);
 }
 
 void NetworkManager::processIncomingPackets() {
@@ -347,7 +369,23 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
 
         case Network::PacketType::PONG: {
             // Server ping reply (SERVER_PING_REPLY = 0x15)
-            // Don't log to avoid spam
+            // Payload contains our original timestamp (4 bytes)
+            if (payloadSize >= sizeof(uint32_t)) {
+                uint32_t echoedTimestamp = 0;
+                std::memcpy(&echoedTimestamp, payload, sizeof(uint32_t));
+                if (echoedTimestamp == lastPingTimestamp_ && lastPingTimestamp_ != 0) {
+                    auto now = std::chrono::steady_clock::now();
+                    uint32_t nowMs = static_cast<uint32_t>(
+                        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
+                    rtt_ = static_cast<float>(nowMs - echoedTimestamp) / 1000.0f;
+                    // Exponential moving average (alpha = 0.2)
+                    if (smoothedRtt_ <= 0.0f) {
+                        smoothedRtt_ = rtt_;
+                    } else {
+                        smoothedRtt_ = 0.8f * smoothedRtt_ + 0.2f * rtt_;
+                    }
+                }
+            }
             break;
         }
 
@@ -500,17 +538,23 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
             if (!inGame_) {
                 break;  // Ignore during lobby
             }
-            
+
             try {
                 // Parse the full packet (header + payload were passed as data)
                 NetworkPacket fullPacket = NetworkPacket::deserialize(data, length);
-                
-                // Parse world snapshot
-                auto [snapHeader, entities] = RType::Protocol::parseWorldSnapshot(fullPacket);
-                
-                // Call snapshot callback if set
+
+                // Parse world snapshot (new format with acks)
+                RType::WorldSnapshotData snapshotData = RType::Protocol::parseWorldSnapshot(fullPacket);
+
+                // Reject out-of-order snapshots
+                if (snapshotData.header.snapshotSeq <= lastSnapshotSeq_ && lastSnapshotSeq_ > 0) {
+                    break;
+                }
+                lastSnapshotSeq_ = snapshotData.header.snapshotSeq;
+
+                // Call snapshot callback with full data (entities + acks)
                 if (onWorldSnapshot_) {
-                    onWorldSnapshot_(entities);
+                    onWorldSnapshot_(snapshotData);
                 }
             }
             catch (const std::exception& e) {

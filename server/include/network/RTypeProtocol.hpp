@@ -272,8 +272,9 @@ struct ClientInput {
     uint8_t playerId;
     uint8_t inputMask;
     uint8_t chargeLevel; // 0 = normal shot, 1-5 = charge levels
+    uint32_t inputSeq;   // Monotonic input sequence number for prediction/reconciliation
 
-    ClientInput() : playerId(0), inputMask(0), chargeLevel(0) {}
+    ClientInput() : playerId(0), inputMask(0), chargeLevel(0), inputSeq(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -290,8 +291,10 @@ struct ClientInput {
 // SnapshotHeader
 struct SnapshotHeader {
     uint32_t entityCount;
+    uint32_t snapshotSeq;    // Monotonic snapshot counter for ordering
+    uint8_t  playerAckCount; // Number of PlayerInputAck entries following this header
 
-    SnapshotHeader() : entityCount(0) {}
+    SnapshotHeader() : entityCount(0), snapshotSeq(0), playerAckCount(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -302,6 +305,25 @@ struct SnapshotHeader {
     static SnapshotHeader deserialize(const char* data) {
          Network::Deserializer deserializer(data, sizeof(SnapshotHeader));
          return deserializer.read<SnapshotHeader>();
+    }
+};
+
+// Per-player input acknowledgement included in snapshots
+struct PlayerInputAck {
+    uint8_t  playerId;
+    uint32_t lastProcessedInputSeq;
+
+    PlayerInputAck() : playerId(0), lastProcessedInputSeq(0) {}
+
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(*this);
+        return serializer.getBuffer();
+    }
+
+    static PlayerInputAck deserialize(const char* data) {
+        Network::Deserializer deserializer(data, sizeof(PlayerInputAck));
+        return deserializer.read<PlayerInputAck>();
     }
 };
 
@@ -356,10 +378,15 @@ struct RTypeProtocol {
         return deserializer.read<ClientInput>();
     }
 
-    static NetworkPacket createWorldSnapshotPacket(const SnapshotHeader& snapHeader, const std::vector<EntityState>& entities) {
+    static NetworkPacket createWorldSnapshotPacket(const SnapshotHeader& snapHeader,
+                                                    const std::vector<PlayerInputAck>& acks,
+                                                    const std::vector<EntityState>& entities) {
         NetworkPacket packet(static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT));
         Network::Serializer serializer;
         serializer.write(snapHeader);
+        for (const auto& ack : acks) {
+            serializer.write(ack);
+        }
         for (const auto& entity : entities) {
             serializer.write(entity);
         }
@@ -367,19 +394,30 @@ struct RTypeProtocol {
         return packet;
     }
 
-    static std::pair<SnapshotHeader, std::vector<EntityState>> getWorldSnapshot(const NetworkPacket& packet) {
+    struct WorldSnapshotData {
+        SnapshotHeader header;
+        std::vector<PlayerInputAck> acks;
+        std::vector<EntityState> entities;
+    };
+
+    static WorldSnapshotData getWorldSnapshot(const NetworkPacket& packet) {
         if (packet.header.type != static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT)) {
             throw std::runtime_error("Invalid packet type for WORLD_SNAPSHOT");
         }
-        
+
+        WorldSnapshotData data;
         Network::Deserializer deserializer(packet.payload);
-        SnapshotHeader snapHeader = deserializer.read<SnapshotHeader>();
-        std::vector<EntityState> entities;
-        entities.reserve(snapHeader.entityCount);
-        
-        for (uint32_t i = 0; i < snapHeader.entityCount; ++i) {
-            entities.push_back(deserializer.read<EntityState>());
+        data.header = deserializer.read<SnapshotHeader>();
+
+        data.acks.reserve(data.header.playerAckCount);
+        for (uint8_t i = 0; i < data.header.playerAckCount; ++i) {
+            data.acks.push_back(deserializer.read<PlayerInputAck>());
         }
-        return {snapHeader, entities};
+
+        data.entities.reserve(data.header.entityCount);
+        for (uint32_t i = 0; i < data.header.entityCount; ++i) {
+            data.entities.push_back(deserializer.read<EntityState>());
+        }
+        return data;
     }
 };

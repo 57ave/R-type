@@ -191,17 +191,34 @@ public:
      */
     uint32_t getChatVersion() const { return chatVersion_; }
 
+    // === Lag Compensation ===
+
+    /**
+     * Get current input sequence number (last sent)
+     */
+    uint32_t getInputSequence() const { return inputSequence_; }
+
+    /**
+     * Get smoothed round-trip time in seconds
+     */
+    float getSmoothedRtt() const { return smoothedRtt_; }
+
+    /**
+     * Get raw round-trip time in seconds
+     */
+    float getRtt() const { return rtt_; }
+
     // === Callbacks ===
-    
+
     using ConnectionCallback = std::function<void(bool success, const std::string& message)>;
     using RoomListCallback = std::function<void(const std::vector<Network::RoomInfo>&)>;
     using RoomUpdateCallback = std::function<void(const Network::RoomInfo&)>;
     using GameStartCallback = std::function<void()>;
-    using WorldSnapshotCallback = std::function<void(const std::vector<RType::EntityState>&)>;
+    using WorldSnapshotCallback = std::function<void(const RType::WorldSnapshotData&)>;
     using LevelChangeCallback = std::function<void(uint8_t level)>;
     using GameOverCallback = std::function<void(uint32_t totalScore)>;
     using VictoryCallback = std::function<void(uint32_t totalScore)>;
-    
+
     void setConnectionCallback(ConnectionCallback callback) { onConnection_ = callback; }
     void setRoomListCallback(RoomListCallback callback) { onRoomList_ = callback; }
     void setRoomUpdateCallback(RoomUpdateCallback callback) { onRoomUpdate_ = callback; }
@@ -212,9 +229,10 @@ public:
     void setVictoryCallback(VictoryCallback callback) { onVictory_ = callback; }
 
     /**
-     * Update network (process packets)
+     * Update network (process packets, send periodic pings)
+     * @param deltaTime Frame delta time in seconds (for ping timer)
      */
-    void update();
+    void update(float deltaTime = 0.0f);
 
 private:
     // Connection state
@@ -248,12 +266,21 @@ private:
     
     // Phase 5.3: Real network client
     std::unique_ptr<NetworkClient> client_;
-    
+
     // Server info (when hosting)
     std::string serverAddress_;
     unsigned short serverPort_ = 0;
-    
+
+    // Lag compensation state
+    uint32_t inputSequence_ = 0;       // Monotonic input counter
+    uint32_t lastSnapshotSeq_ = 0;     // Last received snapshot seq (for ordering)
+    float rtt_ = 0.0f;                 // Raw RTT in seconds
+    float smoothedRtt_ = 0.0f;         // Exponential moving average RTT
+    float pingTimer_ = 0.0f;           // Timer for periodic pings
+    uint32_t lastPingTimestamp_ = 0;    // Timestamp sent in last ping
+
     // Helper methods
     void processIncomingPackets();
     void handlePacket(const char* data, size_t length);
+    void sendPing();
 };

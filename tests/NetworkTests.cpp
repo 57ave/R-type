@@ -177,18 +177,26 @@ TEST(ProtocolTest, ClientInput) {
     ClientInput original;
     original.playerId = 10;
     original.inputMask = 0x05;
-    
+    original.inputSeq = 42;
+
     auto packet = RTypeProtocol::createClientInputPacket(original);
-    
+
     ClientInput result = RTypeProtocol::getClientInput(packet);
     EXPECT_EQ(result.playerId, original.playerId);
     EXPECT_EQ(result.inputMask, original.inputMask);
+    EXPECT_EQ(result.inputSeq, 42);
 }
 
-TEST(ProtocolTest, WorldSnapshotWithQuantization) {
+TEST(ProtocolTest, WorldSnapshotWithAcks) {
     SnapshotHeader header;
     header.entityCount = 2;
-    
+    header.snapshotSeq = 7;
+    header.playerAckCount = 1;
+
+    std::vector<PlayerInputAck> acks(1);
+    acks[0].playerId = 1;
+    acks[0].lastProcessedInputSeq = 99;
+
     std::vector<EntityState> entities(2);
 
     entities[0].id = 1;
@@ -197,30 +205,35 @@ TEST(ProtocolTest, WorldSnapshotWithQuantization) {
     entities[0].y = 200;
     entities[0].vx = 10;
     entities[0].vy = -10;
-    
 
     entities[1].id = 2;
     entities[1].type = EntityType::ENTITY_MONSTER;
     entities[1].x = 500;
     entities[1].y = 600;
-    
-    auto packet = RTypeProtocol::createWorldSnapshotPacket(header, entities);
-    
+
+    auto packet = RTypeProtocol::createWorldSnapshotPacket(header, acks, entities);
+
     // Deserialize
-    auto [recvHeader, recvEntities] = RTypeProtocol::getWorldSnapshot(packet);
-    
-    EXPECT_EQ(recvHeader.entityCount, 2);
-    ASSERT_EQ(recvEntities.size(), 2);
-    
-    EXPECT_EQ(recvEntities[0].id, 1);
-    EXPECT_EQ(recvEntities[0].x, 100);
-    EXPECT_EQ(recvEntities[1].id, 2);
-    EXPECT_EQ(recvEntities[1].type, EntityType::ENTITY_MONSTER);
+    auto data = RTypeProtocol::getWorldSnapshot(packet);
+
+    EXPECT_EQ(data.header.entityCount, 2);
+    EXPECT_EQ(data.header.snapshotSeq, 7);
+    EXPECT_EQ(data.header.playerAckCount, 1);
+    ASSERT_EQ(data.acks.size(), 1);
+    EXPECT_EQ(data.acks[0].playerId, 1);
+    EXPECT_EQ(data.acks[0].lastProcessedInputSeq, 99);
+    ASSERT_EQ(data.entities.size(), 2);
+
+    EXPECT_EQ(data.entities[0].id, 1);
+    EXPECT_EQ(data.entities[0].x, 100);
+    EXPECT_EQ(data.entities[1].id, 2);
+    EXPECT_EQ(data.entities[1].type, EntityType::ENTITY_MONSTER);
 }
 
 TEST(ProtocolTest, QuantizationLimits) {
+    EntityState e;
+    e.x = 32767;
 
-    
     std::vector<char> buf = e.serialize();
     EntityState res = EntityState::deserialize(buf.data());
     EXPECT_EQ(res.x, 32767);

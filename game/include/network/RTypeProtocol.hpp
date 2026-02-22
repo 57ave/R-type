@@ -67,8 +67,9 @@ struct ClientInput {
     uint8_t playerId;
     uint8_t inputMask;
     uint8_t chargeLevel;  // 0 = normal, 1-5 = charge levels
+    uint32_t inputSeq;    // Monotonic input sequence number for prediction/reconciliation
 
-    ClientInput() : playerId(0), inputMask(0), chargeLevel(0) {}
+    ClientInput() : playerId(0), inputMask(0), chargeLevel(0), inputSeq(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -80,7 +81,7 @@ struct ClientInput {
         Network::Deserializer deserializer(data, sizeof(ClientInput));
         return deserializer.read<ClientInput>();
     }
-    
+
     // Helper pour construire inputMask
     static uint8_t buildInputMask(bool up, bool down, bool left, bool right, bool fire) {
         uint8_t mask = 0;
@@ -96,8 +97,10 @@ struct ClientInput {
 // En-tête du snapshot
 struct SnapshotHeader {
     uint32_t entityCount;
+    uint32_t snapshotSeq;    // Monotonic snapshot counter for ordering
+    uint8_t  playerAckCount; // Number of PlayerInputAck entries following this header
 
-    SnapshotHeader() : entityCount(0) {}
+    SnapshotHeader() : entityCount(0), snapshotSeq(0), playerAckCount(0) {}
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -108,6 +111,25 @@ struct SnapshotHeader {
     static SnapshotHeader deserialize(const char* data) {
         Network::Deserializer deserializer(data, sizeof(SnapshotHeader));
         return deserializer.read<SnapshotHeader>();
+    }
+};
+
+// Per-player input acknowledgement included in snapshots
+struct PlayerInputAck {
+    uint8_t  playerId;
+    uint32_t lastProcessedInputSeq;
+
+    PlayerInputAck() : playerId(0), lastProcessedInputSeq(0) {}
+
+    std::vector<char> serialize() const {
+        Network::Serializer serializer;
+        serializer.write(*this);
+        return serializer.getBuffer();
+    }
+
+    static PlayerInputAck deserialize(const char* data) {
+        Network::Deserializer deserializer(data, sizeof(PlayerInputAck));
+        return deserializer.read<PlayerInputAck>();
     }
 };
 
@@ -145,6 +167,13 @@ struct EntityState {
 
 #pragma pack(pop)
 
+// Parsed world snapshot data
+struct WorldSnapshotData {
+    SnapshotHeader header;
+    std::vector<PlayerInputAck> acks;
+    std::vector<EntityState> entities;
+};
+
 // Fonctions utilitaires de protocole
 class Protocol {
 public:
@@ -155,30 +184,35 @@ public:
         return packet;
     }
 
-    // Parser un WORLD_SNAPSHOT
-    static std::pair<SnapshotHeader, std::vector<EntityState>> parseWorldSnapshot(const NetworkPacket& packet) {
+    // Parser un WORLD_SNAPSHOT (new format: header + acks + entities)
+    static WorldSnapshotData parseWorldSnapshot(const NetworkPacket& packet) {
         if (packet.header.type != static_cast<uint16_t>(GamePacketType::WORLD_SNAPSHOT)) {
             throw std::runtime_error("Invalid packet type for WORLD_SNAPSHOT");
         }
 
         const char* data = packet.payload.data();
         size_t offset = 0;
+        WorldSnapshotData result;
 
-        // Lire le header
-        SnapshotHeader header = SnapshotHeader::deserialize(data);
+        // Read header
+        result.header = SnapshotHeader::deserialize(data);
         offset += sizeof(SnapshotHeader);
 
-        // Lire les entités
-        std::vector<EntityState> entities;
-        entities.reserve(header.entityCount);
+        // Read player input acks
+        result.acks.reserve(result.header.playerAckCount);
+        for (uint8_t i = 0; i < result.header.playerAckCount; ++i) {
+            result.acks.push_back(PlayerInputAck::deserialize(data + offset));
+            offset += sizeof(PlayerInputAck);
+        }
 
-        for (uint32_t i = 0; i < header.entityCount; ++i) {
-            EntityState state = EntityState::deserialize(data + offset);
-            entities.push_back(state);
+        // Read entities
+        result.entities.reserve(result.header.entityCount);
+        for (uint32_t i = 0; i < result.header.entityCount; ++i) {
+            result.entities.push_back(EntityState::deserialize(data + offset));
             offset += sizeof(EntityState);
         }
 
-        return {header, entities};
+        return result;
     }
 };
 
