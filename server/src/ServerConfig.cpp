@@ -284,6 +284,7 @@ bool loadFromLua(Config& config, const std::string& luaPath) {
         sol::optional<sol::table> srvT = cfg["server"];
         if (srvT) {
             auto& s = config.server;
+            s.serverIp          = srvT.value().get_or<std::string>("server_ip", s.serverIp);
             s.port              = srvT.value().get_or("port", s.port);
             s.tickRate          = srvT.value().get_or("tick_rate", s.tickRate);
             s.snapshotRate      = srvT.value().get_or("snapshot_rate", s.snapshotRate);

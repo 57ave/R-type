@@ -3,13 +3,20 @@
 #include <chrono>
 #include "network/NetworkServer.hpp"
 #include "network/RTypeProtocol.hpp"
+#include "ServerConfig.hpp"
 
 int main()
 {
     std::cout << "R-Type Server Starting..." << std::endl;
 
+    // Load port from Lua config (single source of truth: server_config.lua)
+    ServerConfig::Config cfg;
+    ServerConfig::loadFromLua(cfg, "assets/scripts/config/server_config.lua");
+    int port = cfg.server.port;
+    std::cout << "[Server] Using port " << port << " (from server_config.lua)" << std::endl;
+
     try {
-        NetworkServer server(12345);
+        NetworkServer server(static_cast<short>(port));
         server.start();
 
         std::cout << "Server started. Processing packets..." << std::endl;

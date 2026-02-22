@@ -7,6 +7,8 @@
 #include "managers/NetworkManager.hpp"
 #include "network/Serializer.hpp"
 #include "network/RTypeProtocol.hpp"
+#include <scripting/LuaState.hpp>
+#include <sol/sol.hpp>
 #include <iostream>
 #include <cstring>
 #include <thread>
@@ -90,10 +92,25 @@ void NetworkManager::disconnect() {
 
 bool NetworkManager::startServer(uint16_t port, uint8_t maxPlayers) {
     std::cout << "[NetworkManager] Server should be started separately" << std::endl;
-    std::cout << "[NetworkManager] Connecting to localhost:" << port << std::endl;
-    
-    // Connect to localhost (server must be running separately)
-    hosting_ = connectToServer("127.0.0.1", port, playerName_);
+
+    // Read server_ip from game_config.lua (single source of truth)
+    std::string connectIp = "127.0.0.1";
+    try {
+        auto& lua = Scripting::LuaState::Instance().GetState();
+        lua.script_file("assets/scripts/config/game_config.lua");
+        sol::table gameConfig = lua["Game"];
+        if (gameConfig.valid()) {
+            sol::optional<sol::table> netT = gameConfig["network"];
+            if (netT) {
+                connectIp = netT.value().get_or<std::string>("server_ip", connectIp);
+            }
+        }
+    } catch (...) {
+        std::cerr << "[NetworkManager] ⚠️ Could not read server_ip from game_config.lua, defaulting to 127.0.0.1" << std::endl;
+    }
+
+    std::cout << "[NetworkManager] Connecting to " << connectIp << ":" << port << std::endl;
+    hosting_ = connectToServer(connectIp, port, playerName_);
     return hosting_;
 }
 

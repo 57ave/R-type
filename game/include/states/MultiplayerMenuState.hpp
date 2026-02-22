@@ -57,4 +57,5 @@ private:
     void createJoinMenu(bool isRefresh = false);
     void createLobbyMenu();
     void clearMenu();
+    void loadNetworkConfig();  // Reads ip/port from game_config.lua
 };

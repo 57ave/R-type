@@ -186,6 +186,7 @@ namespace ServerConfig {
 
     // --- Server ---
     struct ServerSettings {
+        std::string serverIp = "127.0.0.1";
         int port = 12345;
         int tickRate = 60;
         int snapshotRate = 30;

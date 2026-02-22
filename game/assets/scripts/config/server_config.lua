@@ -265,8 +265,16 @@ ServerConfig = {
 
     -- ==========================================
     -- SERVER SETTINGS
+    -- ⚠️  SEUL ENDROIT À MODIFIER pour l'IP et le port.
+    -- Le client lit aussi ces valeurs via game_config.lua qui importe ce fichier.
+    --
+    -- server_ip  : IP d'écoute du serveur ET IP de connexion du client
+    --   "127.0.0.1"    → local (même machine)
+    --   "192.168.1.x"  → réseau local (LAN)
+    --   "0.0.0.0"      → écoute sur toutes les interfaces (serveur dédié)
     -- ==========================================
     server = {
+        server_ip = "127.0.0.1",
         port = 12345,
         tick_rate = 60,        -- simulation FPS
         snapshot_rate = 30,    -- network snapshot FPS
