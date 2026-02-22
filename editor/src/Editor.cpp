@@ -102,6 +102,30 @@ void EditorApp::Update(sf::RenderWindow& window) {
     RenderStatusBar();
     RenderErrorPopup();
 
+    folderBrowser_.Render();
+    if (folderBrowser_.HasResult()) {
+        namespace fs = std::filesystem;
+        std::string newBase = folderBrowser_.ConsumeResult();
+        fs::path levelsPath = fs::path(newBase) / "scripts" / "levels";
+        fs::path enemiesPath = fs::path(newBase) / "enemies" / "enemies.lua";
+
+        if (fs::exists(levelsPath) && fs::exists(enemiesPath)) {
+            data_.assetsBasePath = newBase;
+            data_.levelsDir = levelsPath.string();
+            data_.enemiesConfigPath = enemiesPath.string();
+            data_.enemyTypes.clear();
+            if (!LuaParser::LoadEnemies(data_.enemiesConfigPath, data_.enemyTypes)) {
+                errorMessage_ = "Failed to load enemies: " + LuaParser::GetLastError();
+                showError_ = true;
+            }
+            Reload();
+            std::cout << "[Editor] Reloaded from: " << newBase << std::endl;
+        } else {
+            errorMessage_ = "Invalid assets folder: missing scripts/levels or enemies/enemies.lua";
+            showError_ = true;
+        }
+    }
+
     auto& io = ImGui::GetIO();
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
         Save();
@@ -115,6 +139,9 @@ void EditorApp::RenderMenuBar() {
         }
         if (ImGui::MenuItem("Reload")) {
             Reload();
+        }
+        if (ImGui::MenuItem("Open Assets Folder...")) {
+            folderBrowser_.Open(data_.assetsBasePath);
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Quit")) {
