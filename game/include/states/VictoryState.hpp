@@ -11,7 +11,7 @@ class Game;
 class VictoryState : public GameState
 {
 public:
-    VictoryState(Game* game, int finalScore);
+    VictoryState(Game* game, int finalScore, int currentLevel = 3);
     ~VictoryState() override = default;
 
     void onEnter() override;
@@ -23,6 +23,7 @@ public:
 
 private:
     int finalScore_;
+    int currentLevel_;
     float timer_ = 0.0f;
     bool inputBlocked_ = true;
 

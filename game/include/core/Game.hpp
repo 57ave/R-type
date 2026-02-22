@@ -16,6 +16,7 @@
 class StateManager;
 class NetworkManager;
 class UISystem;
+class AudioManager;
 
 namespace eng::engine::rendering {
     class IRenderer;
@@ -51,6 +52,7 @@ public:
     StateManager* getStateManager() { return stateManager_.get(); }
     NetworkManager* getNetworkManager() { return networkManager_.get(); }
     UISystem* getUISystem() { return uiSystem_.get(); }
+    AudioManager* getAudioManager() { return audioManager_.get(); }
     GameConfig& getConfig() { return config_; }
 
     /**
@@ -73,6 +75,7 @@ private:
     std::unique_ptr<eng::engine::rendering::IRenderer> renderer_;
     std::unique_ptr<StateManager> stateManager_;
     std::unique_ptr<NetworkManager> networkManager_;
+    std::unique_ptr<AudioManager> audioManager_;
     
     // Systems
     std::shared_ptr<UISystem> uiSystem_;
