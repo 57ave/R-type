@@ -73,6 +73,7 @@ struct RoomInfo {
     std::string name;
     uint8_t currentPlayers;
     uint8_t maxPlayers;
+    bool inGame;
 
     std::vector<char> serialize() const {
         Network::Serializer serializer;
@@ -80,6 +81,7 @@ struct RoomInfo {
         serializer.writeString(name);
         serializer.write(currentPlayers);
         serializer.write(maxPlayers);
+        serializer.write(inGame);
         return serializer.getBuffer();
     }
    
@@ -89,6 +91,7 @@ struct RoomInfo {
        info.name = deserializer.readString();
        info.currentPlayers = deserializer.read<uint8_t>();
        info.maxPlayers = deserializer.read<uint8_t>();
+       info.inGame = deserializer.read<bool>();
        return info;
    }
 };
