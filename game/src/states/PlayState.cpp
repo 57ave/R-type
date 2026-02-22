@@ -3,6 +3,7 @@
 #include "states/VictoryState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
+#include "managers/AudioManager.hpp"
 #include <ecs/Coordinator.hpp>
 #include <rendering/IRenderer.hpp>
 #include <components/Position.hpp>
@@ -170,7 +171,7 @@ void PlayState::onEnter()
         }
     }
 
-    // std::cout << "[PlayState] ✅ Gameplay initialized" << std::endl;
+    // std::cout << "[PlayState]  Gameplay initialized" << std::endl;
     // std::cout << "[PlayState] Controls: ZQSD/Arrows=Move, Space=Shoot, ESC=Menu" << std::endl;
 }
 
@@ -327,7 +328,7 @@ void PlayState::setupSystems()
             // Helper: apply damage to target
             auto applyDamage = [&](ECS::Entity target, int dmg, ECS::Entity source, bool allowInvulnerability = true) {
                 if (!coordinator->HasComponent<Health>(target)) {
-                    // std::cout << "[Collision] ⚠️  Entity " << target << " has no Health component!" << std::endl;
+                    // std::cout << "[Collision] WARNING:  Entity " << target << " has no Health component!" << std::endl;
                     return;
                 }
                 auto& health = coordinator->GetComponent<Health>(target);
@@ -340,6 +341,13 @@ void PlayState::setupSystems()
                 }
 
                 health.current -= dmg;
+                
+                // Play damage sound if player is hit
+                if (target == playerEntity_) {
+                    if (auto* audioManager = game_->getAudioManager()) {
+                        audioManager->playSFX("damage", 0.8f);
+                    }
+                }
                 
                 // Only set invincibility timer for entities that should have it (player)
                 if (allowInvulnerability) {
@@ -369,13 +377,13 @@ void PlayState::setupSystems()
                             // Load explosion config from member variable
                             try {
                                 if (!vfxConfig_.valid()) {
-                                    std::cerr << "[Collision] ❌ vfxConfig_ not valid!" << std::endl;
+                                    std::cerr << "[Collision] ERROR: vfxConfig_ not valid!" << std::endl;
                                 } else {
-                                    // std::cout << "[Collision] ✅ vfxConfig_ is valid, getting dead_enemies_animation..." << std::endl;
+                                    // std::cout << "[Collision]  vfxConfig_ is valid, getting dead_enemies_animation..." << std::endl;
                                     sol::table explosionConfig = vfxConfig_["dead_enemies_animation"];
                                     
                                     if (explosionConfig.valid()) {
-                                        // std::cout << "[Collision] ✅ explosionConfig is valid, creating explosion entity..." << std::endl;
+                                        // std::cout << "[Collision]  explosionConfig is valid, creating explosion entity..." << std::endl;
                                 ECS::Entity explosion = coordinator->CreateEntity();
                                 
                                 // Position
@@ -662,7 +670,7 @@ void PlayState::loadWeaponsConfig()
             // Store weapons config for later use
             weaponsConfig_ = weaponsConfig;
             
-            // std::cout << "[PlayState] ✅ Weapons config fully loaded (basic + 5 charge levels + modules)" << std::endl;
+            // std::cout << "[PlayState]  Weapons config fully loaded (basic + 5 charge levels + modules)" << std::endl;
         }
     } catch (const std::exception& e) {
         std::cerr << "[PlayState] Error loading weapons config: " << e.what() << std::endl;
@@ -684,7 +692,7 @@ void PlayState::loadCollectablesConfig()
         
         sol::table collectablesConfig = lua.GetState()["collectables_config"];
         if (collectablesConfig.valid()) {
-            // std::cout << "[PlayState] ✅ Collectables config loaded (powerups + modules)" << std::endl;
+            // std::cout << "[PlayState]  Collectables config loaded (powerups + modules)" << std::endl;
         } else {
             std::cerr << "[PlayState] Warning: collectables_config not found in Lua" << std::endl;
         }
@@ -710,7 +718,7 @@ void PlayState::loadEnemiesConfig()
                     enemyCount++;
                 }
             }
-            // std::cout << "[PlayState] ✅ Enemies config loaded (" << enemyCount << " types)" << std::endl;
+            // std::cout << "[PlayState]  Enemies config loaded (" << enemyCount << " types)" << std::endl;
         } else {
             std::cerr << "[PlayState] Warning: EnemiesSimple not found in Lua" << std::endl;
         }
@@ -736,7 +744,7 @@ void PlayState::loadVFXConfig()
                     vfxCount++;
                 }
             }
-            // std::cout << "[PlayState] ✅ VFX config loaded (" << vfxCount << " effects)" << std::endl;
+            // std::cout << "[PlayState]  VFX config loaded (" << vfxCount << " effects)" << std::endl;
         } else {
             std::cerr << "[PlayState] Warning: VFX table not found in Lua" << std::endl;
         }
@@ -1106,6 +1114,11 @@ void PlayState::handleShooting()
     if (equippedModuleEntity_ != 0 && equippedModuleType_ != "none") {
         // std::cout << "[PlayState] 🔫 Shooting with MODULE: " << equippedModuleType_ << std::endl;
         
+        // Play module shooting sound
+        if (auto* audioManager = game_->getAudioManager()) {
+            audioManager->playSFX("multi_laser_bot", 0.8f);
+        }
+        
         if (equippedModuleType_ == "spread") {
             fireSpreadModule();
         } else if (equippedModuleType_ == "wave") {
@@ -1158,13 +1171,13 @@ void PlayState::handleShooting()
     std::string weaponKey = chargeLevel == 0 ? "basic_shot" : "charge_level_" + std::to_string(chargeLevel);
     
     if (!weaponsConfig_.valid()) {
-        std::cerr << "[PlayState] ❌ Weapons config not loaded!" << std::endl;
+        std::cerr << "[PlayState] ERROR: Weapons config not loaded!" << std::endl;
         return;
     }
     
     sol::table weaponConfig = weaponsConfig_[weaponKey];
     if (!weaponConfig.valid()) {
-        std::cerr << "[PlayState] ❌ Weapon " << weaponKey << " not found in config!" << std::endl;
+        std::cerr << "[PlayState] ERROR: Weapon " << weaponKey << " not found in config!" << std::endl;
         return;
     }
     
@@ -1172,6 +1185,17 @@ void PlayState::handleShooting()
     int damage = weaponConfig["damage"].get_or(10);
     float speed = weaponConfig["speed"].get_or(1000.0f);
     float lifetime = weaponConfig["projectile_lifetime"].get_or(4.0f);
+    
+    // Play shooting sound based on charge level
+    if (auto* audioManager = game_->getAudioManager()) {
+        if (chargeLevel == 0) {
+            // Basic shot
+            audioManager->playSFX("shoot", 0.7f);
+        } else {
+            // Charged shot
+            audioManager->playSFX("laser_bot", 0.9f);
+        }
+    }
     
     sol::table spriteConfig = weaponConfig["sprite"];
     std::string texturePath = spriteConfig["texture_path"].get_or<std::string>("assets/players/r-typesheet1.png");
@@ -1793,7 +1817,7 @@ void PlayState::spawnTestCollectables()
     spawnModule(800.0f, 400.0f, "spread");
     spawnModule(1000.0f, 400.0f, "wave");
     
-    // std::cout << "[PlayState] ✅ Test collectables spawned" << std::endl;
+    // std::cout << "[PlayState]  Test collectables spawned" << std::endl;
 }
 
 void PlayState::spawnPowerup(float x, float y, const std::string& type)
@@ -2040,7 +2064,7 @@ void PlayState::pickupPowerup(ECS::Entity powerupEntity, const std::string& type
                             pos.y >= -margin && pos.y <= windowHeight_ + margin);
             
             if (!isVisible) {
-                // std::cout << "[PlayState] ⚠️  Enemy at (" << pos.x << ", " << pos.y << ") is off-screen, skipping" << std::endl;
+                // std::cout << "[PlayState] WARNING:  Enemy at (" << pos.x << ", " << pos.y << ") is off-screen, skipping" << std::endl;
                 continue; // Skip enemies that are off-screen
             }
             
@@ -2194,7 +2218,7 @@ void PlayState::attachModule(ECS::Entity moduleEntity, const std::string& module
     equippedModuleEntity_ = moduleEntity;
     equippedModuleType_ = extractedType;
     
-    // std::cout << "[PlayState] ✅ Module attached: " << equippedModuleType_ << std::endl;
+    // std::cout << "[PlayState]  Module attached: " << equippedModuleType_ << std::endl;
 }
 
 void PlayState::startLaserBeam()
@@ -2203,7 +2227,7 @@ void PlayState::startLaserBeam()
     
     auto coordinator = game_->getCoordinator();
     if (!coordinator || equippedModuleEntity_ == 0 || equippedModuleType_ != "laser") {
-        // std::cout << "[PlayState] ❌ Cannot start laser: coordinator=" << (coordinator ? "OK" : "NULL") 
+        // std::cout << "[PlayState] ERROR: Cannot start laser: coordinator=" << (coordinator ? "OK" : "NULL") 
         //           << ", moduleEntity=" << equippedModuleEntity_ 
         //           << ", moduleType=" << equippedModuleType_ << std::endl;
         return;
@@ -2211,7 +2235,7 @@ void PlayState::startLaserBeam()
 
     // Déjà actif
     if (laserBeamEntity_ != 0) {
-        // std::cout << "[PlayState] ⚠️ Laser already active: " << laserBeamEntity_ << std::endl;
+        // std::cout << "[PlayState] WARNING: Laser already active: " << laserBeamEntity_ << std::endl;
         return;
     }
 
@@ -2238,7 +2262,7 @@ void PlayState::startLaserBeam()
     beamSprite.sprite = loadSprite(beamSprite.texturePath, &beamSprite.textureRect);
     coordinator->AddComponent(laserBeamEntity_, beamSprite);
 
-    // std::cout << "[PlayState] ✅ Laser sprite loaded from: " << beamSprite.texturePath << " (2000x30)" << std::endl;
+    // std::cout << "[PlayState]  Laser sprite loaded from: " << beamSprite.texturePath << " (2000x30)" << std::endl;
 
     // Composant LaserBeam
     LaserBeam laserData;
@@ -2264,7 +2288,7 @@ void PlayState::startLaserBeam()
     beamDamage.amount = 50; // 50 DPS
     coordinator->AddComponent(laserBeamEntity_, beamDamage);
 
-    // std::cout << "[PlayState] ✅ Laser beam started with Tag=player_projectile, Damage=50" << std::endl;
+    // std::cout << "[PlayState]  Laser beam started with Tag=player_projectile, Damage=50" << std::endl;
 }
 
 void PlayState::stopLaserBeam()
@@ -2804,18 +2828,18 @@ void PlayState::spawnEnemy(const std::string& enemyType, float x, float y)
         // Get enemy config from Lua
         sol::table enemiesConfig = lua.GetState()["EnemiesSimple"];
         if (!enemiesConfig.valid()) {
-            std::cerr << "[PlayState] ❌ EnemiesSimple table not found in Lua!" << std::endl;
+            std::cerr << "[PlayState] ERROR: EnemiesSimple table not found in Lua!" << std::endl;
             return;
         }
         
         sol::table enemyData = enemiesConfig[enemyType];
         
         if (!enemyData.valid()) {
-            std::cerr << "[PlayState] ❌ Enemy type not found: " << enemyType << std::endl;
+            std::cerr << "[PlayState] ERROR: Enemy type not found: " << enemyType << std::endl;
             return;
         }
         
-        // std::cout << "[PlayState] ✅ Found enemy config for: " << enemyType << std::endl;
+        // std::cout << "[PlayState]  Found enemy config for: " << enemyType << std::endl;
         
         // Create enemy entity
         ECS::Entity enemy = coordinator->CreateEntity();
@@ -2857,9 +2881,9 @@ void PlayState::spawnEnemy(const std::string& enemyType, float x, float y)
         enemySprite.sprite = loadSprite(enemySprite.texturePath, &enemySprite.textureRect);
         
         if (enemySprite.sprite == nullptr) {
-            std::cerr << "[PlayState] ❌ Failed to load sprite for enemy: " << enemyType << std::endl;
+            std::cerr << "[PlayState] ERROR: Failed to load sprite for enemy: " << enemyType << std::endl;
         } else {
-            // std::cout << "[PlayState] ✅ Sprite loaded for: " << enemyType << std::endl;
+            // std::cout << "[PlayState]  Sprite loaded for: " << enemyType << std::endl;
         }
         
         coordinator->AddComponent<Sprite>(enemy, enemySprite);
@@ -2929,12 +2953,12 @@ void PlayState::spawnEnemy(const std::string& enemyType, float x, float y)
                 std::string firePattern = weaponData["pattern"].get_or<std::string>("straight");
                 enemyFirePatterns_[enemy] = firePattern;
                 
-                // std::cout << "[PlayState] ✅ Enemy has weapon (rate=" << weapon.fireRate 
+                // std::cout << "[PlayState]  Enemy has weapon (rate=" << weapon.fireRate 
                 //           << "s, dmg=" << weapon.projectileDamage << ", pattern=" << firePattern << ")" << std::endl;
             }
         }
         
-        // std::cout << "[PlayState] ✅ Spawned enemy: " << enemyType << " at (" << x << ", " << y << ")" << std::endl;
+        // std::cout << "[PlayState]  Spawned enemy: " << enemyType << " at (" << x << ", " << y << ")" << std::endl;
         
         // Add to active enemies list for optimized iteration
         activeEnemies_.push_back(enemy);
@@ -2963,7 +2987,7 @@ void PlayState::spawnTestEnemies()
     spawnEnemy("tank", 3100, 500);         // Kamikaze (17px frames)
     spawnEnemy("bug", 3500, 650);          // Another BasicEnemy
     
-    // std::cout << "[PlayState] ✅ Test enemies spawned" << std::endl;
+    // std::cout << "[PlayState]  Test enemies spawned" << std::endl;
 }
 
 void PlayState::updateEnemyMovement(float deltaTime)
@@ -3367,6 +3391,26 @@ void PlayState::startLevel(int level) {
     showLevelText_ = true;
     levelTransitionTimer_ = 3.0f;
     
+    // Play level music based on current level
+    if (auto* audioManager = game_->getAudioManager()) {
+        std::string musicName;
+        switch (level) {
+            case 1:
+                musicName = "BATTLE THEME (STAGE 1 The Encounter)";
+                break;
+            case 2:
+                musicName = "MONSTER BEAT (STAGE 2 Life Forms in a Cave)";
+                break;
+            case 3:
+                musicName = "BATTLE PRESSURE (STAGE 3 Giant Warship)";
+                break;
+            default:
+                musicName = "BATTLE THEME (STAGE 1 The Encounter)";
+                break;
+        }
+        audioManager->playMusic(musicName, true, 1.0f);
+    }
+    
     // Clean up all remaining enemies from previous level
     auto coordinator = game_->getCoordinator();
     if (coordinator) {
@@ -3440,7 +3484,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
                 int finalScore = (coordinator && coordinator->HasComponent<Score>(playerEntity_))
                     ? coordinator->GetComponent<Score>(playerEntity_).current : 0;
                 game_->getStateManager()->pushState(
-                    std::make_unique<VictoryState>(game_, finalScore));
+                    std::make_unique<VictoryState>(game_, finalScore, currentLevel_));
                 levelActive_ = false;
             }
             return;
@@ -3463,7 +3507,7 @@ void PlayState::updateLevelSystem(float deltaTime) {
                     int finalScore = (coordinator && coordinator->HasComponent<Score>(playerEntity_))
                         ? coordinator->GetComponent<Score>(playerEntity_).current : 0;
                     game_->getStateManager()->pushState(
-                        std::make_unique<VictoryState>(game_, finalScore));
+                        std::make_unique<VictoryState>(game_, finalScore, currentLevel_));
                     levelActive_ = false;
                 }
                 return;
@@ -3551,6 +3595,11 @@ void PlayState::updateLevelSystem(float deltaTime) {
 void PlayState::spawnBoss() {
     auto coordinator = game_->getCoordinator();
     if (!coordinator) return;
+    
+    // Play boss music
+    if (auto* audioManager = game_->getAudioManager()) {
+        audioManager->playMusic("BOSS THEME", true, 1.0f);
+    }
     
     auto config = getSoloLevelConfig(currentLevel_);
     

@@ -8,6 +8,7 @@
 #include "states/MultiplayerMenuState.hpp"
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
+#include "managers/AudioManager.hpp"
 #include <components/Position.hpp>
 #include <components/UIElement.hpp>
 #include <components/UIText.hpp>
@@ -24,6 +25,11 @@ MainMenuState::MainMenuState(Game* game)
 void MainMenuState::onEnter()
 {
     std::cout << "[MainMenuState] Entering main menu" << std::endl;
+    
+    // Play main menu music
+    if (auto* audioManager = game_->getAudioManager()) {
+        audioManager->playMusic("Title", true, 1.0f);
+    }
     
     // Load Main Menu UI from Lua
     auto& lua = Scripting::LuaState::Instance().GetState();
@@ -86,16 +92,21 @@ void MainMenuState::onEnter()
             std::cout << "[MainMenuState] Created button: " << btn["text"].get<std::string>() << std::endl;
         }
         
-        std::cout << "[MainMenuState] ✅ Created " << menuEntities_.size() << " UI entities" << std::endl;
+        std::cout << "[MainMenuState]  Created " << menuEntities_.size() << " UI entities" << std::endl;
         
     } catch (const sol::error& e) {
-        std::cerr << "[MainMenuState] ❌ Error loading menu UI: " << e.what() << std::endl;
+        std::cerr << "[MainMenuState] ERROR: Error loading menu UI: " << e.what() << std::endl;
     }
 }
 
 void MainMenuState::onExit()
 {
     std::cout << "[MainMenuState] Exiting main menu" << std::endl;
+    
+    // Stop main menu music
+    if (auto* audioManager = game_->getAudioManager()) {
+        audioManager->stopMusic(0.5f);
+    }
     
     // Destroy all menu entities
     auto coordinator = game_->getCoordinator();
@@ -104,7 +115,7 @@ void MainMenuState::onExit()
     }
     menuEntities_.clear();
     
-    std::cout << "[MainMenuState] ✅ Cleaned up menu entities" << std::endl;
+    std::cout << "[MainMenuState]  Cleaned up menu entities" << std::endl;
 }
 
 void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
@@ -179,9 +190,9 @@ void MainMenuState::handleEvent(const eng::engine::InputEvent& event)
                         auto& lua = Scripting::LuaState::Instance().GetState();
                         try {
                             lua[button.onClickCallback]();
-                            std::cout << "[MainMenuState] ✅ Callback executed: " << button.onClickCallback << std::endl;
+                            std::cout << "[MainMenuState]  Callback executed: " << button.onClickCallback << std::endl;
                         } catch (const sol::error& e) {
-                            std::cerr << "[MainMenuState] ❌ Error calling callback: " << e.what() << std::endl;
+                            std::cerr << "[MainMenuState] ERROR: Error calling callback: " << e.what() << std::endl;
                         }
                     }
                     

@@ -249,7 +249,7 @@ void NetworkManager::startGame() {
     
     client_->sendPacket(packet);
     
-    std::cout << "[NetworkManager] 🚀 Sending GAME_START for room " << currentRoomId_ << std::endl;
+    std::cout << "[NetworkManager] Sending GAME_START for room " << currentRoomId_ << std::endl;
 }
 
 void NetworkManager::sendInput(bool up, bool down, bool left, bool right, bool fire, uint8_t chargeLevel) {
@@ -409,7 +409,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 currentRoomId_ = roomId;
                 hosting_ = true;
 
-                std::cout << "[NetworkManager] ✅ Room created with ID " << roomId << std::endl;
+                std::cout << "[NetworkManager] Room created with ID " << roomId << std::endl;
             }
             break;
         }
@@ -434,7 +434,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 currentRoomName_ = roomName;
                 currentMaxPlayers_ = maxPlayers;
 
-                std::cout << "[NetworkManager] ✅ Joined room " << roomId << " (" << roomName 
+                std::cout << "[NetworkManager] Joined room " << roomId << " (" << roomName 
                           << ", " << (int)maxPlayers << " max players, host: " << hostPlayerId << ")" << std::endl;
             }
             catch (const std::exception& e) {
@@ -487,7 +487,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
         }
 
         case Network::PacketType::GAME_START: {
-            std::cout << "[NetworkManager] 🎮 Game starting!" << std::endl;
+            std::cout << "[NetworkManager] Game starting!" << std::endl;
             inGame_ = true;  // Mark as in game
             if (gameStartCallback_) {
                 gameStartCallback_();
@@ -524,7 +524,7 @@ void NetworkManager::handlePacket(const char* data, size_t length) {
                 // Extract level ID from payload (first byte after header)
                 const char* payloadStart = data + sizeof(PacketHeader);
                 uint8_t newLevel = static_cast<uint8_t>(*payloadStart);
-                std::cout << "[NetworkManager] 🎮 LEVEL_CHANGE received: Level " << (int)newLevel << std::endl;
+                std::cout << "[NetworkManager] LEVEL_CHANGE received: Level " << (int)newLevel << std::endl;
                 if (onLevelChange_) {
                     onLevelChange_(newLevel);
                 }

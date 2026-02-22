@@ -2,6 +2,7 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/AudioManager.hpp"
 #include "states/MainMenuState.hpp"
 #include <rendering/IRenderer.hpp>
 #include <rendering/sfml/SFMLText.hpp>
@@ -9,14 +10,28 @@
 #include <iostream>
 #include <cmath>
 
-VictoryState::VictoryState(Game* game, int finalScore)
+VictoryState::VictoryState(Game* game, int finalScore, int currentLevel)
     : finalScore_(finalScore)
+    , currentLevel_(currentLevel)
 {
     game_ = game;
 }
 
 void VictoryState::onEnter()
 {
+    // Play victory music based on current level
+    if (auto* audioManager = game_->getAudioManager()) {
+        std::string musicName;
+        if (currentLevel_ >= 3) {
+            // All stages cleared
+            musicName = "LIKE A HERO (ALL STAGE CLEAR)";
+        } else {
+            // Stage cleared
+            musicName = "RETURN IN TRIUMPH (STAGE CLEAR)";
+        }
+        audioManager->playMusic(musicName, false, 1.0f);
+    }
+    
     int w = 1920, h = 1080;
     if (auto* win = game_->getWindow()) {
         w = win->getSize().x;
@@ -58,6 +73,11 @@ void VictoryState::onEnter()
 
 void VictoryState::onExit()
 {
+    // Stop victory music
+    if (auto* audioManager = game_->getAudioManager()) {
+        audioManager->stopMusic(0.5f);
+    }
+    
     titleText_.reset();
     scoreText_.reset();
     promptText_.reset();

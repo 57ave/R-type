@@ -112,7 +112,7 @@ void NetworkPlayState::onEnter()
         });
     }
 
-    std::cout << "[NetworkPlayState] ✅ Multiplayer gameplay initialized" << std::endl;
+    std::cout << "[NetworkPlayState]  Multiplayer gameplay initialized" << std::endl;
     std::cout << "[NetworkPlayState] Controls: ZQSD/Arrows=Move, Space=Shoot, ESC=Disconnect" << std::endl;
 }
 
@@ -1318,5 +1318,5 @@ void NetworkPlayState::onLevelChange(uint8_t level) {
     // Change background based on level
     spawnBackground();
     
-    std::cout << "[NetworkPlayState] 🎮 Level changed to " << (int)level << ": " << name << std::endl;
+    std::cout << "[NetworkPlayState]  Level changed to " << (int)level << ": " << name << std::endl;
 }

@@ -5,6 +5,7 @@
 #include "core/Game.hpp"
 #include "managers/StateManager.hpp"
 #include "managers/NetworkManager.hpp"
+#include "managers/AudioManager.hpp"
 #include "states/MainMenuState.hpp"
 #include <rendering/sfml/SFMLRenderer.hpp>
 #include <engine/Clock.hpp>
@@ -110,6 +111,17 @@ bool Game::initialize()
     // Load configurations from Lua
     loadConfigurations();
 
+    // Create audio manager
+    audioManager_ = std::make_unique<AudioManager>();
+    if (!audioManager_->initialize("assets"))
+    {
+        std::cerr << "[GAME] Warning: Failed to initialize audio manager" << std::endl;
+    }
+    else
+    {
+        std::cout << "[GAME] Audio manager initialized" << std::endl;
+    }
+
     // Create state manager
     stateManager_ = std::make_unique<StateManager>(this);
     
@@ -212,6 +224,12 @@ void Game::update(float deltaTime)
         networkManager_->update();
     }
 
+    // Update audio manager
+    if (audioManager_)
+    {
+        audioManager_->update(deltaTime);
+    }
+
     // Update UISystem
     if (uiSystem_)
     {
@@ -300,7 +318,7 @@ void Game::setupECS()
     // Load default font
     uiSystem_->LoadFont("default", "assets/fonts/main_font.ttf");
     
-    std::cout << "[GAME] ✅ UISystem registered and configured" << std::endl;
+    std::cout << "[GAME] UISystem registered and configured" << std::endl;
     std::cout << "[GAME] Systems setup complete" << std::endl;
 }
 
@@ -527,7 +545,7 @@ void Game::setupLuaBindings()
         coordinator_->AddComponent(entity, tag);
     };
     
-    std::cout << "[GAME] ✅ Lua bindings registered (ECS + UI exposed to Lua)" << std::endl;
+    std::cout << "[GAME] Lua bindings registered (ECS + UI exposed to Lua)" << std::endl;
 }
 
 void Game::loadConfigurations()
@@ -539,46 +557,46 @@ void Game::loadConfigurations()
     // Load init.lua which loads all other configs
     try {
         lua.script_file("assets/scripts/init.lua");
-        std::cout << "[GAME] ✅ init.lua loaded successfully" << std::endl;
+        std::cout << "[GAME] init.lua loaded successfully" << std::endl;
         
         // Access loaded configurations
         sol::optional<sol::table> gameConfig = lua["Game"];
         if (gameConfig) {
-            std::cout << "[GAME] ✅ Game configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Game configuration accessible from Lua" << std::endl;
         }
         
         sol::optional<sol::table> playerConfig = lua["Player"];
         if (playerConfig) {
-            std::cout << "[GAME] ✅ Player configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Player configuration accessible from Lua" << std::endl;
         }
         
         sol::optional<sol::table> weaponsConfig = lua["Weapons"];
         if (weaponsConfig) {
-            std::cout << "[GAME] ✅ Weapons configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Weapons configuration accessible from Lua" << std::endl;
         }
         
         sol::optional<sol::table> enemiesConfig = lua["Enemies"];
         if (enemiesConfig) {
-            std::cout << "[GAME] ✅ Enemies configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Enemies configuration accessible from Lua" << std::endl;
         }
         
         sol::optional<sol::table> bossesConfig = lua["Bosses"];
         if (bossesConfig) {
-            std::cout << "[GAME] ✅ Bosses configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Bosses configuration accessible from Lua" << std::endl;
         }
         
         sol::optional<sol::table> assetsConfig = lua["Assets"];
         if (assetsConfig) {
-            std::cout << "[GAME] ✅ Assets configuration accessible from Lua" << std::endl;
+            std::cout << "[GAME] Assets configuration accessible from Lua" << std::endl;
         }
         
         // Test ECS-Lua integration
         std::cout << "[GAME] Testing Lua-ECS integration..." << std::endl;
         lua.script_file("assets/scripts/test_entity.lua");
-        std::cout << "[GAME] ✅ Lua-ECS integration test complete" << std::endl;
+        std::cout << "[GAME] Lua-ECS integration test complete" << std::endl;
         
     } catch (const sol::error& e) {
-        std::cerr << "[GAME] ❌ Error loading Lua configurations: " << e.what() << std::endl;
+        std::cerr << "[GAME] ERROR: Error loading Lua configurations: " << e.what() << std::endl;
     }
     
     std::cout << "[GAME] Configurations loaded from Lua" << std::endl;
